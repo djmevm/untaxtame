@@ -1,0 +1,71 @@
+{
+  "expo": {
+    "name": "UntaXtame",
+    "slug": "untaxtame",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/bienvenida.jpg",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "image": "./assets/bienvenida.jpg",
+      "resizeMode": "cover",
+      "backgroundColor": "#111111"
+    },
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.untaxtame.app",
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "Necesitamos tu ubicación para solicitar taxis y mostrar conductores cercanos.",
+        "NSLocationAlwaysUsageDescription": "Necesitamos tu ubicación para el seguimiento del servicio de taxi.",
+        "NSCameraUsageDescription": "Necesitamos acceso a la cámara para tomar fotos de documentos y perfil.",
+        "NSPhotoLibraryUsageDescription": "Necesitamos acceso a tu galería para subir fotos de documentos y perfil."
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/bienvenida.jpg",
+        "backgroundColor": "#FFC107"
+      },
+      "package": "com.untaxtame.app",
+      "versionCode": 1,
+      "permissions": [
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_COARSE_LOCATION",
+        "CAMERA",
+        "READ_EXTERNAL_STORAGE",
+        "WRITE_EXTERNAL_STORAGE",
+        "VIBRATE",
+        "INTERNET",
+        "ACCESS_NETWORK_STATE"
+      ],
+      "config": {
+        "googleMaps": {
+          "apiKey": "TU_GOOGLE_MAPS_API_KEY_AQUI"
+        }
+      }
+    },
+    "plugins": [
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "Necesitamos tu ubicación para el servicio de taxi."
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Necesitamos acceso a tus fotos para subir documentos.",
+          "cameraPermission": "Necesitamos la cámara para tomar fotos de documentos."
+        }
+      ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "TU_EAS_PROJECT_ID"
+      }
+    }
+  }
+}
