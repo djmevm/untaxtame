@@ -110,14 +110,15 @@ function securityLogger(req, res, next) {
 
 // ═══ CORS CONFIGURADO ═══
 function corsConfig() {
-  const allowedOrigins = process.env.ALLOWED_ORIGINS
-    ? process.env.ALLOWED_ORIGINS.split(',')
-    : ['http://localhost:3001', 'http://192.168.0.101:3001'];
-
   return {
     origin: function(origin, callback) {
-      // Permitir requests sin origin (apps móviles, Postman)
+      // Permitir requests sin origin (apps móviles, datos móviles, Postman)
       if (!origin) return callback(null, true);
+
+      const allowedOrigins = process.env.ALLOWED_ORIGINS
+        ? process.env.ALLOWED_ORIGINS.split(',')
+        : ['http://localhost:3001', 'http://192.168.0.101:3001'];
+
       if (allowedOrigins.includes(origin) || process.env.NODE_ENV !== 'production') {
         callback(null, true);
       } else {
@@ -126,8 +127,8 @@ function corsConfig() {
       }
     },
     credentials: true,
-    methods: ['GET', 'POST', 'PUT', 'DELETE'],
-    allowedHeaders: ['Content-Type', 'Authorization'],
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
     maxAge: 86400,
   };
 }

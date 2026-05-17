@@ -9,6 +9,7 @@ import Dashboard from './components/Dashboard';
 import Emergencias from './components/Emergencias';
 import MapaConductores from './components/MapaConductores';
 import Billetera from './components/Billetera';
+import CodigosRadio from './components/CodigosRadio';
 import './App.css';
 
 import { reproducirNotificacion, reproducirAlarmaSOS } from './utils/sonido';
@@ -164,6 +165,7 @@ export default function App() {
         <button className={tab === 'servicios' ? 'active' : ''} onClick={() => setTab('servicios')}>📋 Servicios</button>
         <button className={tab === 'usuarios' ? 'active' : ''} onClick={() => setTab('usuarios')}>👥 Usuarios</button>
         <button className={tab === 'emergencias' ? 'active' : ''} onClick={() => setTab('emergencias')}>🚨 Emergencias</button>
+        <button className={tab === 'radio' ? 'active' : ''} onClick={() => setTab('radio')}>📻 Radio</button>
         <button className={tab === 'billetera' ? 'active' : ''} onClick={() => setTab('billetera')}>💰 Billetera</button>
         <button className={tab === 'mapa' ? 'active' : ''} onClick={() => setTab('mapa')}>📍 Mapa</button>
       </nav>
@@ -172,6 +174,7 @@ export default function App() {
         {tab === 'servicios' && <Servicios />}
         {tab === 'usuarios' && <Usuarios />}
         {tab === 'emergencias' && <Emergencias />}
+        {tab === 'radio' && <CodigosRadio />}
         {tab === 'billetera' && <Billetera />}
         {tab === 'mapa' && <MapaConductores />}
       </main>

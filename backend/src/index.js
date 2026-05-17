@@ -32,6 +32,7 @@ const chatRoutes = require('./routes/chat');
 const emergenciaRoutes = require('./routes/emergencia');
 const ofertasRoutes = require('./routes/ofertas');
 const billeteraRoutes = require('./routes/billetera');
+const radioRoutes = require('./routes/radio');
 
 const app = express();
 
@@ -79,6 +80,7 @@ app.use('/api/chat', chatRoutes);
 app.use('/api/emergencia', emergenciaRoutes);
 app.use('/api/ofertas', ofertasRoutes);
 app.use('/api/billetera', billeteraRoutes);
+app.use('/api/radio', radioRoutes);
 
 // Ruta raíz (no exponer info sensible)
 app.get('/', (req, res) => {
@@ -112,7 +114,9 @@ app.use('*', (req, res) => {
 });
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  console.log(`[UntaXtame] Servidor corriendo en puerto ${PORT} — ${process.env.NODE_ENV || 'development'}`);
+const HOST = process.env.HOST || '0.0.0.0'; // Escuchar en todas las interfaces (WiFi + datos móviles)
+app.listen(PORT, HOST, () => {
+  console.log(`[UntaXtame] Servidor corriendo en ${HOST}:${PORT} — ${process.env.NODE_ENV || 'development'}`);
   console.log('[SEGURIDAD] Helmet, Rate Limiting, HPP, Sanitización, CORS — ACTIVOS');
+  console.log('[RED] Accesible desde WiFi y datos móviles');
 });

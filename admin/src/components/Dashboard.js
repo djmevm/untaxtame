@@ -446,9 +446,99 @@ export default function Dashboard() {
           </table>
         </div>
       )}
+
+      {/* QR de descarga de la app */}
+      <DescargarApp />
     </div>
   );
 }
+
+// ═══ COMPONENTE QR DE DESCARGA ═══
+function DescargarApp() {
+  // Cambia este link por el de tu app en Aptoide
+  const LINK_DESCARGA = 'https://com-untaxtame-app.en.aptoide.com/app';
+  const QR_API = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(LINK_DESCARGA)}`;
+
+  const copiarLink = () => {
+    navigator.clipboard.writeText(LINK_DESCARGA);
+    alert('✅ Link copiado al portapapeles');
+  };
+
+  return (
+    <div style={estilosQR.container}>
+      <div style={estilosQR.card}>
+        <div style={estilosQR.izquierda}>
+          <h3 style={estilosQR.titulo}>📲 Descargar UntaXtame</h3>
+          <p style={estilosQR.descripcion}>
+            Escanea el código QR con tu celular para descargar la app de UntaXtame.
+            Disponible para Android.
+          </p>
+          <div style={estilosQR.badges}>
+            <span style={estilosQR.badgeAndroid}>🤖 Android</span>
+            <span style={estilosQR.badgeVersion}>v1.1.0</span>
+          </div>
+          <div style={estilosQR.acciones}>
+            <a href={LINK_DESCARGA} target="_blank" rel="noopener noreferrer" style={estilosQR.btnDescargar}>
+              ⬇️ Descargar APK
+            </a>
+            <button onClick={copiarLink} style={estilosQR.btnCopiar}>
+              📋 Copiar link
+            </button>
+          </div>
+          <p style={estilosQR.nota}>
+            💡 Comparte este QR con conductores y clientes para que descarguen la app fácilmente.
+          </p>
+        </div>
+        <div style={estilosQR.derecha}>
+          <img
+            src={QR_API}
+            alt="QR Descarga UntaXtame"
+            style={estilosQR.qrImagen}
+          />
+          <p style={estilosQR.qrLabel}>Escanear para descargar</p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+const estilosQR = {
+  container: { marginBottom: 24 },
+  card: {
+    background: 'linear-gradient(135deg, #1a1a1a, #333)',
+    borderRadius: 20, padding: 32, display: 'flex',
+    alignItems: 'center', gap: 40, flexWrap: 'wrap',
+    boxShadow: '0 4px 20px rgba(0,0,0,0.2)',
+  },
+  izquierda: { flex: 1, minWidth: 280 },
+  titulo: { color: '#FFC107', fontSize: 22, margin: '0 0 12px', fontWeight: 'bold' },
+  descripcion: { color: '#ccc', fontSize: 14, lineHeight: 1.6, margin: '0 0 16px' },
+  badges: { display: 'flex', gap: 10, marginBottom: 20 },
+  badgeAndroid: {
+    background: '#2E7D32', color: '#fff', padding: '5px 14px',
+    borderRadius: 20, fontSize: 12, fontWeight: 'bold',
+  },
+  badgeVersion: {
+    background: '#FFC107', color: '#000', padding: '5px 14px',
+    borderRadius: 20, fontSize: 12, fontWeight: 'bold',
+  },
+  acciones: { display: 'flex', gap: 12, marginBottom: 16 },
+  btnDescargar: {
+    background: '#FFC107', color: '#000', padding: '10px 20px',
+    borderRadius: 10, fontWeight: 'bold', textDecoration: 'none', fontSize: 14,
+  },
+  btnCopiar: {
+    background: 'transparent', color: '#FFC107', border: '2px solid #FFC107',
+    padding: '10px 20px', borderRadius: 10, fontWeight: 'bold', cursor: 'pointer', fontSize: 14,
+  },
+  nota: { color: '#888', fontSize: 12, margin: 0, fontStyle: 'italic' },
+  derecha: { textAlign: 'center' },
+  qrImagen: {
+    width: 180, height: 180, borderRadius: 12, border: '4px solid #FFC107',
+    background: '#fff', padding: 8,
+  },
+  qrLabel: { color: '#FFC107', fontSize: 12, marginTop: 8, fontWeight: 'bold' },
+};
 
 const estilos = {
   alertasContainer: { display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 24 },
