@@ -66,7 +66,12 @@ router.get('/:servicioId/mensajes', verifyToken, async (req, res) => {
     }
 
     const servicio = servicioDoc.data();
-    if (servicio.clienteUid !== uid && servicio.conductorUid !== uid) {
+
+    // Permitir acceso al cliente, conductor o admin
+    const userDoc = await db.collection('usuarios').doc(uid).get();
+    const esAdmin = userDoc.exists && userDoc.data().rol === 'admin';
+
+    if (!esAdmin && servicio.clienteUid !== uid && servicio.conductorUid !== uid) {
       return res.status(403).json({ error: 'No tienes acceso a este chat' });
     }
 

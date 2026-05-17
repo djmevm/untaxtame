@@ -1,10 +1,17 @@
 import React, { useEffect, useState } from 'react';
 import api from '../api';
+import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet';
+import 'leaflet/dist/leaflet.css';
+import L from 'leaflet';
 
 export default function Servicios() {
   const [servicios, setServicios] = useState([]);
   const [cargando, setCargando] = useState(true);
   const [filtroEstado, setFiltroEstado] = useState('todos');
+  const [detalle, setDetalle] = useState(null);
+  const [ofertas, setOfertas] = useState([]);
+  const [chat, setChat] = useState([]);
+  const [cargandoDetalle, setCargandoDetalle] = useState(false);
 
   const cargar = () => {
     api.get('/services/todos')
@@ -39,6 +46,21 @@ export default function Servicios() {
     }
   };
 
+  const verDetalle = async (servicio) => {
+    setDetalle(servicio);
+    setCargandoDetalle(true);
+    try {
+      const [ofertasRes, chatRes] = await Promise.all([
+        api.get(`/ofertas/${servicio.id}`).catch(() => ({ data: [] })),
+        api.get(`/chat/${servicio.id}`).catch(() => ({ data: [] })),
+      ]);
+      setOfertas(ofertasRes.data || []);
+      setChat(chatRes.data || []);
+    } catch {} finally {
+      setCargandoDetalle(false);
+    }
+  };
+
   const filtrados = filtroEstado === 'todos'
     ? servicios
     : servicios.filter(s => s.estado === filtroEstado);
@@ -69,6 +91,201 @@ export default function Servicios() {
   };
 
   if (cargando) return <p className="loading">Cargando servicios...</p>;
+
+  // ── VISTA DETALLE DEL SERVICIO ──
+  if (detalle) {
+    const ESTADO_COLORES = {
+      pendiente: '#FFC107', aceptado: '#1565C0', conductor_en_sitio: '#FF9800',
+      completado: '#2E7D32', cancelado: '#E53935',
+    };
+
+    return (
+      <div>
+        <button onClick={() => { setDetalle(null); setOfertas([]); setChat([]); }} style={estilos.btnVolver}>
+          ← Volver a la lista
+        </button>
+
+        <h2 style={{ marginBottom: 20 }}>🚕 Seguimiento del Servicio</h2>
+
+        {/* Estado actual */}
+        <div style={{ ...estilos.estadoBanner, backgroundColor: ESTADO_COLORES[detalle.estado] || '#999' }}>
+          <span style={{ fontSize: 28 }}>
+            {detalle.estado === 'pendiente' ? '🔍' : detalle.estado === 'aceptado' ? '🚕' : detalle.estado === 'conductor_en_sitio' ? '📍' : detalle.estado === 'completado' ? '✅' : '❌'}
+          </span>
+          <span style={{ color: '#fff', fontWeight: 'bold', fontSize: 18 }}>
+            {detalle.estado === 'pendiente' ? 'Buscando conductor...' : detalle.estado === 'aceptado' ? 'Conductor en camino' : detalle.estado === 'conductor_en_sitio' ? 'Conductor en el punto' : detalle.estado === 'completado' ? 'Servicio completado' : 'Servicio cancelado'}
+          </span>
+        </div>
+
+        {/* Mapa en tiempo real */}
+        {(detalle.ubicacionGPS || detalle.destinoLat) && (
+          <div style={estilos.seccionDetalle}>
+            <h3>🗺️ Mapa del servicio</h3>
+            <div style={{ borderRadius: 14, overflow: 'hidden', height: 350 }}>
+              <MapContainer
+                center={[
+                  detalle.ubicacionGPS?.lat || detalle.destinoLat || 4.6097,
+                  detalle.ubicacionGPS?.lng || detalle.destinoLng || -74.0817
+                ]}
+                zoom={14}
+                style={{ height: '100%', width: '100%' }}
+              >
+                <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+                {/* Marcador del cliente (origen) */}
+                {detalle.ubicacionGPS && (
+                  <Marker position={[detalle.ubicacionGPS.lat, detalle.ubicacionGPS.lng]}
+                    icon={L.divIcon({ className: '', html: '<div style="font-size:28px">👤</div>', iconSize: [30, 30], iconAnchor: [15, 30] })}>
+                    <Popup>📍 Cliente: {detalle.clienteNombre}<br/>{detalle.origen}</Popup>
+                  </Marker>
+                )}
+                {/* Marcador del destino */}
+                {detalle.destinoLat && detalle.destinoLng && (
+                  <Marker position={[detalle.destinoLat, detalle.destinoLng]}
+                    icon={L.divIcon({ className: '', html: '<div style="font-size:28px">🏁</div>', iconSize: [30, 30], iconAnchor: [15, 30] })}>
+                    <Popup>🏁 Destino: {detalle.destino}</Popup>
+                  </Marker>
+                )}
+                {/* Marcador del conductor */}
+                {detalle.conductorUbicacion && (
+                  <Marker position={[detalle.conductorUbicacion.lat, detalle.conductorUbicacion.lng]}
+                    icon={L.divIcon({ className: '', html: '<div style="font-size:28px">🚕</div>', iconSize: [30, 30], iconAnchor: [15, 30] })}>
+                    <Popup>🚕 Conductor: {detalle.conductorNombre}<br/>{detalle.conductorPlaca}</Popup>
+                  </Marker>
+                )}
+              </MapContainer>
+            </div>
+            {detalle.tarifaEstimada && (
+              <div style={{ display: 'flex', gap: 20, marginTop: 12, justifyContent: 'center' }}>
+                <span style={estilos.mapaBadge}>📏 {detalle.tarifaEstimada.distanciaKm} km</span>
+                <span style={estilos.mapaBadge}>⏱️ ~{detalle.tarifaEstimada.tiempoEstimadoMin} min</span>
+                <span style={{ ...estilos.mapaBadge, background: '#2E7D32', color: '#fff' }}>💰 ${detalle.tarifaEstimada.tarifaEstimada?.toLocaleString('es-CO')}</span>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Info del servicio */}
+        <div style={estilos.detalleGrid}>
+          {/* Cliente */}
+          <div style={estilos.detalleCard}>
+            <h3 style={estilos.detalleCardTitulo}>👤 Cliente</h3>
+            <p style={estilos.detalleInfo}><strong>{detalle.clienteNombre}</strong></p>
+            <p style={estilos.detalleInfo}>📞 {detalle.clienteCelular || '—'}</p>
+            <p style={estilos.detalleInfo}>💳 {detalle.metodoPago?.toUpperCase() || '—'}</p>
+          </div>
+
+          {/* Conductor */}
+          <div style={estilos.detalleCard}>
+            <h3 style={estilos.detalleCardTitulo}>🚕 Conductor</h3>
+            {detalle.conductorNombre ? (
+              <>
+                <p style={estilos.detalleInfo}><strong>{detalle.conductorNombre}</strong></p>
+                <p style={estilos.detalleInfo}>🚗 {detalle.conductorPlaca || '—'}</p>
+                <p style={estilos.detalleInfo}>📞 {detalle.conductorCelular || '—'}</p>
+              </>
+            ) : (
+              <p style={{ color: '#999' }}>Sin conductor asignado</p>
+            )}
+          </div>
+
+          {/* Ruta */}
+          <div style={estilos.detalleCard}>
+            <h3 style={estilos.detalleCardTitulo}>🗺️ Ruta</h3>
+            <p style={estilos.detalleInfo}>📍 <strong>Origen:</strong> {detalle.origen}</p>
+            <p style={estilos.detalleInfo}>🏁 <strong>Destino:</strong> {detalle.destino}</p>
+            {detalle.tarifaEstimada && (
+              <p style={estilos.detalleInfo}>💰 <strong>Tarifa:</strong> ${detalle.tarifaEstimada.tarifaEstimada?.toLocaleString('es-CO')} ({detalle.tarifaEstimada.distanciaKm} km, ~{detalle.tarifaEstimada.tiempoEstimadoMin} min)</p>
+            )}
+          </div>
+
+          {/* Tiempos */}
+          <div style={estilos.detalleCard}>
+            <h3 style={estilos.detalleCardTitulo}>⏱️ Tiempos</h3>
+            <p style={estilos.detalleInfo}>📅 Creado: {new Date(detalle.creadoEn).toLocaleString('es-CO')}</p>
+            {detalle.actualizadoEn && <p style={estilos.detalleInfo}>🔄 Actualizado: {new Date(detalle.actualizadoEn).toLocaleString('es-CO')}</p>}
+            {detalle.calificacion && (
+              <p style={estilos.detalleInfo}>⭐ Calificación: {detalle.calificacion.puntuacion || detalle.calificacion.estrellas}/10 {detalle.calificacion.comentario ? `— "${detalle.calificacion.comentario}"` : ''}</p>
+            )}
+          </div>
+        </div>
+
+        {/* Ofertas / Negociación */}
+        <div style={estilos.seccionDetalle}>
+          <h3>💰 Negociación — Ofertas recibidas ({ofertas.length})</h3>
+          {cargandoDetalle ? (
+            <p style={{ color: '#999' }}>Cargando...</p>
+          ) : ofertas.length === 0 ? (
+            <p style={{ color: '#999' }}>No se recibieron ofertas para este servicio</p>
+          ) : (
+            <table>
+              <thead>
+                <tr><th>Conductor</th><th>Placa</th><th>Monto ofertado</th><th>Mensaje</th><th>Estado</th><th>Fecha</th></tr>
+              </thead>
+              <tbody>
+                {ofertas.map((o, i) => (
+                  <tr key={o.id || i} style={o.aceptada ? { backgroundColor: '#E8F5E9' } : {}}>
+                    <td><strong>{o.conductorNombre}</strong></td>
+                    <td style={{ color: '#FFC107', fontWeight: 'bold' }}>{o.conductorPlaca || '—'}</td>
+                    <td style={{ fontWeight: 'bold', color: '#2E7D32' }}>${(o.monto || 0).toLocaleString('es-CO')}</td>
+                    <td style={{ fontSize: 13, color: '#666' }}>{o.mensaje || '—'}</td>
+                    <td>
+                      {o.aceptada ? (
+                        <span style={{ background: '#2E7D32', color: '#fff', padding: '3px 10px', borderRadius: 10, fontSize: 11, fontWeight: 'bold' }}>✅ ACEPTADA</span>
+                      ) : (
+                        <span style={{ background: '#eee', color: '#666', padding: '3px 10px', borderRadius: 10, fontSize: 11 }}>Pendiente</span>
+                      )}
+                    </td>
+                    <td style={{ fontSize: 12, whiteSpace: 'nowrap' }}>{o.creadoEn ? new Date(o.creadoEn).toLocaleString('es-CO', { hour: '2-digit', minute: '2-digit', hour12: true }) : '—'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+
+        {/* Chat */}
+        <div style={estilos.seccionDetalle}>
+          <h3>💬 Chat del servicio ({chat.length} mensajes)</h3>
+          {cargandoDetalle ? (
+            <p style={{ color: '#999' }}>Cargando...</p>
+          ) : chat.length === 0 ? (
+            <p style={{ color: '#999' }}>No hay mensajes en este servicio</p>
+          ) : (
+            <div style={estilos.chatContainer}>
+              {chat.map((msg, i) => (
+                <div key={msg.id || i} style={{
+                  ...estilos.chatBurbuja,
+                  alignSelf: msg.rol === 'cliente' ? 'flex-start' : 'flex-end',
+                  backgroundColor: msg.rol === 'cliente' ? '#E3F2FD' : '#E8F5E9',
+                  borderColor: msg.rol === 'cliente' ? '#1565C0' : '#2E7D32',
+                }}>
+                  <span style={estilos.chatNombre}>{msg.nombre || msg.rol}</span>
+                  <span style={estilos.chatTexto}>{msg.texto}</span>
+                  <span style={estilos.chatHora}>
+                    {msg.creadoEn ? new Date(msg.creadoEn).toLocaleString('es-CO', { hour: '2-digit', minute: '2-digit', hour12: true }) : ''}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Requisitos */}
+        {detalle.requisitos && detalle.requisitos.length > 0 && (
+          <div style={estilos.seccionDetalle}>
+            <h3>📋 Requisitos especiales</h3>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              {detalle.requisitos.map(r => (
+                <span key={r} style={estilos.requisitoChip}>
+                  {r === 'maletas' ? '🧳' : r === 'discapacitado' ? '♿' : r === 'bicicleta' ? '🚲' : r === 'aireAcondicionado' ? '❄️' : r === 'mascotas' ? '🐾' : '📋'} {r}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
 
   return (
     <div>
@@ -150,11 +367,16 @@ export default function Servicios() {
                 })}
               </td>
               <td>
-                {!['completado', 'cancelado'].includes(s.estado) && (
-                  <button onClick={() => cancelarServicio(s)} style={estilos.btnCancelar}>
-                    ❌ Cancelar
+                <div style={{ display: 'flex', gap: 6 }}>
+                  <button onClick={() => verDetalle(s)} style={estilos.btnVer}>
+                    👁️ Ver
                   </button>
-                )}
+                  {!['completado', 'cancelado'].includes(s.estado) && (
+                    <button onClick={() => cancelarServicio(s)} style={estilos.btnCancelar}>
+                      ❌
+                    </button>
+                  )}
+                </div>
               </td>
             </tr>
           ))}
@@ -175,7 +397,54 @@ const estilos = {
   },
   btnCancelar: {
     background: '#E53935', color: '#fff', border: 'none',
+    borderRadius: 6, padding: '6px 10px', cursor: 'pointer',
+    fontWeight: 'bold', fontSize: 12,
+  },
+  btnVer: {
+    background: '#1565C0', color: '#fff', border: 'none',
     borderRadius: 6, padding: '6px 12px', cursor: 'pointer',
     fontWeight: 'bold', fontSize: 12,
+  },
+  btnVolver: {
+    background: 'none', border: 'none', color: '#E53935',
+    cursor: 'pointer', fontSize: 15, marginBottom: 16, fontWeight: 'bold',
+  },
+  estadoBanner: {
+    display: 'flex', alignItems: 'center', gap: 12,
+    borderRadius: 14, padding: '16px 24px', marginBottom: 20,
+  },
+  detalleGrid: {
+    display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
+    gap: 16, marginBottom: 24,
+  },
+  detalleCard: {
+    background: '#fff', borderRadius: 14, padding: 20,
+    boxShadow: '0 2px 10px rgba(0,0,0,0.06)',
+  },
+  detalleCardTitulo: { margin: '0 0 12px', fontSize: 15, color: '#333' },
+  detalleInfo: { margin: '6px 0', fontSize: 14, color: '#555' },
+  seccionDetalle: {
+    background: '#fff', borderRadius: 14, padding: 20,
+    boxShadow: '0 2px 10px rgba(0,0,0,0.06)', marginBottom: 16,
+  },
+  chatContainer: {
+    display: 'flex', flexDirection: 'column', gap: 8,
+    maxHeight: 400, overflowY: 'auto', padding: 10,
+    background: '#f9f9f9', borderRadius: 10,
+  },
+  chatBurbuja: {
+    padding: '10px 14px', borderRadius: 12, maxWidth: '70%',
+    borderLeft: '3px solid',
+  },
+  chatNombre: { display: 'block', fontSize: 11, fontWeight: 'bold', color: '#555', marginBottom: 2 },
+  chatTexto: { display: 'block', fontSize: 14, color: '#333' },
+  chatHora: { display: 'block', fontSize: 10, color: '#999', marginTop: 4, textAlign: 'right' },
+  requisitoChip: {
+    background: '#E3F2FD', borderRadius: 20, padding: '6px 14px',
+    fontSize: 13, fontWeight: '600', color: '#1565C0',
+  },
+  mapaBadge: {
+    background: '#f5f5f5', borderRadius: 20, padding: '6px 14px',
+    fontSize: 13, fontWeight: '600', color: '#333',
   },
 };
