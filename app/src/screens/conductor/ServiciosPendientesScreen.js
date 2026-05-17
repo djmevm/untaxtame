@@ -8,6 +8,7 @@ import api from '../../config/api';
 import { useConductorServiciosListener, useConductorOfertaAceptada } from '../../hooks/useServicioListener';
 import BotonSOS from '../../components/BotonSOS';
 import AlertasConductores from '../../components/AlertasConductores';
+import ReconocimientoVozSOS from '../../components/ReconocimientoVozSOS';
 import { reproducirSonido } from '../../services/sonido';
 
 export default function ServiciosPendientesScreen() {
@@ -263,6 +264,9 @@ export default function ServiciosPendientesScreen() {
 
       {/* Botón SOS flotante */}
       <BotonSOS servicioId={null} />
+
+      {/* Reconocimiento de voz H1/H2 */}
+      <ReconocimientoVozSOS servicioId={null} usuarioUid={perfil?.uid} />
 
       {/* Modal de oferta */}
       <Modal visible={modalVisible} transparent animationType="slide">

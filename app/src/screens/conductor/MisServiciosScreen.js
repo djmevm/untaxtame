@@ -9,6 +9,7 @@ import * as Location from 'expo-location';
 import ChatServicio from '../../components/ChatServicio';
 import BotonSOS from '../../components/BotonSOS';
 import AlertasConductores from '../../components/AlertasConductores';
+import ReconocimientoVozSOS from '../../components/ReconocimientoVozSOS';
 import { reproducirSonido } from '../../services/sonido';
 import useChatNotificacion from '../../hooks/useChatNotificacion';
 
@@ -270,6 +271,9 @@ export default function MisServiciosScreen() {
 
       {/* SOS */}
       {servicioActivo && <BotonSOS servicioId={servicioActivo.id} />}
+
+      {/* Reconocimiento de voz H1/H2 y códigos 20-X */}
+      <ReconocimientoVozSOS servicioId={servicioActivo?.id} usuarioUid={perfil?.uid} />
 
       {/* Modal de cancelación con motivo */}
       <Modal visible={!!modalCancelar} transparent animationType="slide">

@@ -4,11 +4,11 @@
     "slug": "untaxtame",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/bienvenida.jpg",
+    "icon": "./assets/icon_adaptive.jpg",
     "userInterfaceStyle": "light",
     "splash": {
-      "image": "./assets/bienvenida.jpg",
-      "resizeMode": "cover",
+      "image": "./assets/logo.png",
+      "resizeMode": "contain",
       "backgroundColor": "#111111"
     },
     "assetBundlePatterns": [
@@ -26,8 +26,8 @@
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/bienvenida.jpg",
-        "backgroundColor": "#FFC107"
+        "foregroundImage": "./assets/icon_adaptive.jpg",
+        "backgroundColor": "#000000"
       },
       "package": "com.untaxtame.app",
       "versionCode": 1,
@@ -44,7 +44,7 @@
       ],
       "config": {
         "googleMaps": {
-          "apiKey": "TU_GOOGLE_MAPS_API_KEY_AQUI"
+          "apiKey": "AIzaSyCz_s1BIBL0E9rJfQRXQ4lgnPb6GR9IiJE"
         }
       }
     },
@@ -61,7 +61,10 @@
           "photosPermission": "Necesitamos acceso a tus fotos para subir documentos.",
           "cameraPermission": "Necesitamos la cámara para tomar fotos de documentos."
         }
-      ]
+      ],
+      "expo-audio",
+      "expo-video",
+      "expo-speech-recognition"
     ],
     "extra": {
       "eas": {
