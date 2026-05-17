@@ -455,13 +455,41 @@ export default function Dashboard() {
 
 // ═══ COMPONENTE QR DE DESCARGA ═══
 function DescargarApp() {
-  // Cambia este link por el de tu app en Aptoide
+  // Link de descarga de Aptoide (actualizar con tu link real)
   const LINK_DESCARGA = 'https://com-untaxtame-app.en.aptoide.com/app';
-  const QR_API = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(LINK_DESCARGA)}`;
+  const QR_API = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(LINK_DESCARGA)}&color=1a1a1a&bgcolor=ffffff`;
+
+  const MENSAJE_COMPARTIR = '🚕 ¡Descarga UntaXtame! La app de taxis más segura de Colombia. Pide tu taxi fácil y rápido: ';
 
   const copiarLink = () => {
     navigator.clipboard.writeText(LINK_DESCARGA);
     alert('✅ Link copiado al portapapeles');
+  };
+
+  const compartirWhatsApp = () => {
+    const url = `https://wa.me/?text=${encodeURIComponent(MENSAJE_COMPARTIR + LINK_DESCARGA)}`;
+    window.open(url, '_blank');
+  };
+
+  const compartirFacebook = () => {
+    const url = `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(LINK_DESCARGA)}&quote=${encodeURIComponent(MENSAJE_COMPARTIR)}`;
+    window.open(url, '_blank');
+  };
+
+  const compartirTelegram = () => {
+    const url = `https://t.me/share/url?url=${encodeURIComponent(LINK_DESCARGA)}&text=${encodeURIComponent(MENSAJE_COMPARTIR)}`;
+    window.open(url, '_blank');
+  };
+
+  const compartirTwitter = () => {
+    const url = `https://twitter.com/intent/tweet?text=${encodeURIComponent(MENSAJE_COMPARTIR)}&url=${encodeURIComponent(LINK_DESCARGA)}`;
+    window.open(url, '_blank');
+  };
+
+  const compartirEmail = () => {
+    const subject = encodeURIComponent('🚕 Descarga UntaXtame - App de Taxis');
+    const body = encodeURIComponent(`${MENSAJE_COMPARTIR}\n\n${LINK_DESCARGA}\n\n¡Descárgala ya!`);
+    window.open(`mailto:?subject=${subject}&body=${body}`);
   };
 
   return (
@@ -470,13 +498,16 @@ function DescargarApp() {
         <div style={estilosQR.izquierda}>
           <h3 style={estilosQR.titulo}>📲 Descargar UntaXtame</h3>
           <p style={estilosQR.descripcion}>
-            Escanea el código QR con tu celular para descargar la app de UntaXtame.
+            Escanea el código QR o comparte el link para descargar la app.
             Disponible para Android.
           </p>
           <div style={estilosQR.badges}>
             <span style={estilosQR.badgeAndroid}>🤖 Android</span>
-            <span style={estilosQR.badgeVersion}>v1.1.0</span>
+            <span style={estilosQR.badgeVersion}>v1.2.0</span>
+            <span style={estilosQR.badgeRailway}>🚀 Producción</span>
           </div>
+
+          {/* Botones de acción */}
           <div style={estilosQR.acciones}>
             <a href={LINK_DESCARGA} target="_blank" rel="noopener noreferrer" style={estilosQR.btnDescargar}>
               ⬇️ Descargar APK
@@ -485,9 +516,26 @@ function DescargarApp() {
               📋 Copiar link
             </button>
           </div>
-          <p style={estilosQR.nota}>
-            💡 Comparte este QR con conductores y clientes para que descarguen la app fácilmente.
-          </p>
+
+          {/* Botones de compartir */}
+          <p style={estilosQR.compartirLabel}>Compartir en:</p>
+          <div style={estilosQR.compartirGrid}>
+            <button onClick={compartirWhatsApp} style={{...estilosQR.btnCompartir, backgroundColor: '#25D366'}}>
+              💬 WhatsApp
+            </button>
+            <button onClick={compartirFacebook} style={{...estilosQR.btnCompartir, backgroundColor: '#1877F2'}}>
+              📘 Facebook
+            </button>
+            <button onClick={compartirTelegram} style={{...estilosQR.btnCompartir, backgroundColor: '#0088cc'}}>
+              ✈️ Telegram
+            </button>
+            <button onClick={compartirTwitter} style={{...estilosQR.btnCompartir, backgroundColor: '#1DA1F2'}}>
+              🐦 Twitter
+            </button>
+            <button onClick={compartirEmail} style={{...estilosQR.btnCompartir, backgroundColor: '#EA4335'}}>
+              📧 Email
+            </button>
+          </div>
         </div>
         <div style={estilosQR.derecha}>
           <img
@@ -496,6 +544,14 @@ function DescargarApp() {
             style={estilosQR.qrImagen}
           />
           <p style={estilosQR.qrLabel}>Escanear para descargar</p>
+          <button onClick={() => {
+            const link = document.createElement('a');
+            link.href = QR_API;
+            link.download = 'UntaXtame-QR-Descarga.png';
+            link.click();
+          }} style={estilosQR.btnDescargarQR}>
+            💾 Descargar QR
+          </button>
         </div>
       </div>
     </div>
@@ -513,7 +569,7 @@ const estilosQR = {
   izquierda: { flex: 1, minWidth: 280 },
   titulo: { color: '#FFC107', fontSize: 22, margin: '0 0 12px', fontWeight: 'bold' },
   descripcion: { color: '#ccc', fontSize: 14, lineHeight: 1.6, margin: '0 0 16px' },
-  badges: { display: 'flex', gap: 10, marginBottom: 20 },
+  badges: { display: 'flex', gap: 10, marginBottom: 20, flexWrap: 'wrap' },
   badgeAndroid: {
     background: '#2E7D32', color: '#fff', padding: '5px 14px',
     borderRadius: 20, fontSize: 12, fontWeight: 'bold',
@@ -522,7 +578,11 @@ const estilosQR = {
     background: '#FFC107', color: '#000', padding: '5px 14px',
     borderRadius: 20, fontSize: 12, fontWeight: 'bold',
   },
-  acciones: { display: 'flex', gap: 12, marginBottom: 16 },
+  badgeRailway: {
+    background: '#1565C0', color: '#fff', padding: '5px 14px',
+    borderRadius: 20, fontSize: 12, fontWeight: 'bold',
+  },
+  acciones: { display: 'flex', gap: 12, marginBottom: 20 },
   btnDescargar: {
     background: '#FFC107', color: '#000', padding: '10px 20px',
     borderRadius: 10, fontWeight: 'bold', textDecoration: 'none', fontSize: 14,
@@ -531,13 +591,22 @@ const estilosQR = {
     background: 'transparent', color: '#FFC107', border: '2px solid #FFC107',
     padding: '10px 20px', borderRadius: 10, fontWeight: 'bold', cursor: 'pointer', fontSize: 14,
   },
-  nota: { color: '#888', fontSize: 12, margin: 0, fontStyle: 'italic' },
+  compartirLabel: { color: '#aaa', fontSize: 13, margin: '0 0 10px', fontWeight: '600' },
+  compartirGrid: { display: 'flex', gap: 8, flexWrap: 'wrap' },
+  btnCompartir: {
+    color: '#fff', border: 'none', padding: '8px 14px',
+    borderRadius: 8, fontWeight: 'bold', cursor: 'pointer', fontSize: 12,
+  },
   derecha: { textAlign: 'center' },
   qrImagen: {
-    width: 180, height: 180, borderRadius: 12, border: '4px solid #FFC107',
+    width: 200, height: 200, borderRadius: 12, border: '4px solid #FFC107',
     background: '#fff', padding: 8,
   },
-  qrLabel: { color: '#FFC107', fontSize: 12, marginTop: 8, fontWeight: 'bold' },
+  qrLabel: { color: '#FFC107', fontSize: 12, marginTop: 10, fontWeight: 'bold' },
+  btnDescargarQR: {
+    marginTop: 10, background: 'transparent', color: '#ccc', border: '1px solid #555',
+    padding: '6px 14px', borderRadius: 8, cursor: 'pointer', fontSize: 12,
+  },
 };
 
 const estilos = {
