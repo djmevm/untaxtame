@@ -16,13 +16,33 @@ export default function Billetera() {
 
   const cargar = async () => {
     try {
-      const [cRes, rRes] = await Promise.all([
+      const [cRes, rRes, uRes] = await Promise.all([
         api.get('/billetera/config'),
         api.get('/billetera/reporte'),
+        api.get('/users/todos'),
       ]);
       setConfig(cRes.data);
       setFormConfig(cRes.data);
-      setReporte(rRes.data);
+
+      // Combinar conductores aprobados con billeteras existentes
+      const conductores = uRes.data.filter(u => u.rol === 'conductor' && u.estadoVerificacion === 'aprobado');
+      const billeterasMap = {};
+      rRes.data.billeteras.forEach(b => { billeterasMap[b.uid] = b; });
+
+      // Mostrar TODOS los conductores aprobados, con o sin billetera
+      const billeterasCompletas = conductores.map(c => ({
+        uid: c.uid,
+        nombre: c.nombre || '—',
+        placa: c.placa || '—',
+        saldo: billeterasMap[c.uid]?.saldo || 0,
+        totalRecargas: billeterasMap[c.uid]?.totalRecargas || 0,
+        totalComisiones: billeterasMap[c.uid]?.totalComisiones || 0,
+      }));
+
+      setReporte({
+        billeteras: billeterasCompletas,
+        totales: rRes.data.totales,
+      });
     } catch {} finally { setCargando(false); }
   };
 

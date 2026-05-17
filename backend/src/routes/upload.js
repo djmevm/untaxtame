@@ -1,50 +1,44 @@
 const express = require('express');
 const router = express.Router();
 const multer = require('multer');
-const path = require('path');
-const fs = require('fs');
+const admin = require('firebase-admin');
 const verifyToken = require('../middleware/verifyToken');
 const { db } = require('../firebase');
 
-// Carpeta base en el escritorio
-const DESKTOP_BASE = path.join(require('os').homedir(), 'OneDrive', 'Desktop', 'UntaXtame_Archivos');
-const UPLOADS_DIR = path.join(__dirname, '../../uploads');
-
-// Asegurar que existan las carpetas
-function asegurarCarpeta(dir) {
-  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-}
-
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    asegurarCarpeta(UPLOADS_DIR);
-    cb(null, UPLOADS_DIR);
-  },
-  filename: (req, file, cb) => {
-    const ext = file.mimetype.split('/')[1] || 'jpg';
-    cb(null, `${Date.now()}-${Math.random().toString(36).substring(7)}.${ext}`);
-  },
-});
-
+// Usar memoria para multer (no disco) — subimos directo a Firebase Storage
 const upload = multer({
-  storage,
-  limits: { fileSize: 5 * 1024 * 1024 },
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB max
   fileFilter: (req, file, cb) => {
     if (['image/jpeg', 'image/png', 'image/webp'].includes(file.mimetype)) cb(null, true);
     else cb(new Error('Solo imágenes JPEG, PNG, WEBP'));
   },
 });
 
-// Copiar archivo al escritorio organizado
-function copiarAlEscritorio(archivoOrigen, subcarpeta, nombreFinal) {
-  try {
-    const destDir = path.join(DESKTOP_BASE, subcarpeta);
-    asegurarCarpeta(destDir);
-    const destPath = path.join(destDir, nombreFinal);
-    fs.copyFileSync(archivoOrigen, destPath);
-  } catch (err) {
-    console.warn('No se pudo copiar al escritorio:', err.message);
-  }
+// Obtener bucket de Firebase Storage
+function getBucket() {
+  return admin.storage().bucket();
+}
+
+// Subir archivo a Firebase Storage y obtener URL pública
+async function subirAFirebase(buffer, mimetype, carpeta, nombreArchivo) {
+  const bucket = getBucket();
+  const filePath = `${carpeta}/${nombreArchivo}`;
+  const file = bucket.file(filePath);
+
+  await file.save(buffer, {
+    metadata: {
+      contentType: mimetype,
+      cacheControl: 'public, max-age=31536000',
+    },
+  });
+
+  // Hacer el archivo público
+  await file.makePublic();
+
+  // Retornar URL pública
+  const url = `https://storage.googleapis.com/${bucket.name}/${filePath}`;
+  return url;
 }
 
 // Subir foto de perfil
@@ -52,18 +46,32 @@ router.post('/imagen', verifyToken, upload.single('imagen'), async (req, res) =>
   if (!req.file) return res.status(400).json({ error: 'No se envió imagen' });
 
   const uid = req.user.uid;
-  const url = `/uploads/${req.file.filename}`;
 
-  // Obtener rol del usuario para organizar
   try {
+    // Obtener datos del usuario
     const userDoc = await db.collection('usuarios').doc(uid).get();
-    const rol = userDoc.exists ? userDoc.data().rol : 'general';
-    const nombre = userDoc.exists ? userDoc.data().nombre?.replace(/[^a-zA-Z0-9]/g, '_') : uid;
-    const subcarpeta = rol === 'conductor' ? `perfiles/conductores` : rol === 'cliente' ? `perfiles/clientes` : 'perfiles';
-    copiarAlEscritorio(req.file.path, subcarpeta, `${nombre}_${req.file.filename}`);
-  } catch {}
+    const userData = userDoc.exists ? userDoc.data() : {};
+    const rol = userData.rol || 'general';
 
-  res.json({ message: 'Imagen subida', url });
+    // Generar nombre único
+    const ext = req.file.mimetype.split('/')[1] || 'jpg';
+    const nombreArchivo = `${uid}_${Date.now()}.${ext}`;
+    const carpeta = `perfiles/${rol}s`;
+
+    // Subir a Firebase Storage
+    const url = await subirAFirebase(req.file.buffer, req.file.mimetype, carpeta, nombreArchivo);
+
+    // Guardar URL en el perfil del usuario
+    await db.collection('usuarios').doc(uid).update({
+      fotoPerfil: url,
+      fotoPerfilActualizada: new Date().toISOString(),
+    });
+
+    res.json({ message: 'Imagen subida', url });
+  } catch (err) {
+    console.error('[UPLOAD] Error:', err.message);
+    res.status(500).json({ error: 'Error al subir imagen: ' + err.message });
+  }
 });
 
 // Subir documentos del conductor
@@ -80,19 +88,22 @@ router.post('/documentos', verifyToken, upload.fields(camposDocumentos), async (
   const archivosSubidos = {};
 
   try {
-    // Obtener nombre del conductor
     const userDoc = await db.collection('usuarios').doc(uid).get();
-    const nombre = userDoc.exists ? userDoc.data().nombre?.replace(/[^a-zA-Z0-9]/g, '_') : uid;
-    const placa = userDoc.exists ? userDoc.data().placa || '' : '';
+    const userData = userDoc.exists ? userDoc.data() : {};
+    const nombre = (userData.nombre || uid).replace(/[^a-zA-Z0-9]/g, '_');
+    const placa = userData.placa || '';
 
     for (const campo of camposDocumentos) {
       const archivo = req.files?.[campo.name]?.[0];
       if (!archivo) continue;
-      archivosSubidos[campo.name] = `/uploads/${archivo.filename}`;
 
-      // Copiar al escritorio organizado por conductor
-      const carpetaConductor = `documentos/${nombre}_${placa}`;
-      copiarAlEscritorio(archivo.path, carpetaConductor, `${campo.name}_${archivo.filename}`);
+      const ext = archivo.mimetype.split('/')[1] || 'jpg';
+      const nombreArchivo = `${nombre}_${placa}_${campo.name}_${Date.now()}.${ext}`;
+      const carpeta = `documentos/${uid}`;
+
+      // Subir a Firebase Storage
+      const url = await subirAFirebase(archivo.buffer, archivo.mimetype, carpeta, nombreArchivo);
+      archivosSubidos[campo.name] = url;
     }
 
     if (Object.keys(archivosSubidos).length > 0) {
@@ -106,7 +117,8 @@ router.post('/documentos', verifyToken, upload.fields(camposDocumentos), async (
 
     res.json({ message: 'Documentos subidos', documentos: archivosSubidos, total: Object.keys(archivosSubidos).length });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error('[UPLOAD DOCS] Error:', err.message);
+    res.status(500).json({ error: 'Error al subir documentos: ' + err.message });
   }
 });
 

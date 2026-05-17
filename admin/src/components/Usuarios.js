@@ -7,9 +7,10 @@ const VERIFICACION_COLOR = {
   rechazado: '#E53935',
 };
 
-const BACKEND_URL = 'http://localhost:3000';
+const BACKEND_URL = 'https://untaxtame-production.up.railway.app';
 
 // Resolver URL de imagen: si es relativa (/uploads/...), agregar el host del backend
+// Si es URL completa de Firebase Storage, usarla directamente
 function resolverUrl(url) {
   if (!url) return null;
   if (url.startsWith('http')) return url;
