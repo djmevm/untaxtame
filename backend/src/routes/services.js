@@ -16,15 +16,15 @@ router.get('/tarifas', (req, res) => {
 
 // Cliente solicita un taxi
 router.post('/solicitar', verifyToken, async (req, res) => {
-  const { clienteUid, clienteNombre, clienteCelular, clienteDireccion, origen, destino, metodoPago, ubicacionGPS } = req.body;
+  const { clienteUid, clienteNombre, clienteCelular, clienteDireccion, origen, destino, metodoPago, ubicacionGPS, destinoLat, destinoLng } = req.body;
 
   if (!clienteUid || !clienteNombre || !origen || !destino || !metodoPago) {
     return res.status(400).json({ error: 'Faltan campos requeridos' });
   }
 
-  const metodosPagoValidos = ['daviplata', 'nequi', 'pse', 'efectivo'];
+  const metodosPagoValidos = ['daviplata', 'nequi', 'pse', 'breb', 'efectivo'];
   if (!metodosPagoValidos.includes(metodoPago.toLowerCase())) {
-    return res.status(400).json({ error: 'Método de pago inválido' });
+    return res.status(400).json({ error: 'Método de pago inválido: ' + metodoPago });
   }
 
   try {
@@ -37,6 +37,8 @@ router.post('/solicitar', verifyToken, async (req, res) => {
       clienteCelular:   clienteCelular   || null,
       clienteDireccion: clienteDireccion || null,
       ubicacionGPS:     ubicacionGPS     || null,
+      destinoLat:       destinoLat       || null,
+      destinoLng:       destinoLng       || null,
       origen,
       destino,
       metodoPago: metodoPago.toLowerCase(),
