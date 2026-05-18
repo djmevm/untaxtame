@@ -18,7 +18,7 @@ router.post('/:servicioId/mensaje', verifyToken, async (req, res) => {
   }
 
   try {
-    // Verificar que el servicio existe y el usuario es parte de él
+    // Verificar que el servicio existe
     const servicioRef = db.collection('servicios').doc(servicioId);
     const servicioDoc = await servicioRef.get();
 
@@ -27,14 +27,35 @@ router.post('/:servicioId/mensaje', verifyToken, async (req, res) => {
     }
 
     const servicio = servicioDoc.data();
-    if (servicio.clienteUid !== uid && servicio.conductorUid !== uid) {
+
+    // Verificar acceso: cliente, conductor o admin
+    const userDoc = await db.collection('usuarios').doc(uid).get();
+    const userData = userDoc.exists ? userDoc.data() : {};
+    const esAdmin = userData.rol === 'admin';
+
+    if (!esAdmin && servicio.clienteUid !== uid && servicio.conductorUid !== uid) {
       return res.status(403).json({ error: 'No tienes acceso a este chat' });
+    }
+
+    // Determinar rol y nombre del remitente
+    let rol = 'desconocido';
+    let nombre = 'Usuario';
+
+    if (esAdmin) {
+      rol = 'admin';
+      nombre = 'Administrador';
+    } else if (servicio.clienteUid === uid) {
+      rol = 'cliente';
+      nombre = servicio.clienteNombre;
+    } else {
+      rol = 'conductor';
+      nombre = servicio.conductorNombre;
     }
 
     const mensaje = {
       uid,
-      nombre: servicio.clienteUid === uid ? servicio.clienteNombre : servicio.conductorNombre,
-      rol: servicio.clienteUid === uid ? 'cliente' : 'conductor',
+      nombre,
+      rol,
       texto: texto.trim(),
       creadoEn: new Date().toISOString(),
     };

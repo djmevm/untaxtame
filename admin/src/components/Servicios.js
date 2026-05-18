@@ -248,25 +248,36 @@ export default function Servicios() {
           <h3>💬 Chat del servicio ({chat.length} mensajes)</h3>
           {cargandoDetalle ? (
             <p style={{ color: '#999' }}>Cargando...</p>
-          ) : chat.length === 0 ? (
-            <p style={{ color: '#999' }}>No hay mensajes en este servicio</p>
           ) : (
-            <div style={estilos.chatContainer}>
-              {chat.map((msg, i) => (
-                <div key={msg.id || i} style={{
-                  ...estilos.chatBurbuja,
-                  alignSelf: msg.rol === 'cliente' ? 'flex-start' : 'flex-end',
-                  backgroundColor: msg.rol === 'cliente' ? '#E3F2FD' : '#E8F5E9',
-                  borderColor: msg.rol === 'cliente' ? '#1565C0' : '#2E7D32',
-                }}>
-                  <span style={estilos.chatNombre}>{msg.nombre || msg.rol}</span>
-                  <span style={estilos.chatTexto}>{msg.texto}</span>
-                  <span style={estilos.chatHora}>
-                    {msg.creadoEn ? new Date(msg.creadoEn).toLocaleString('es-CO', { hour: '2-digit', minute: '2-digit', hour12: true }) : ''}
-                  </span>
+            <>
+              {chat.length === 0 ? (
+                <p style={{ color: '#999' }}>No hay mensajes en este servicio</p>
+              ) : (
+                <div style={estilos.chatContainer}>
+                  {chat.map((msg, i) => (
+                    <div key={msg.id || i} style={{
+                      ...estilos.chatBurbuja,
+                      alignSelf: msg.rol === 'cliente' ? 'flex-start' : msg.rol === 'admin' ? 'center' : 'flex-end',
+                      backgroundColor: msg.rol === 'cliente' ? '#E3F2FD' : msg.rol === 'admin' ? '#FFF3E0' : '#E8F5E9',
+                      borderColor: msg.rol === 'cliente' ? '#1565C0' : msg.rol === 'admin' ? '#F97316' : '#2E7D32',
+                    }}>
+                      <span style={estilos.chatNombre}>
+                        {msg.rol === 'admin' ? '🛡️ Admin' : msg.rol === 'cliente' ? '👤' : '🚕'} {msg.nombre || msg.rol}
+                      </span>
+                      <span style={estilos.chatTexto}>{msg.texto}</span>
+                      <span style={estilos.chatHora}>
+                        {msg.creadoEn ? new Date(msg.creadoEn).toLocaleString('es-CO', { hour: '2-digit', minute: '2-digit', hour12: true }) : ''}
+                      </span>
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </div>
+              )}
+
+              {/* Input para enviar mensaje como admin */}
+              {!['completado', 'cancelado'].includes(detalle.estado) && (
+                <ChatAdminInput servicioId={detalle.id} onMensajeEnviado={() => verDetalle(detalle)} />
+              )}
+            </>
           )}
         </div>
 
@@ -382,6 +393,52 @@ export default function Servicios() {
           ))}
         </tbody>
       </table>
+    </div>
+  );
+}
+
+// Componente de chat para admin
+function ChatAdminInput({ servicioId, onMensajeEnviado }) {
+  const [texto, setTexto] = useState('');
+  const [enviando, setEnviando] = useState(false);
+
+  const enviar = async () => {
+    if (!texto.trim() || enviando) return;
+    setEnviando(true);
+    try {
+      await api.post(`/chat/${servicioId}/mensaje`, { texto: texto.trim() });
+      setTexto('');
+      if (onMensajeEnviado) onMensajeEnviado();
+    } catch (err) {
+      alert('Error enviando mensaje: ' + (err.response?.data?.error || err.message));
+    } finally {
+      setEnviando(false);
+    }
+  };
+
+  return (
+    <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
+      <input
+        type="text"
+        value={texto}
+        onChange={e => setTexto(e.target.value)}
+        onKeyDown={e => { if (e.key === 'Enter') enviar(); }}
+        placeholder="Escribir mensaje como Admin..."
+        style={{ flex: 1, padding: '10px 14px', borderRadius: 10, border: '1px solid #E2E8F0', fontSize: 14 }}
+        disabled={enviando}
+      />
+      <button
+        onClick={enviar}
+        disabled={!texto.trim() || enviando}
+        style={{
+          background: texto.trim() ? '#F97316' : '#E2E8F0',
+          color: '#fff', border: 'none', borderRadius: 10,
+          padding: '10px 20px', cursor: texto.trim() ? 'pointer' : 'default',
+          fontWeight: 'bold', fontSize: 14,
+        }}
+      >
+        {enviando ? '...' : 'Enviar'}
+      </button>
     </div>
   );
 }
