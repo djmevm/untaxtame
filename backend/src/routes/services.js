@@ -22,7 +22,7 @@ router.post('/solicitar', verifyToken, async (req, res) => {
     return res.status(400).json({ error: 'Faltan campos requeridos' });
   }
 
-  const metodosPagoValidos = ['daviplata', 'nequi', 'pse', 'breb', 'efectivo'];
+  const metodosPagoValidos = ['daviplata', 'nequi', 'efectivo'];
   if (!metodosPagoValidos.includes(metodoPago.toLowerCase())) {
     return res.status(400).json({ error: 'Método de pago inválido: ' + metodoPago });
   }
@@ -230,6 +230,8 @@ function calcularDistanciaMetros(lat1, lng1, lat2, lng2) {
 
 // Marcar servicio como completado
 router.put('/completar/:servicioId', verifyToken, async (req, res) => {
+  const { clientePago, metodoPagoConfirmado } = req.body || {};
+
   try {
     const ref = db.collection('servicios').doc(req.params.servicioId);
     const doc = await ref.get();
@@ -241,6 +243,8 @@ router.put('/completar/:servicioId', verifyToken, async (req, res) => {
       estado: 'completado',
       completadoEn: new Date().toISOString(),
       actualizadoEn: new Date().toISOString(),
+      clientePago: clientePago !== undefined ? clientePago : null,
+      metodoPagoConfirmado: metodoPagoConfirmado || data.metodoPago,
     });
 
     // Descontar comisión de la billetera del conductor
@@ -248,7 +252,6 @@ router.put('/completar/:servicioId', verifyToken, async (req, res) => {
     if (data.conductorUid) {
       const tarifa = data.tarifaAcordada || data.tarifaMinima || 8000;
       comisionResult = await descontarComision(data.conductorUid, req.params.servicioId, tarifa);
-      // Guardar info de comisión en el servicio
       await ref.update({ comision: comisionResult });
     }
 
@@ -257,7 +260,7 @@ router.put('/completar/:servicioId', verifyToken, async (req, res) => {
       await db.collection('usuarios').doc(data.conductorUid).update({ disponible: true });
     }
 
-    res.json({ message: 'Servicio completado', comision: comisionResult });
+    res.json({ message: 'Servicio completado', comision: comisionResult, clientePago });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
