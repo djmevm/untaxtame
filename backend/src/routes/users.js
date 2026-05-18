@@ -210,7 +210,7 @@ router.put('/conductor/:uid/repostularse', verifyToken, async (req, res) => {
   }
 });
 
-// Eliminar usuario (admin)
+// Eliminar usuario (admin) — borra TODO el historial
 router.delete('/:uid', verifyToken, verifyAdmin, async (req, res) => {
   const uid = req.params.uid;
 
@@ -218,25 +218,74 @@ router.delete('/:uid', verifyToken, verifyAdmin, async (req, res) => {
     const userDoc = await db.collection('usuarios').doc(uid).get();
     if (!userDoc.exists) return res.status(404).json({ error: 'Usuario no encontrado' });
 
+    const userData = userDoc.data();
+
     // No permitir eliminar admins
-    if (userDoc.data().rol === 'admin') {
+    if (userData.rol === 'admin') {
       return res.status(403).json({ error: 'No se puede eliminar un administrador' });
     }
 
-    // Eliminar de Firebase Auth
+    // No permitir eliminar si está bloqueado (bloqueado conserva historial)
+    if (userData.bloqueado) {
+      return res.status(400).json({
+        error: 'Este usuario está bloqueado. Los usuarios bloqueados conservan su historial. Si deseas eliminarlo, primero desbloquéalo.',
+      });
+    }
+
+    const eliminados = { servicios: 0, mensajes: 0, ofertas: 0, emergencias: 0, billetera: 0, radio: 0 };
+
+    // 1. Eliminar servicios donde participó
+    const campoUid = userData.rol === 'cliente' ? 'clienteUid' : 'conductorUid';
+    const serviciosSnap = await db.collection('servicios').where(campoUid, '==', uid).get();
+
+    for (const servicioDoc of serviciosSnap.docs) {
+      // Eliminar mensajes del chat
+      const mensajesSnap = await servicioDoc.ref.collection('mensajes').get();
+      for (const m of mensajesSnap.docs) { await m.ref.delete(); eliminados.mensajes++; }
+      await servicioDoc.ref.delete();
+      eliminados.servicios++;
+    }
+
+    // 2. Eliminar ofertas del conductor
+    if (userData.rol === 'conductor') {
+      const ofertasSnap = await db.collection('ofertas').where('conductorUid', '==', uid).get();
+      for (const d of ofertasSnap.docs) { await d.ref.delete(); eliminados.ofertas++; }
+    }
+
+    // 3. Eliminar emergencias
+    const emergenciasSnap = await db.collection('emergencias').where('uid', '==', uid).get();
+    for (const d of emergenciasSnap.docs) { await d.ref.delete(); eliminados.emergencias++; }
+
+    // 4. Eliminar billetera y movimientos
+    const billeteraRef = db.collection('billeteras').doc(uid);
+    const billeteraDoc = await billeteraRef.get();
+    if (billeteraDoc.exists) {
+      const movSnap = await billeteraRef.collection('movimientos').get();
+      for (const d of movSnap.docs) { await d.ref.delete(); }
+      await billeteraRef.delete();
+      eliminados.billetera = 1;
+    }
+
+    // 5. Eliminar códigos de radio
+    const radioSnap = await db.collection('codigos_radio').where('uid', '==', uid).get();
+    for (const d of radioSnap.docs) { await d.ref.delete(); eliminados.radio++; }
+
+    // 6. Eliminar de Firebase Auth
     try {
       await auth.deleteUser(uid);
     } catch (authErr) {
-      // Si no existe en Auth, continuar con Firestore
       if (authErr.code !== 'auth/user-not-found') {
         console.error('Error eliminando de Auth:', authErr.message);
       }
     }
 
-    // Eliminar de Firestore
+    // 7. Eliminar perfil de Firestore
     await db.collection('usuarios').doc(uid).delete();
 
-    res.json({ message: 'Usuario eliminado correctamente' });
+    res.json({
+      message: `Usuario ${userData.nombre} eliminado completamente`,
+      eliminados,
+    });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
