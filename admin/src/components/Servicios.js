@@ -28,9 +28,9 @@ export default function Servicios() {
     completados: servicios.filter(s => s.estado === 'completado').length,
     cancelados: servicios.filter(s => s.estado === 'cancelado').length,
     promedio: (() => {
-      const cal = servicios.filter(s => s.calificacion?.estrellas);
+      const cal = servicios.filter(s => s.calificacion?.puntuacion || s.calificacion?.estrellas);
       if (!cal.length) return '—';
-      return (cal.reduce((a, s) => a + s.calificacion.estrellas, 0) / cal.length).toFixed(1);
+      return (cal.reduce((a, s) => a + (s.calificacion.puntuacion || s.calificacion.estrellas || 0), 0) / cal.length).toFixed(1);
     })(),
   };
 
@@ -371,9 +371,9 @@ export default function Servicios() {
                 ) : <span style={{ color: '#999' }}>—</span>}
               </td>
               <td>
-                {s.calificacion?.estrellas
-                  ? <span title={s.calificacion.comentario || ''}>
-                      {'★'.repeat(s.calificacion.estrellas)}{'☆'.repeat(5 - s.calificacion.estrellas)}
+                {(s.calificacion?.puntuacion || s.calificacion?.estrellas)
+                  ? <span title={s.calificacion.comentario || ''} style={{ fontWeight: 'bold', color: '#F97316' }}>
+                      ⭐ {s.calificacion.puntuacion || s.calificacion.estrellas}/10
                     </span>
                   : '—'}
               </td>
