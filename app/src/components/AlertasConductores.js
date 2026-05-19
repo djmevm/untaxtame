@@ -21,16 +21,18 @@ export default function AlertasConductores() {
     const cargar = async () => {
       try {
         const res = await api.get('/emergencia/alertas-conductores');
-        if (res.data.length > cantidadAnterior.current && cantidadAnterior.current > 0) {
+        // Filtrar solo alertas no resueltas
+        const activas = res.data.filter(a => !a.resuelta);
+        if (activas.length > cantidadAnterior.current && cantidadAnterior.current > 0) {
           reproducirSonidoSOS();
         }
-        cantidadAnterior.current = res.data.length;
-        setAlertas(res.data);
+        cantidadAnterior.current = activas.length;
+        setAlertas(activas);
       } catch {}
     };
 
     cargar();
-    const intervalo = setInterval(cargar, 30000);
+    const intervalo = setInterval(cargar, 5000); // Cada 5 seg para sincronizar retiros
     return () => clearInterval(intervalo);
   }, []);
 

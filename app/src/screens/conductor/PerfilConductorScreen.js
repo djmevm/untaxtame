@@ -145,6 +145,7 @@ export default function PerfilConductorScreen() {
   const [selectorVisible, setSelectorVisible] = useState(false);
   const [docSeleccionado, setDocSeleccionado] = useState(null);
   const [guardandoVenc, setGuardandoVenc] = useState(false);
+  const [mostrarRadio, setMostrarRadio] = useState(false);
   const alertasMostradas = useRef({});
 
   // Verificar vencimientos al cargar y cada 60s
@@ -362,6 +363,55 @@ export default function PerfilConductorScreen() {
         </TouchableOpacity>
       )}
 
+      {/* ═══ COMANDOS DE RADIO ═══ */}
+      <View style={styles.seccion}>
+        <TouchableOpacity onPress={() => setMostrarRadio(!mostrarRadio)}>
+          <Text style={styles.seccionTitulo}>📻 Comandos de Radio {mostrarRadio ? '▲' : '▼'}</Text>
+        </TouchableOpacity>
+        <Text style={{ fontSize: 12, color: '#888', marginBottom: 10 }}>Di estos comandos por voz para comunicarte con el panel</Text>
+
+        {mostrarRadio && (
+          <View style={{ gap: 8 }}>
+            <View style={styles.radioItem}>
+              <Text style={styles.radioCode}>H1</Text>
+              <Text style={styles.radioDesc}>🔫 Atraco / Robo (alerta silenciosa)</Text>
+            </View>
+            <View style={styles.radioItem}>
+              <Text style={styles.radioCode}>H2</Text>
+              <Text style={styles.radioDesc}>🚗💥 Accidente de tránsito</Text>
+            </View>
+            <View style={[styles.radioItem, { borderLeftColor: '#1565C0' }]}>
+              <Text style={styles.radioCode}>20-1</Text>
+              <Text style={styles.radioDesc}>🚕 Tomé el servicio</Text>
+            </View>
+            <View style={[styles.radioItem, { borderLeftColor: '#FF9800' }]}>
+              <Text style={styles.radioCode}>20-2</Text>
+              <Text style={styles.radioDesc}>📍 Ya recogí el pasajero</Text>
+            </View>
+            <View style={[styles.radioItem, { borderLeftColor: '#2E7D32' }]}>
+              <Text style={styles.radioCode}>20-3</Text>
+              <Text style={styles.radioDesc}>✅ Terminé el servicio</Text>
+            </View>
+            <View style={[styles.radioItem, { borderLeftColor: '#E53935' }]}>
+              <Text style={styles.radioCode}>20-4</Text>
+              <Text style={styles.radioDesc}>❌ Servicio cancelado</Text>
+            </View>
+            <View style={[styles.radioItem, { borderLeftColor: '#E65100' }]}>
+              <Text style={styles.radioCode}>20-13</Text>
+              <Text style={styles.radioDesc}>🔧 Estoy varado</Text>
+            </View>
+            <View style={[styles.radioItem, { borderLeftColor: '#880E4F' }]}>
+              <Text style={styles.radioCode}>20-15</Text>
+              <Text style={styles.radioDesc}>⚠️ Carrera sospechosa</Text>
+            </View>
+            <View style={[styles.radioItem, { borderLeftColor: '#000' }]}>
+              <Text style={styles.radioCode}>20-20</Text>
+              <Text style={styles.radioDesc}>💀 Muerto en la vía</Text>
+            </View>
+          </View>
+        )}
+      </View>
+
       {/* ═══ VENCIMIENTO DE DOCUMENTOS ═══ */}
       <View style={styles.seccion}>
         <Text style={styles.seccionTitulo}>📅 Vencimiento de Documentos</Text>
@@ -513,4 +563,7 @@ const styles = StyleSheet.create({
   vencSinFecha: { fontSize: 12, color: '#bbb', fontStyle: 'italic', marginTop: 2 },
   vencBtn: { width: 40, height: 40, borderRadius: 20, borderWidth: 2, alignItems: 'center', justifyContent: 'center', marginLeft: 10 },
   vencBtnTxt: { fontSize: 18 },
+  radioItem: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: '#f9f9f9', borderRadius: 10, padding: 12, borderLeftWidth: 4, borderLeftColor: '#E53935' },
+  radioCode: { fontSize: 16, fontWeight: 'bold', color: '#333', minWidth: 50 },
+  radioDesc: { fontSize: 13, color: '#555', flex: 1 },
 });

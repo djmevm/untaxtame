@@ -29,48 +29,23 @@ const CLAVES_EMERGENCIA = {
   'h dos': { tipo: 'accidente', label: '🚗💥 Accidente', silenciosa: false, categoria: 'emergencia' },
 };
 
-// ═══ CÓDIGOS DE RADIO 20-X ═══
-const CODIGOS_RADIO = {
-  // 20-1 Tomé el servicio
-  '20-1': { codigo: '20-1', label: '🚕 Tomé el servicio', accion: 'tomar_servicio', color: '#1565C0' },
-  '201': { codigo: '20-1', label: '🚕 Tomé el servicio', accion: 'tomar_servicio', color: '#1565C0' },
-  '20 1': { codigo: '20-1', label: '🚕 Tomé el servicio', accion: 'tomar_servicio', color: '#1565C0' },
-  'veinte uno': { codigo: '20-1', label: '🚕 Tomé el servicio', accion: 'tomar_servicio', color: '#1565C0' },
-  'veinte 1': { codigo: '20-1', label: '🚕 Tomé el servicio', accion: 'tomar_servicio', color: '#1565C0' },
-  // 20-2 Ya recogí el servicio
-  '20-2': { codigo: '20-2', label: '📍 Ya recogí el pasajero', accion: 'recoger_servicio', color: '#FF9800' },
-  '202': { codigo: '20-2', label: '📍 Ya recogí el pasajero', accion: 'recoger_servicio', color: '#FF9800' },
-  '20 2': { codigo: '20-2', label: '📍 Ya recogí el pasajero', accion: 'recoger_servicio', color: '#FF9800' },
-  'veinte dos': { codigo: '20-2', label: '📍 Ya recogí el pasajero', accion: 'recoger_servicio', color: '#FF9800' },
-  'veinte 2': { codigo: '20-2', label: '📍 Ya recogí el pasajero', accion: 'recoger_servicio', color: '#FF9800' },
-  // 20-3 Terminé el servicio
-  '20-3': { codigo: '20-3', label: '✅ Terminé el servicio', accion: 'terminar_servicio', color: '#2E7D32' },
-  '203': { codigo: '20-3', label: '✅ Terminé el servicio', accion: 'terminar_servicio', color: '#2E7D32' },
-  '20 3': { codigo: '20-3', label: '✅ Terminé el servicio', accion: 'terminar_servicio', color: '#2E7D32' },
-  'veinte tres': { codigo: '20-3', label: '✅ Terminé el servicio', accion: 'terminar_servicio', color: '#2E7D32' },
-  'veinte 3': { codigo: '20-3', label: '✅ Terminé el servicio', accion: 'terminar_servicio', color: '#2E7D32' },
-  // 20-4 Servicio cancelado
-  '20-4': { codigo: '20-4', label: '❌ Servicio cancelado', accion: 'cancelar_servicio', color: '#E53935' },
-  '204': { codigo: '20-4', label: '❌ Servicio cancelado', accion: 'cancelar_servicio', color: '#E53935' },
-  '20 4': { codigo: '20-4', label: '❌ Servicio cancelado', accion: 'cancelar_servicio', color: '#E53935' },
-  'veinte cuatro': { codigo: '20-4', label: '❌ Servicio cancelado', accion: 'cancelar_servicio', color: '#E53935' },
-  'veinte 4': { codigo: '20-4', label: '❌ Servicio cancelado', accion: 'cancelar_servicio', color: '#E53935' },
-  // 20-13 Estoy varado
-  '20-13': { codigo: '20-13', label: '🔧 Estoy varado', accion: 'varado', color: '#E65100' },
-  '2013': { codigo: '20-13', label: '🔧 Estoy varado', accion: 'varado', color: '#E65100' },
-  '20 13': { codigo: '20-13', label: '🔧 Estoy varado', accion: 'varado', color: '#E65100' },
-  'veinte trece': { codigo: '20-13', label: '🔧 Estoy varado', accion: 'varado', color: '#E65100' },
-  // 20-15 Carrera sospechosa
-  '20-15': { codigo: '20-15', label: '⚠️ Carrera sospechosa', accion: 'sospechosa', color: '#880E4F' },
-  '2015': { codigo: '20-15', label: '⚠️ Carrera sospechosa', accion: 'sospechosa', color: '#880E4F' },
-  '20 15': { codigo: '20-15', label: '⚠️ Carrera sospechosa', accion: 'sospechosa', color: '#880E4F' },
-  'veinte quince': { codigo: '20-15', label: '⚠️ Carrera sospechosa', accion: 'sospechosa', color: '#880E4F' },
-  // 20-20 Muerto en la vía
-  '20-20': { codigo: '20-20', label: '💀 Muerto en la vía', accion: 'muerto_via', color: '#000000' },
-  '2020': { codigo: '20-20', label: '💀 Muerto en la vía', accion: 'muerto_via', color: '#000000' },
-  '20 20': { codigo: '20-20', label: '💀 Muerto en la vía', accion: 'muerto_via', color: '#000000' },
-  'veinte veinte': { codigo: '20-20', label: '💀 Muerto en la vía', accion: 'muerto_via', color: '#000000' },
-};
+// ═══ CÓDIGOS DE RADIO 20-X (ordenados de más largo a más corto para evitar falsos positivos) ═══
+const CODIGOS_RADIO_LISTA = [
+  // 20-20 primero (más largo)
+  { claves: ['veinte veinte', '20-20', '2020', '20 20'], codigo: '20-20', label: '💀 Muerto en la vía', accion: 'muerto_via', color: '#000000' },
+  // 20-15
+  { claves: ['veinte quince', '20-15', '2015', '20 15'], codigo: '20-15', label: '⚠️ Carrera sospechosa', accion: 'sospechosa', color: '#880E4F' },
+  // 20-13
+  { claves: ['veinte trece', '20-13', '2013', '20 13'], codigo: '20-13', label: '🔧 Estoy varado', accion: 'varado', color: '#E65100' },
+  // 20-4
+  { claves: ['veinte cuatro', '20-4', '204', '20 4'], codigo: '20-4', label: '❌ Servicio cancelado', accion: 'cancelar_servicio', color: '#E53935' },
+  // 20-3
+  { claves: ['veinte tres', '20-3', '203', '20 3'], codigo: '20-3', label: '✅ Terminé el servicio', accion: 'terminar_servicio', color: '#2E7D32' },
+  // 20-2
+  { claves: ['veinte dos', '20-2', '202', '20 2'], codigo: '20-2', label: '📍 Ya recogí el pasajero', accion: 'recoger_servicio', color: '#FF9800' },
+  // 20-1
+  { claves: ['veinte uno', '20-1', '201', '20 1'], codigo: '20-1', label: '🚕 Tomé el servicio', accion: 'tomar_servicio', color: '#1565C0' },
+];
 
 export default function ReconocimientoVozSOS({ servicioId, usuarioUid }) {
   const [escuchando, setEscuchando] = useState(false);
@@ -110,17 +85,17 @@ export default function ReconocimientoVozSOS({ servicioId, usuarioUid }) {
 
   // Evento: resultado del reconocimiento de voz
   useSpeechRecognitionEvent('result', (event) => {
-    if (cooldownRef.current) return; // Ignorar si está en cooldown
+    if (cooldownRef.current) return;
 
     const textos = event.results?.map(r => r?.transcript?.toLowerCase().trim()) || [];
 
     for (const texto of textos) {
       if (!texto) continue;
 
-      // Primero buscar códigos de radio 20-X (más específicos)
-      for (const [clave, config] of Object.entries(CODIGOS_RADIO)) {
-        if (texto.includes(clave)) {
-          // Evitar duplicado del mismo código
+      // Buscar códigos de radio (ordenados de más largo a más corto)
+      for (const config of CODIGOS_RADIO_LISTA) {
+        const encontrado = config.claves.some(clave => texto.includes(clave));
+        if (encontrado) {
           if (ultimoCodigoRef.current === config.codigo) return;
           ultimoCodigoRef.current = config.codigo;
           setTimeout(() => { ultimoCodigoRef.current = null; }, 15000);
@@ -129,7 +104,7 @@ export default function ReconocimientoVozSOS({ servicioId, usuarioUid }) {
         }
       }
 
-      // Luego buscar claves de emergencia H1/H2
+      // Buscar claves de emergencia H1/H2
       for (const [clave, config] of Object.entries(CLAVES_EMERGENCIA)) {
         if (texto.includes(clave)) {
           if (ultimoCodigoRef.current === config.tipo) return;
