@@ -171,6 +171,30 @@ router.put('/atender/:id', verifyToken, async (req, res) => {
       estado: 'atendido',
     });
 
+    // También marcar alertas de conductores asociadas como resueltas
+    const alertasSnap = await db.collection('alertas_conductores')
+      .where('emergenciaId', '==', req.params.id)
+      .get();
+    if (!alertasSnap.empty) {
+      const batch = db.batch();
+      alertasSnap.docs.forEach(doc => {
+        batch.update(doc.ref, { resuelta: true, resueltaEn: new Date().toISOString() });
+      });
+      await batch.commit();
+    }
+
+    // También resolver emergencias asociadas
+    const emergSnap = await db.collection('emergencias')
+      .where('codigoRadioId', '==', req.params.id)
+      .get();
+    if (!emergSnap.empty) {
+      const batch = db.batch();
+      emergSnap.docs.forEach(doc => {
+        batch.update(doc.ref, { estado: 'resuelta', resueltaEn: new Date().toISOString() });
+      });
+      await batch.commit();
+    }
+
     res.json({ message: 'Código marcado como atendido' });
   } catch (err) {
     res.status(500).json({ error: err.message });
