@@ -71,7 +71,7 @@ export default function ChatServicio({ servicioId, visible, onCerrar }) {
   const esMio = (msg) => msg.uid === perfil?.uid;
 
   return (
-    <Modal visible={visible} animationType="slide" onRequestClose={onCerrar}>
+    <Modal visible={visible} animationType="slide" onRequestClose={onCerrar} statusBarTranslucent presentationStyle="fullScreen">
       <View style={styles.container}>
         {/* Header */}
         <View style={styles.header}>

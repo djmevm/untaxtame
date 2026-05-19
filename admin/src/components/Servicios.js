@@ -274,9 +274,7 @@ export default function Servicios() {
               )}
 
               {/* Input para enviar mensaje como admin */}
-              {!['completado', 'cancelado'].includes(detalle.estado) && (
-                <ChatAdminInput servicioId={detalle.id} onMensajeEnviado={() => verDetalle(detalle)} />
-              )}
+              <ChatAdminInput servicioId={detalle.id} onMensajeEnviado={() => verDetalle(detalle)} />
             </>
           )}
         </div>

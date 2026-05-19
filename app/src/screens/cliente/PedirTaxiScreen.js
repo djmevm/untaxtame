@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
-  View, Text, TextInput, TouchableOpacity,
+  View, Text, TextInput, TouchableOpacity, Image,
   StyleSheet, Alert, ScrollView, ActivityIndicator, Linking, Dimensions
 } from 'react-native';
 import MapView, { Marker, PROVIDER_GOOGLE } from 'react-native-maps';
@@ -20,7 +20,6 @@ const { width } = Dimensions.get('window');
 const METODOS_PAGO = [
   { id: 'daviplata', label: 'Daviplata', color: '#E53935' },
   { id: 'nequi',     label: 'Nequi',     color: '#6A1B9A' },
-  { id: 'pse',       label: 'PSE',       color: '#1565C0' },
   { id: 'efectivo',  label: 'Efectivo',  color: '#2E7D32' },
 ];
 
@@ -66,6 +65,11 @@ export default function PedirTaxiScreen() {
   });
 
   useClienteServicioListener(perfil?.uid);
+
+  // GPS automático al abrir la app
+  useEffect(() => {
+    obtenerUbicacion();
+  }, []);
 
   // Notificar mensajes de chat cuando el chat está cerrado
   useChatNotificacion(servicioActivo?.id, perfil?.uid, mostrarChat);
@@ -182,9 +186,19 @@ export default function PedirTaxiScreen() {
     return '$' + valor.toLocaleString('es-CO');
   };
 
+  const seleccionarMetodoPago = (id) => {
+    setMetodoPago(id);
+  };
+
   const solicitarTaxi = async () => {
-    if (!origen || !destino || !metodoPago) {
-      return Alert.alert('Error', 'Completa origen, destino y método de pago');
+    if (!origen) {
+      return Alert.alert('Falta origen', 'Toca el botón 📡 para obtener tu ubicación');
+    }
+    if (!destino) {
+      return Alert.alert('Falta destino', 'Selecciona a dónde vas tocando el mapa');
+    }
+    if (!metodoPago) {
+      return Alert.alert('Falta método de pago', 'Selecciona cómo vas a pagar');
     }
     setCargando(true);
     try {
@@ -202,8 +216,9 @@ export default function PedirTaxiScreen() {
         requisitos: Object.entries(requisitos).filter(([k, v]) => v).map(([k]) => k),
       });
       setServicioActivo(res.data.servicio);
-    } catch {
-      Alert.alert('Error', 'No se pudo solicitar el taxi');
+    } catch (err) {
+      const mensaje = err.response?.data?.error || err.message || 'No se pudo solicitar el taxi';
+      Alert.alert('Error', mensaje);
     } finally {
       setCargando(false);
     }
@@ -296,193 +311,217 @@ export default function PedirTaxiScreen() {
   // ── FORMULARIO ──
   if (!servicioActivo) {
     return (
-      <ScrollView contentContainerStyle={styles.container}>
-        <Text style={styles.titulo}>🚕 Pide tu Taxi</Text>
-        <Text style={styles.subtitulo}>Hola, {perfil?.nombre}</Text>
-
-        {/* Mapa con pin central arrastrable estilo InDriver */}
-        <View style={styles.mapaContainer}>
-          <MapView
-            ref={mapRef}
-            style={seleccionandoDestino ? styles.mapaGrande : styles.mapa}
-            initialRegion={region}
-            showsUserLocation={true}
-            showsMyLocationButton={false}
-            onRegionChangeComplete={async (newRegion) => {
-              if (!seleccionandoDestino) return;
-              const lat = newRegion.latitude;
-              const lng = newRegion.longitude;
-              setDestinoGPS({ lat, lng });
-              try {
-                const [lugar] = await Location.reverseGeocodeAsync({ latitude: lat, longitude: lng });
-                const dir = lugar
-                  ? (lugar.street || '') + ' ' + (lugar.streetNumber || '') + ', ' + (lugar.city || lugar.district || '')
-                  : lat.toFixed(5) + ', ' + lng.toFixed(5);
-                setDestino(dir.trim());
-              } catch (e) {
-                setDestino(lat.toFixed(5) + ', ' + lng.toFixed(5));
-              }
-            }}
-          >
-            {ubicacionGPS && (
-              <Marker
-                coordinate={{ latitude: ubicacionGPS.lat, longitude: ubicacionGPS.lng }}
-                title="Tu ubicación"
-                description={origen}
-                pinColor="#1565C0"
-              />
-            )}
-            {destinoGPS && !seleccionandoDestino && (
-              <Marker
-                coordinate={{ latitude: destinoGPS.lat, longitude: destinoGPS.lng }}
-                title="Destino"
-                description={destino}
-                pinColor="#E53935"
-              />
-            )}
-          </MapView>
-
-          {/* Pin fijo en el centro del mapa (estilo InDriver) */}
-          {seleccionandoDestino && (
-            <View style={styles.pinCentral} pointerEvents="none">
-              <Text style={styles.pinEmoji}>📍</Text>
-              <View style={styles.pinSombra} />
-            </View>
-          )}
-
-          {/* Banner de instrucción */}
-          {seleccionandoDestino && (
-            <View style={styles.mapaOverlay}>
-              <Text style={styles.mapaOverlayTexto}>🚕 Mueve el mapa para elegir destino</Text>
-            </View>
-          )}
-
-          {/* Dirección en tiempo real mientras mueve */}
-          {seleccionandoDestino && destino ? (
-            <View style={styles.destinoFloating}>
-              <Text style={styles.destinoFloatingTexto} numberOfLines={1}>🏁 {destino}</Text>
-            </View>
-          ) : null}
-
-          {/* Botón confirmar destino */}
-          {seleccionandoDestino && destinoGPS && (
-            <TouchableOpacity style={styles.btnConfirmarDestino} onPress={() => setSeleccionandoDestino(false)}>
-              <Text style={styles.btnConfirmarDestinoTexto}>✅ Confirmar destino</Text>
-            </TouchableOpacity>
-          )}
-        </View>
-
-        {/* Conductores cercanos */}
-        <ConductoresCercanos />
-
-        {/* Origen con GPS */}
-        <View style={styles.inputRow}>
-          <TextInput
-            style={[styles.input, { flex: 1, marginBottom: 0 }]}
-            placeholder="📍 ¿Dónde estás? (Origen)"
-            value={origen}
-            onChangeText={setOrigen}
-          />
-          <TouchableOpacity style={styles.btnGPS} onPress={obtenerUbicacion} disabled={cargandoGPS}>
-            {cargandoGPS
-              ? <ActivityIndicator size="small" color="#fff" />
-              : <Text style={styles.btnGPSTexto}>📡</Text>
+      <View style={styles.containerFull}>
+        {/* Mapa de fondo grande */}
+        <MapView
+          ref={mapRef}
+          style={styles.mapaFull}
+          initialRegion={region}
+          showsUserLocation={true}
+          showsMyLocationButton={false}
+          onRegionChangeComplete={async (newRegion) => {
+            if (!seleccionandoDestino) return;
+            const lat = newRegion.latitude;
+            const lng = newRegion.longitude;
+            setDestinoGPS({ lat, lng });
+            try {
+              const [lugar] = await Location.reverseGeocodeAsync({ latitude: lat, longitude: lng });
+              const dir = lugar
+                ? (lugar.street || '') + ' ' + (lugar.streetNumber || '') + ', ' + (lugar.city || lugar.district || '')
+                : lat.toFixed(5) + ', ' + lng.toFixed(5);
+              setDestino(dir.trim());
+            } catch (e) {
+              setDestino(lat.toFixed(5) + ', ' + lng.toFixed(5));
             }
-          </TouchableOpacity>
-        </View>
+          }}
+        >
+          {ubicacionGPS && (
+            <Marker
+              coordinate={{ latitude: ubicacionGPS.lat, longitude: ubicacionGPS.lng }}
+              title="Tu ubicación"
+              description={origen}
+              pinColor="#1565C0"
+            />
+          )}
+          {destinoGPS && !seleccionandoDestino && (
+            <Marker
+              coordinate={{ latitude: destinoGPS.lat, longitude: destinoGPS.lng }}
+              title="Destino"
+              description={destino}
+              pinColor="#E53935"
+            />
+          )}
+        </MapView>
 
-        {/* Destino */}
-        <View style={styles.inputRow}>
-          <TextInput
-            style={[styles.input, { flex: 1, marginBottom: 0 }]}
-            placeholder="🏁 ¿A dónde vas? (Destino)"
-            value={destino}
-            onChangeText={(text) => {
-              setDestino(text);
-              setDestinoGPS(null);
-              setTarifa(null);
-            }}
-          />
-          <TouchableOpacity
-            style={[styles.btnGPS, seleccionandoDestino && { backgroundColor: '#E53935' }]}
-            onPress={() => setSeleccionandoDestino(!seleccionandoDestino)}
-          >
-            <Text style={styles.btnGPSTexto}>📌</Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* Tarifa estimada */}
-        {cargandoTarifa && (
-          <View style={styles.tarifaCard}>
-            <ActivityIndicator size="small" color="#FFC107" />
-            <Text style={styles.tarifaCargando}>Calculando tarifa...</Text>
-          </View>
-        )}
-        {tarifa && !cargandoTarifa && (
-          <View style={styles.tarifaCard}>
-            <View style={styles.tarifaHeader}>
-              <Text style={styles.tarifaTitulo}>💰 Tarifa estimada</Text>
-              {tarifa.esNocturno && (
-                <View style={styles.nocturnoBadge}>
-                  <Text style={styles.nocturnoTexto}>🌙 Nocturno</Text>
-                </View>
-              )}
-            </View>
-            <Text style={styles.tarifaPrecio}>{formatCOP(tarifa.tarifaEstimada)}</Text>
-            <Text style={styles.tarifaRango}>
-              Rango: {formatCOP(tarifa.rangoMinimo)} — {formatCOP(tarifa.rangoMaximo)}
-            </Text>
-            <View style={styles.tarifaDetalles}>
-              <Text style={styles.tarifaDetalle}>📏 {tarifa.distanciaKm} km</Text>
-              <Text style={styles.tarifaDetalle}>⏱️ ~{tarifa.tiempoEstimadoMin} min</Text>
-            </View>
+        {/* Pin central cuando selecciona destino */}
+        {seleccionandoDestino && (
+          <View style={styles.pinCentral} pointerEvents="none">
+            <Text style={styles.pinEmoji}>📍</Text>
+            <View style={styles.pinSombra} />
           </View>
         )}
 
-        <Text style={styles.labelPago}>Método de pago:</Text>
-        <View style={styles.pagoGrid}>
-          {METODOS_PAGO.map((m) => (
-            <TouchableOpacity
-              key={m.id}
-              style={[styles.pagoBtn, { borderColor: m.color }, metodoPago === m.id && { backgroundColor: m.color }]}
-              onPress={() => setMetodoPago(m.id)}
-            >
-              <Text style={[styles.pagoTexto, metodoPago === m.id && { color: '#fff' }]}>{m.label}</Text>
-            </TouchableOpacity>
-          ))}
-        </View>
+        {/* Banner instrucción destino */}
+        {seleccionandoDestino && (
+          <View style={styles.bannerDestino}>
+            <Text style={styles.bannerDestinoTexto}>🚕 Mueve el mapa para elegir destino</Text>
+            {destino ? <Text style={styles.bannerDireccion} numberOfLines={1}>{destino}</Text> : null}
+            {destinoGPS && (
+              <TouchableOpacity style={styles.btnConfirmarDestino} onPress={() => setSeleccionandoDestino(false)}>
+                <Text style={styles.btnConfirmarDestinoTexto}>✅ Confirmar destino</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        )}
 
-        {/* Requisitos especiales */}
-        <Text style={styles.labelPago}>Requisitos especiales:</Text>
-        <View style={styles.requisitosGrid}>
-          {[
-            { key: 'maletas', icon: '🧳', label: 'Maletas extras' },
-            { key: 'discapacitado', icon: '♿', label: 'Pasajero discapacitado' },
-            { key: 'bicicleta', icon: '🚲', label: 'Soporte bicicleta' },
-            { key: 'aireAcondicionado', icon: '❄️', label: 'Aire acondicionado' },
-            { key: 'mascotas', icon: '🐾', label: 'Mascotas permitidas' },
-          ].map((req) => (
-            <TouchableOpacity
-              key={req.key}
-              style={[styles.requisitoBtn, requisitos[req.key] && styles.requisitoBtnActivo]}
-              onPress={() => setRequisitos(prev => ({ ...prev, [req.key]: !prev[req.key] }))}
-            >
-              <Text style={styles.requisitoIcon}>{req.icon}</Text>
-              <Text style={[styles.requisitoTexto, requisitos[req.key] && styles.requisitoTextoActivo]}>
-                {req.label}
-              </Text>
-              {requisitos[req.key] && <Text style={styles.requisitoCheck}>✓</Text>}
-            </TouchableOpacity>
-          ))}
-        </View>
-
-        <TouchableOpacity style={styles.btnSolicitar} onPress={solicitarTaxi} disabled={cargando}>
-          {cargando
-            ? <ActivityIndicator color="#000" />
-            : <Text style={styles.btnSolicitarTexto}>PEDIR TAXI</Text>
+        {/* Botón menú / GPS */}
+        <TouchableOpacity style={styles.btnMenuFloat} onPress={obtenerUbicacion} disabled={cargandoGPS}>
+          {cargandoGPS
+            ? <ActivityIndicator size="small" color="#333" />
+            : <Text style={styles.btnMenuIcon}>📡</Text>
           }
         </TouchableOpacity>
-      </ScrollView>
+
+        {/* Panel inferior */}
+        {!seleccionandoDestino && (
+          <View style={styles.panelInferior}>
+            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.panelScroll}>
+              {/* Saludo con foto del cliente */}
+              <View style={styles.saludoRow}>
+                {perfil?.fotoPerfil ? (
+                  <Image source={{ uri: perfil.fotoPerfil }} style={styles.saludoFoto} />
+                ) : (
+                  <View style={styles.saludoAvatarCircle}>
+                    <Text style={styles.saludoAvatarLetra}>{perfil?.nombre?.charAt(0)?.toUpperCase() || '?'}</Text>
+                  </View>
+                )}
+                <View>
+                  <Text style={styles.saludoTexto}>
+                    ¡Hola! <Text style={styles.saludoNombre}>{perfil?.nombre?.split(' ')[0]}</Text>
+                  </Text>
+                  <Text style={styles.saludoSub}>¿A dónde vamos hoy?</Text>
+                </View>
+              </View>
+
+              {/* Campo origen editable */}
+              <View style={styles.inputRow}>
+                <View style={styles.inputDot}>
+                  <View style={styles.dotGreen} />
+                </View>
+                <TextInput
+                  style={styles.inputField}
+                  placeholder="¿Dónde estás? (Origen)"
+                  placeholderTextColor="#94A3B8"
+                  value={origen}
+                  onChangeText={setOrigen}
+                />
+                <TouchableOpacity style={styles.inputAction} onPress={obtenerUbicacion} disabled={cargandoGPS}>
+                  {cargandoGPS
+                    ? <ActivityIndicator size="small" color="#16A34A" />
+                    : <Text style={styles.inputActionIcon}>📡</Text>
+                  }
+                </TouchableOpacity>
+              </View>
+
+              {/* Campo destino editable */}
+              <View style={styles.inputRow}>
+                <View style={styles.inputDot}>
+                  <View style={styles.dotRed} />
+                </View>
+                <TextInput
+                  style={styles.inputField}
+                  placeholder="¿Hacia dónde vamos? (Destino)"
+                  placeholderTextColor="#94A3B8"
+                  value={destino}
+                  onChangeText={(text) => {
+                    setDestino(text);
+                    setDestinoGPS(null);
+                    setTarifa(null);
+                  }}
+                />
+                <TouchableOpacity style={styles.inputAction} onPress={() => setSeleccionandoDestino(true)}>
+                  <Text style={styles.inputActionIcon}>📌</Text>
+                </TouchableOpacity>
+              </View>
+
+              {/* Conductores cercanos */}
+              <ConductoresCercanos />
+
+              {/* Tarifa estimada */}
+              {cargandoTarifa && (
+                <View style={styles.tarifaCard}>
+                  <ActivityIndicator size="small" color="#FFC107" />
+                  <Text style={styles.tarifaCargando}>Calculando tarifa...</Text>
+                </View>
+              )}
+              {tarifa && !cargandoTarifa && (
+                <View style={styles.tarifaCard}>
+                  <View style={styles.tarifaHeader}>
+                    <Text style={styles.tarifaTitulo}>💰 Tarifa estimada</Text>
+                    {tarifa.esNocturno && (
+                      <View style={styles.nocturnoBadge}>
+                        <Text style={styles.nocturnoTexto}>🌙 Nocturno</Text>
+                      </View>
+                    )}
+                  </View>
+                  <Text style={styles.tarifaPrecio}>{formatCOP(tarifa.tarifaEstimada)}</Text>
+                  <Text style={styles.tarifaRango}>
+                    Rango: {formatCOP(tarifa.rangoMinimo)} — {formatCOP(tarifa.rangoMaximo)}
+                  </Text>
+                  <View style={styles.tarifaDetalles}>
+                    <Text style={styles.tarifaDetalle}>📏 {tarifa.distanciaKm} km</Text>
+                    <Text style={styles.tarifaDetalle}>⏱️ ~{tarifa.tiempoEstimadoMin} min</Text>
+                  </View>
+                </View>
+              )}
+
+              {/* Método de pago */}
+              <Text style={styles.labelSeccion}>Método de pago</Text>
+              <View style={styles.pagoGrid}>
+                {METODOS_PAGO.map((m) => (
+                  <TouchableOpacity
+                    key={m.id}
+                    style={[styles.pagoBtn, { borderColor: m.color }, metodoPago === m.id && { backgroundColor: m.color }]}
+                    onPress={() => seleccionarMetodoPago(m.id)}
+                  >
+                    <Text style={[styles.pagoTexto, metodoPago === m.id && { color: '#fff' }]}>{m.label}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              {/* Requisitos especiales */}
+              <Text style={styles.labelSeccion}>Requisitos especiales:</Text>
+              <View style={styles.requisitosGrid}>
+                {[
+                  { key: 'maletas', icon: '🧳', label: 'Maletas extras' },
+                  { key: 'discapacitado', icon: '♿', label: 'Pasajero discapacitado' },
+                  { key: 'bicicleta', icon: '🚲', label: 'Soporte bicicleta' },
+                  { key: 'aireAcondicionado', icon: '❄️', label: 'Aire acondicionado' },
+                  { key: 'mascotas', icon: '🐾', label: 'Mascotas permitidas' },
+                ].map((req) => (
+                  <TouchableOpacity
+                    key={req.key}
+                    style={[styles.requisitoBtn, requisitos[req.key] && styles.requisitoBtnActivo]}
+                    onPress={() => setRequisitos(prev => ({ ...prev, [req.key]: !prev[req.key] }))}
+                  >
+                    <Text style={styles.requisitoIcon}>{req.icon}</Text>
+                    <Text style={styles.requisitoLabel}>{req.label}</Text>
+                    {requisitos[req.key] && <Text style={styles.requisitoCheck}>✓</Text>}
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              {/* Botón pedir taxi */}
+              <TouchableOpacity style={styles.btnSolicitar} onPress={solicitarTaxi} disabled={cargando}>
+                {cargando
+                  ? <ActivityIndicator color="#000" />
+                  : <Text style={styles.btnSolicitarTexto}>🚕 PEDIR TAXI</Text>
+                }
+              </TouchableOpacity>
+            </ScrollView>
+          </View>
+        )}
+      </View>
     );
   }
 
@@ -620,7 +659,7 @@ export default function PedirTaxiScreen() {
       )}
 
       {/* Chat y SOS — solo cuando hay conductor */}
-      {servicioActivo.conductorNombre && ['pendiente', 'aceptado'].includes(servicioActivo.estado) && (
+      {servicioActivo.conductorNombre && ['pendiente', 'aceptado', 'conductor_en_sitio'].includes(servicioActivo.estado) && (
         <View style={styles.chatSOSRow}>
           <TouchableOpacity style={styles.btnChat} onPress={() => setMostrarChat(true)}>
             <Text style={styles.btnChatTexto}>💬 Chat con conductor</Text>
@@ -684,19 +723,21 @@ export default function PedirTaxiScreen() {
 
 
 const styles = StyleSheet.create({
-  container: { flexGrow: 1, backgroundColor: '#f5f5f5', padding: 16 },
-  titulo: { fontSize: 24, fontWeight: 'bold', textAlign: 'center', marginBottom: 2 },
-  subtitulo: { textAlign: 'center', color: '#666', marginBottom: 12 },
+  // ═══ NUEVO DISEÑO PROFESIONAL ═══
+  containerFull: { flex: 1, backgroundColor: '#f5f5f5' },
+  mapaFull: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: 0 },
 
-  // Mapa
-  mapaContainer: {
-    borderRadius: 16, overflow: 'hidden', marginBottom: 14,
-    elevation: 3, backgroundColor: '#fff',
+  btnMenuFloat: {
+    position: 'absolute', top: 50, left: 16,
+    width: 44, height: 44, borderRadius: 22,
+    backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center',
+    elevation: 6, shadowColor: '#000', shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2, shadowRadius: 4,
   },
-  mapa: { width: '100%', height: 200 },
-  mapaGrande: { width: '100%', height: 350 },
+  btnMenuIcon: { fontSize: 20 },
+
   pinCentral: {
-    position: 'absolute', top: '50%', left: '50%',
+    position: 'absolute', top: '40%', left: '50%',
     marginLeft: -20, marginTop: -48,
     alignItems: 'center', zIndex: 5,
   },
@@ -705,83 +746,118 @@ const styles = StyleSheet.create({
     width: 10, height: 10, borderRadius: 5,
     backgroundColor: 'rgba(0,0,0,0.3)', marginTop: -6,
   },
-  destinoFloating: {
-    position: 'absolute', bottom: 56, left: 12, right: 12,
-    backgroundColor: '#fff', borderRadius: 10, padding: 10,
-    elevation: 4, shadowColor: '#000', shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2, shadowRadius: 4,
-  },
-  destinoFloatingTexto: { fontSize: 13, fontWeight: '600', color: '#333' },
-  btnConfirmarDestino: {
-    position: 'absolute', bottom: 10, left: 16, right: 16,
-    backgroundColor: '#2E7D32', borderRadius: 12, padding: 14,
-    alignItems: 'center', elevation: 6,
-  },
-  btnConfirmarDestinoTexto: { color: '#fff', fontWeight: 'bold', fontSize: 16 },
-  mapaOverlay: {
-    position: 'absolute', top: 0, left: 0, right: 0,
-    backgroundColor: 'rgba(229, 57, 53, 0.9)', padding: 10, alignItems: 'center',
-  },
-  mapaOverlayTexto: { color: '#fff', fontWeight: 'bold', fontSize: 13 },
 
-  inputRow: { flexDirection: 'row', gap: 8, marginBottom: 10 },
-  input: {
-    borderWidth: 1, borderColor: '#ddd', borderRadius: 8,
-    padding: 12, marginBottom: 12, fontSize: 15, backgroundColor: '#fff',
+  bannerDestino: {
+    position: 'absolute', top: 0, left: 0, right: 0,
+    backgroundColor: 'rgba(229, 57, 53, 0.95)', padding: 16,
+    paddingTop: 50, alignItems: 'center', zIndex: 10,
   },
-  btnGPS: {
-    backgroundColor: '#1565C0', borderRadius: 8,
-    width: 48, alignItems: 'center', justifyContent: 'center',
+  bannerDestinoTexto: { color: '#fff', fontWeight: 'bold', fontSize: 14 },
+  bannerDireccion: { color: '#FFE082', fontSize: 13, marginTop: 4 },
+  btnConfirmarDestino: {
+    backgroundColor: '#fff', borderRadius: 12, paddingVertical: 12, paddingHorizontal: 30,
+    marginTop: 12, elevation: 4,
   },
-  btnGPSTexto: { fontSize: 22 },
+  btnConfirmarDestinoTexto: { color: '#2E7D32', fontWeight: 'bold', fontSize: 15 },
+
+  // Panel inferior
+  panelInferior: {
+    position: 'absolute', bottom: 0, left: 0, right: 0,
+    backgroundColor: '#fff', borderTopLeftRadius: 24, borderTopRightRadius: 24,
+    maxHeight: '50%', elevation: 10,
+    shadowColor: '#000', shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.15, shadowRadius: 8,
+  },
+  panelScroll: { padding: 20, paddingBottom: 30 },
+
+  // Saludo
+  saludoRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 16 },
+  saludoFoto: { width: 44, height: 44, borderRadius: 22, borderWidth: 2, borderColor: '#FFC107' },
+  saludoAvatarCircle: {
+    width: 44, height: 44, borderRadius: 22, backgroundColor: '#FFC107',
+    alignItems: 'center', justifyContent: 'center',
+  },
+  saludoAvatarLetra: { fontSize: 20, fontWeight: 'bold', color: '#000' },
+  saludoTexto: { fontSize: 18, color: '#333' },
+  saludoNombre: { fontWeight: 'bold', color: '#000' },
+  saludoSub: { fontSize: 13, color: '#888', marginTop: 2 },
+
+  // Inputs editables
+  inputRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 10,
+    backgroundColor: '#fff', borderRadius: 14, padding: 14,
+    marginBottom: 10, borderWidth: 1, borderColor: '#E2E8F0',
+  },
+  inputDot: { width: 20, alignItems: 'center' },
+  dotGreen: { width: 10, height: 10, borderRadius: 5, backgroundColor: '#16A34A' },
+  dotRed: { width: 10, height: 10, borderRadius: 5, backgroundColor: '#DC2626' },
+  inputField: { flex: 1, fontSize: 14, color: '#1E293B' },
+  inputAction: {
+    width: 36, height: 36, borderRadius: 18, backgroundColor: '#F1F5F9',
+    alignItems: 'center', justifyContent: 'center',
+  },
+  inputActionIcon: { fontSize: 18 },
 
   // Tarifa
   tarifaCard: {
-    backgroundColor: '#fff', borderRadius: 14, padding: 16,
-    marginBottom: 14, elevation: 2, borderLeftWidth: 4, borderLeftColor: '#FFC107',
+    backgroundColor: '#FFFDE7', borderRadius: 14, padding: 16,
+    marginBottom: 14, borderLeftWidth: 4, borderLeftColor: '#FFC107',
   },
   tarifaHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 },
   tarifaTitulo: { fontSize: 14, fontWeight: 'bold', color: '#333' },
   tarifaCargando: { color: '#999', fontSize: 13, marginLeft: 8 },
-  tarifaPrecio: { fontSize: 28, fontWeight: 'bold', color: '#2E7D32', marginBottom: 2 },
+  tarifaPrecio: { fontSize: 26, fontWeight: 'bold', color: '#2E7D32', marginBottom: 2 },
   tarifaRango: { fontSize: 13, color: '#888', marginBottom: 8 },
   tarifaDetalles: { flexDirection: 'row', gap: 16 },
   tarifaDetalle: { fontSize: 13, color: '#666' },
   nocturnoBadge: { backgroundColor: '#311B92', borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3 },
   nocturnoTexto: { color: '#fff', fontSize: 11, fontWeight: 'bold' },
+
+  // Secciones
+  labelSeccion: { fontWeight: 'bold', marginBottom: 10, fontSize: 14, color: '#333' },
+
+  // Pago
+  pagoGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 16 },
+  pagoBtn: {
+    borderWidth: 2, borderRadius: 10, paddingVertical: 10, paddingHorizontal: 16,
+    alignItems: 'center', backgroundColor: '#fff',
+  },
+  pagoTexto: { fontWeight: 'bold', fontSize: 13 },
+
+  // Requisitos chips
+  requisitosGrid: { gap: 10, marginBottom: 16 },
+  requisitoBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 14,
+    backgroundColor: '#FFFDE7', borderRadius: 14, padding: 16,
+    borderWidth: 2, borderColor: '#FFC107',
+  },
+  requisitoBtnActivo: {
+    backgroundColor: '#FFFDE7', borderColor: '#FFC107',
+  },
+  requisitoIcon: { fontSize: 26 },
+  requisitoLabel: { flex: 1, fontSize: 16, fontWeight: 'bold', color: '#333' },
+  requisitoCheck: { fontSize: 22, color: '#16A34A', fontWeight: 'bold' },
+
+  // Botón solicitar
+  btnSolicitar: {
+    backgroundColor: '#FFC107', borderRadius: 14,
+    padding: 16, alignItems: 'center', elevation: 4,
+    shadowColor: '#FFC107', shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3, shadowRadius: 8,
+  },
+  btnSolicitarTexto: { fontWeight: 'bold', fontSize: 17, color: '#000' },
+
+  // ═══ ESTILOS SERVICIO ACTIVO (se mantienen) ═══
+  container: { flexGrow: 1, backgroundColor: '#f5f5f5', padding: 16 },
+  titulo: { fontSize: 24, fontWeight: 'bold', textAlign: 'center', marginBottom: 2 },
+  subtitulo: { textAlign: 'center', color: '#666', marginBottom: 12 },
+
   tarifaCardActivo: {
     backgroundColor: '#fff', borderRadius: 14, padding: 16,
     marginBottom: 12, elevation: 2, alignItems: 'center',
     borderLeftWidth: 4, borderLeftColor: '#2E7D32',
   },
   tarifaPrecioActivo: { fontSize: 24, fontWeight: 'bold', color: '#2E7D32', marginVertical: 4 },
-
-  labelPago: { fontWeight: 'bold', marginBottom: 10, fontSize: 15 },
-  pagoGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 20 },
-  pagoBtn: {
-    borderWidth: 2, borderRadius: 8, padding: 12,
-    minWidth: '45%', alignItems: 'center', backgroundColor: '#fff',
-  },
-  pagoTexto: { fontWeight: 'bold', fontSize: 15 },
-
-  // Requisitos
-  requisitosGrid: { gap: 8, marginBottom: 20 },
-  requisitoBtn: {
-    flexDirection: 'row', alignItems: 'center', gap: 10,
-    backgroundColor: '#fff', borderRadius: 10, padding: 12,
-    borderWidth: 2, borderColor: '#eee',
-  },
-  requisitoBtnActivo: { borderColor: '#FFC107', backgroundColor: '#FFFDE7' },
-  requisitoIcon: { fontSize: 22 },
-  requisitoTexto: { flex: 1, fontSize: 14, color: '#666' },
-  requisitoTextoActivo: { color: '#000', fontWeight: '600' },
-  requisitoCheck: { fontSize: 18, color: '#2E7D32', fontWeight: 'bold' },
-
-  btnSolicitar: {
-    backgroundColor: '#FFC107', borderRadius: 10,
-    padding: 16, alignItems: 'center', elevation: 3,
-  },
-  btnSolicitarTexto: { fontWeight: 'bold', fontSize: 18, color: '#000' },
 
   estadoCard: {
     borderRadius: 16, padding: 20, alignItems: 'center',
@@ -800,21 +876,16 @@ const styles = StyleSheet.create({
   datoValor: { fontSize: 14, fontWeight: '600', color: '#222', textAlign: 'right', maxWidth: '60%' },
   separador: { height: 1, backgroundColor: '#f0f0f0' },
   placa: { fontSize: 16, color: '#FFC107', fontWeight: 'bold', letterSpacing: 2 },
-
   telefonoLink: { fontSize: 14, color: '#1565C0', fontWeight: 'bold' },
-
   pagoBadge: { borderRadius: 8, paddingHorizontal: 10, paddingVertical: 4 },
   pagoBadgeTexto: { color: '#fff', fontWeight: 'bold', fontSize: 12 },
-
   rutaFila: { flexDirection: 'row', alignItems: 'flex-start', gap: 10 },
   rutaPunto: { width: 12, height: 12, borderRadius: 6, marginTop: 4 },
   rutaLinea: { width: 2, height: 20, backgroundColor: '#ddd', marginLeft: 5, marginVertical: 2 },
   rutaEtiqueta: { fontSize: 11, color: '#aaa', marginBottom: 2 },
   rutaTexto: { fontSize: 14, fontWeight: '600', color: '#333' },
-
   esperandoCard: { alignItems: 'center', paddingVertical: 20 },
   esperandoTexto: { color: '#888', fontSize: 14, textAlign: 'center' },
-
   btnCalificar: {
     borderWidth: 2, borderColor: '#FFC107', borderRadius: 10,
     padding: 14, alignItems: 'center', marginBottom: 12, backgroundColor: '#fff',
@@ -826,11 +897,8 @@ const styles = StyleSheet.create({
   },
   calificacionPuntuacion: { fontSize: 28, color: '#FFC107', fontWeight: 'bold' },
   calificacionComentario: { fontSize: 13, color: '#888', fontStyle: 'italic', marginTop: 4 },
-
   acciones: { marginBottom: 24 },
-  chatSOSRow: {
-    flexDirection: 'row', gap: 10, marginBottom: 12,
-  },
+  chatSOSRow: { flexDirection: 'row', gap: 10, marginBottom: 12 },
   btnChat: {
     flex: 1, backgroundColor: '#1565C0', borderRadius: 10,
     padding: 14, alignItems: 'center', elevation: 2,

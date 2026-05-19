@@ -173,7 +173,7 @@ export default function BotonSOS({ servicioId }) {
 }
 
 const styles = StyleSheet.create({
-  container: { position: 'absolute', bottom: 20, right: 20, zIndex: 50 },
+  container: { position: 'absolute', bottom: 80, right: 20, zIndex: 50 },
   boton: {
     width: 64, height: 64, borderRadius: 32, backgroundColor: '#E53935',
     alignItems: 'center', justifyContent: 'center', elevation: 8,
