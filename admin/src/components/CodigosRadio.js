@@ -53,7 +53,7 @@ export default function CodigosRadio() {
 
   useEffect(() => {
     cargar();
-    const intervalo = setInterval(cargar, 5000); // Actualizar cada 5 segundos
+    const intervalo = setInterval(cargar, 1000); // Actualizar cada 1 segundo
     return () => clearInterval(intervalo);
   }, []);
 
