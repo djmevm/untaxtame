@@ -8,6 +8,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { useAuth } from '../../context/AuthContext';
 import { useNavigation } from '@react-navigation/native';
 import apiInstance from '../../config/api';
+import MensajesAdmin from '../../components/MensajesAdmin';
 
 export default function PerfilClienteScreen() {
   const { perfil, setPerfil, cerrarSesion } = useAuth();
@@ -197,6 +198,8 @@ export default function PerfilClienteScreen() {
       <TouchableOpacity style={styles.btnPedirTaxi} onPress={() => navigation.navigate('PedirTaxi')}>
         <Text style={styles.btnPedirTaxiTexto}>🚕 Pedir Taxi</Text>
       </TouchableOpacity>
+
+      <MensajesAdmin uid={perfil?.uid} />
 
       <TouchableOpacity style={styles.btnSalir} onPress={handleCerrarSesion}>
         <Text style={styles.btnSalirTexto}>Cerrar sesión</Text>

@@ -37,6 +37,13 @@ export default function MensajesAdmin({ uid }) {
   // Contar mensajes no leídos
   const totalMensajes = mensajes.length;
 
+  // Auto-abrir si hay mensajes nuevos
+  useEffect(() => {
+    if (totalMensajes > 0 && !mostrar) {
+      setMostrar(true);
+    }
+  }, [totalMensajes]);
+
   return (
     <View style={styles.seccion}>
       <TouchableOpacity onPress={() => setMostrar(!mostrar)}>
