@@ -97,15 +97,15 @@ export default function ChatServicio({ servicioId, visible, onCerrar }) {
           </TouchableOpacity>
         </View>
 
-        {/* Mensajes debajo - invertido para que los recientes estén arriba */}
+        {/* Mensajes debajo - orden normal de arriba hacia abajo */}
         <FlatList
           ref={flatListRef}
-          data={[...mensajes].reverse()}
-          inverted
+          data={mensajes}
           keyExtractor={(item, i) => item.id || `m-${i}`}
           style={styles.lista}
           contentContainerStyle={mensajes.length === 0 ? styles.listaVacia : styles.listaContent}
           keyboardShouldPersistTaps="always"
+          onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: true })}
           ListEmptyComponent={
             <View style={styles.vacio}>
               <Text style={{ fontSize: 40 }}>💬</Text>
