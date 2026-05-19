@@ -222,6 +222,9 @@ export default function Usuarios() {
             </div>
           )}
 
+          {/* Chat directo con el usuario */}
+          <ChatDirectoAdmin uid={u.uid} nombre={u.nombre} />
+
           {esConductor && (
             <>
               <h3 style={styles.subtitulo}>📄 Documentos adjuntos</h3>
@@ -418,6 +421,99 @@ export default function Usuarios() {
           ))}
         </tbody>
       </table>
+    </div>
+  );
+}
+
+// Componente de chat directo admin → usuario
+function ChatDirectoAdmin({ uid, nombre }) {
+  const [mensajes, setMensajes] = React.useState([]);
+  const [texto, setTexto] = React.useState('');
+  const [enviando, setEnviando] = React.useState(false);
+  const [mostrar, setMostrar] = React.useState(false);
+
+  const cargar = async () => {
+    try {
+      const res = await api.get(`/chat/directo/${uid}/mensajes`);
+      setMensajes(res.data);
+    } catch {}
+  };
+
+  React.useEffect(() => {
+    if (mostrar) {
+      cargar();
+      const intervalo = setInterval(cargar, 3000);
+      return () => clearInterval(intervalo);
+    }
+  }, [mostrar, uid]);
+
+  const enviar = async () => {
+    if (!texto.trim() || enviando) return;
+    setEnviando(true);
+    try {
+      await api.post(`/chat/directo/${uid}/mensaje`, { texto: texto.trim() });
+      setTexto('');
+      cargar();
+    } catch (err) {
+      alert('Error: ' + (err.response?.data?.error || err.message));
+    } finally {
+      setEnviando(false);
+    }
+  };
+
+  return (
+    <div style={{ marginTop: 20, marginBottom: 20 }}>
+      <button onClick={() => setMostrar(!mostrar)} style={{
+        background: '#1565C0', color: '#fff', border: 'none', borderRadius: 10,
+        padding: '10px 20px', cursor: 'pointer', fontWeight: 'bold', fontSize: 14,
+      }}>
+        💬 {mostrar ? 'Ocultar chat' : `Mensaje directo a ${nombre}`}
+      </button>
+
+      {mostrar && (
+        <div style={{ marginTop: 12, background: '#f9f9f9', borderRadius: 14, padding: 16, border: '1px solid #eee' }}>
+          <div style={{ maxHeight: 300, overflowY: 'auto', marginBottom: 12 }}>
+            {mensajes.length === 0 ? (
+              <p style={{ color: '#999', textAlign: 'center' }}>Sin mensajes</p>
+            ) : (
+              mensajes.map((msg, i) => (
+                <div key={msg.id || i} style={{
+                  padding: '8px 12px', borderRadius: 10, marginBottom: 6, maxWidth: '80%',
+                  background: msg.rol === 'admin' ? '#FFF3E0' : '#E3F2FD',
+                  marginLeft: msg.rol === 'admin' ? 'auto' : 0,
+                  borderLeft: `3px solid ${msg.rol === 'admin' ? '#F97316' : '#1565C0'}`,
+                }}>
+                  <span style={{ fontSize: 11, color: '#888', fontWeight: '600' }}>
+                    {msg.rol === 'admin' ? '🛡️ Admin' : `👤 ${msg.nombre || nombre}`}
+                  </span>
+                  <p style={{ margin: '4px 0 2px', fontSize: 14, color: '#333' }}>{msg.texto}</p>
+                  <span style={{ fontSize: 10, color: '#bbb' }}>
+                    {msg.creadoEn ? new Date(msg.creadoEn).toLocaleString('es-CO', { hour: '2-digit', minute: '2-digit', hour12: true }) : ''}
+                  </span>
+                </div>
+              ))
+            )}
+          </div>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <input
+              type="text"
+              value={texto}
+              onChange={e => setTexto(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') enviar(); }}
+              placeholder="Escribir mensaje..."
+              style={{ flex: 1, padding: '10px 14px', borderRadius: 10, border: '1px solid #ddd', fontSize: 14 }}
+              disabled={enviando}
+            />
+            <button onClick={enviar} disabled={!texto.trim() || enviando} style={{
+              background: texto.trim() ? '#F97316' : '#ddd', color: '#fff', border: 'none',
+              borderRadius: 10, padding: '10px 18px', cursor: texto.trim() ? 'pointer' : 'default',
+              fontWeight: 'bold',
+            }}>
+              Enviar
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

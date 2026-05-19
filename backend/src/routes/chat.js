@@ -109,3 +109,57 @@ router.get('/:servicioId/mensajes', verifyToken, async (req, res) => {
 });
 
 module.exports = router;
+
+
+// ═══ CHAT DIRECTO ADMIN → USUARIO ═══
+
+// Enviar mensaje directo a un usuario
+router.post('/directo/:uid/mensaje', verifyToken, async (req, res) => {
+  const { uid } = req.params;
+  const { texto } = req.body;
+  const adminUid = req.user.uid;
+
+  if (!texto || !texto.trim()) {
+    return res.status(400).json({ error: 'El mensaje no puede estar vacío' });
+  }
+
+  try {
+    // Verificar que es admin
+    const adminDoc = await db.collection('usuarios').doc(adminUid).get();
+    if (!adminDoc.exists || adminDoc.data().rol !== 'admin') {
+      return res.status(403).json({ error: 'Solo administradores pueden enviar mensajes directos' });
+    }
+
+    const mensaje = {
+      uid: adminUid,
+      nombre: 'Administrador',
+      rol: 'admin',
+      texto: texto.trim(),
+      creadoEn: new Date().toISOString(),
+    };
+
+    await db.collection('chats_directos').doc(uid).collection('mensajes').add(mensaje);
+
+    res.status(201).json({ message: 'Mensaje enviado', mensaje });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Obtener mensajes directos con un usuario
+router.get('/directo/:uid/mensajes', verifyToken, async (req, res) => {
+  const { uid } = req.params;
+
+  try {
+    const snapshot = await db.collection('chats_directos').doc(uid)
+      .collection('mensajes')
+      .orderBy('creadoEn', 'asc')
+      .limit(100)
+      .get();
+
+    const mensajes = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+    res.json(mensajes);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
