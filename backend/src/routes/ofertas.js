@@ -131,7 +131,22 @@ router.get('/:servicioId', verifyToken, async (req, res) => {
       .orderBy('monto', 'asc')
       .get();
 
-    const ofertas = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+    const ofertas = [];
+    for (const d of snapshot.docs) {
+      const oferta = { id: d.id, ...d.data() };
+      // Agregar reputación del conductor
+      try {
+        const conductorDoc = await db.collection('usuarios').doc(oferta.conductorUid).get();
+        if (conductorDoc.exists) {
+          const cData = conductorDoc.data();
+          const rep = cData.reputacion;
+          oferta.reputacion = typeof rep === 'object' ? rep : null;
+          oferta.viajesCompletados = rep?.totalServicios || 0;
+        }
+      } catch {}
+      ofertas.push(oferta);
+    }
+
     res.json(ofertas);
   } catch (err) {
     res.status(500).json({ error: err.message });

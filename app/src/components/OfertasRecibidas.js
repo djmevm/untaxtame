@@ -83,6 +83,15 @@ export default function OfertasRecibidas({ servicioId, onAceptar }) {
             <Text style={styles.ofertaMonto}>${oferta.monto.toLocaleString('es-CO')}</Text>
           </View>
 
+          {/* Reputación del conductor */}
+          {oferta.reputacion && (
+            <View style={styles.reputacionRow}>
+              <Text style={styles.reputacionItem}>⭐ {oferta.reputacion.promedio || '—'}/10</Text>
+              <Text style={styles.reputacionItem}>📊 {oferta.reputacion.porcentaje || 0}%</Text>
+              <Text style={styles.reputacionItem}>🚕 {oferta.viajesCompletados || 0} viajes</Text>
+            </View>
+          )}
+
           {oferta.mensaje ? (
             <Text style={styles.ofertaMensaje}>"{oferta.mensaje}"</Text>
           ) : null}
@@ -134,6 +143,11 @@ const styles = StyleSheet.create({
   conductorNombre: { fontSize: 16, fontWeight: 'bold', color: '#222' },
   conductorPlaca: { fontSize: 13, color: '#FFC107', fontWeight: 'bold', letterSpacing: 1, marginTop: 2 },
   ofertaMonto: { fontSize: 22, fontWeight: 'bold', color: '#2E7D32' },
+  reputacionRow: {
+    flexDirection: 'row', gap: 12, marginBottom: 8,
+    backgroundColor: '#F0FDF4', borderRadius: 8, padding: 8,
+  },
+  reputacionItem: { fontSize: 12, color: '#333', fontWeight: '600' },
   ofertaMensaje: { fontSize: 13, color: '#666', fontStyle: 'italic', marginBottom: 8 },
   ofertaCelular: { fontSize: 13, color: '#1565C0', marginBottom: 8 },
   btnAceptar: {
