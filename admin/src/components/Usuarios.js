@@ -332,56 +332,6 @@ export default function Usuarios() {
     URL.revokeObjectURL(url);
   };
 
-  // ── DESCARGAR ARCHIVOS como ZIP organizado ──
-  const descargarArchivos = async () => {
-    const archivos = [];
-    usuarios.forEach(u => {
-      const carpeta = u.rol === 'conductor' ? 'Conductores' : 'Clientes';
-      const nombre = (u.nombre || 'usuario').replace(/[^a-zA-Z0-9 ]/g, '').trim();
-      if (u.fotoPerfil && u.fotoPerfil.startsWith('http')) {
-        archivos.push({ url: u.fotoPerfil, path: `${carpeta}/${nombre}/perfil.jpg` });
-      }
-      if (u.documentos) {
-        Object.entries(u.documentos).forEach(([key, url]) => {
-          if (url && url.startsWith('http')) {
-            archivos.push({ url, path: `${carpeta}/${nombre}/${key}.jpg` });
-          }
-        });
-      }
-    });
-
-    if (archivos.length === 0) return alert('No hay archivos para descargar');
-    if (!window.JSZip) return alert('Error: recarga la página e intenta de nuevo.');
-
-    const zip = new window.JSZip();
-    let ok = 0;
-
-    for (const archivo of archivos) {
-      try {
-        // Usar proxy del backend para evitar CORS
-        const proxyUrl = `${api.defaults.baseURL}/upload/proxy?url=${encodeURIComponent(archivo.url)}`;
-        const token = await (await import('../firebase')).auth.currentUser?.getIdToken();
-        const res = await fetch(proxyUrl, { headers: { 'Authorization': `Bearer ${token}` } });
-        if (res.ok) {
-          const blob = await res.blob();
-          zip.file(archivo.path, blob);
-          ok++;
-        }
-      } catch {}
-    }
-
-    if (ok === 0) return alert('No se pudieron descargar. Intenta de nuevo en unos minutos.');
-
-    const blob = await zip.generateAsync({ type: 'blob' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `UntaXtame_Archivos_${new Date().toISOString().split('T')[0]}.zip`;
-    a.click();
-    URL.revokeObjectURL(url);
-    alert(`✅ ZIP descargado con ${ok} archivos.`);
-  };
-
   // ── LISTA DE USUARIOS ──
   return (
     <div>
@@ -392,10 +342,7 @@ export default function Usuarios() {
             <span style={styles.alertaBadge}>{pendientesVerificacion} pendientes</span>
           )}
         </h2>
-        <div style={{ display: 'flex', gap: 8 }}>
-          <button onClick={descargarArchivos} style={styles.btnExportar}>📁 Descargar Archivos</button>
-          <button onClick={exportarUsuariosCSV} style={styles.btnExportar}>📥 Exportar CSV</button>
-        </div>
+        <button onClick={exportarUsuariosCSV} style={styles.btnExportar}>📥 Exportar CSV</button>
       </div>
 
       <div className="stats">

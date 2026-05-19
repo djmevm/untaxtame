@@ -199,20 +199,18 @@ export default function PerfilConductorScreen() {
   };
 
   useEffect(() => {
-    if (enServicio) {
-      const enviar = async () => {
-        try {
-          const { status } = await Location.requestForegroundPermissionsAsync();
-          if (status !== 'granted') return;
-          const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
-          await api.put(`/users/conductor/${perfil?.uid}/ubicacion`, { lat: loc.coords.latitude, lng: loc.coords.longitude, enServicio: true });
-        } catch {}
-      };
-      enviar();
-      ubicacionInterval.current = setInterval(enviar, 60000);
-    } else { if (ubicacionInterval.current) clearInterval(ubicacionInterval.current); }
+    const enviarUbicacion = async () => {
+      try {
+        const { status } = await Location.requestForegroundPermissionsAsync();
+        if (status !== 'granted') return;
+        const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+        await api.put(`/users/conductor/${perfil?.uid}/ubicacion`, { lat: loc.coords.latitude, lng: loc.coords.longitude, enServicio: true });
+      } catch {}
+    };
+    enviarUbicacion();
+    ubicacionInterval.current = setInterval(enviarUbicacion, 10000);
     return () => { if (ubicacionInterval.current) clearInterval(ubicacionInterval.current); };
-  }, [enServicio]);
+  }, [perfil?.uid]);
 
   const toggleEnServicio = async () => {
     const nuevo = !enServicio;

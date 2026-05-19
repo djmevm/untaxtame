@@ -66,9 +66,11 @@ export default function PedirTaxiScreen() {
 
   useClienteServicioListener(perfil?.uid);
 
-  // GPS automático al abrir la app
+  // GPS automático al abrir la app y actualización periódica
   useEffect(() => {
     obtenerUbicacion();
+    const intervalo = setInterval(obtenerUbicacion, 30000); // Actualizar cada 30 seg
+    return () => clearInterval(intervalo);
   }, []);
 
   // Notificar mensajes de chat cuando el chat está cerrado
