@@ -332,51 +332,54 @@ export default function Usuarios() {
     URL.revokeObjectURL(url);
   };
 
-  // ── DESCARGAR ARCHIVOS (fotos y documentos) ──
+  // ── DESCARGAR ARCHIVOS como ZIP organizado ──
   const descargarArchivos = async () => {
     const archivos = [];
-
     usuarios.forEach(u => {
+      const carpeta = u.rol === 'conductor' ? 'Conductores' : 'Clientes';
+      const nombre = (u.nombre || 'usuario').replace(/[^a-zA-Z0-9 ]/g, '').trim();
       if (u.fotoPerfil && u.fotoPerfil.startsWith('http')) {
-        archivos.push({ url: u.fotoPerfil, nombre: `${u.rol}_${u.nombre?.replace(/[^a-zA-Z0-9]/g, '_')}_perfil.jpg`, usuario: u.nombre });
+        archivos.push({ url: u.fotoPerfil, path: `${carpeta}/${nombre}/perfil.jpg` });
       }
       if (u.documentos) {
         Object.entries(u.documentos).forEach(([key, url]) => {
           if (url && url.startsWith('http')) {
-            archivos.push({ url, nombre: `${u.nombre?.replace(/[^a-zA-Z0-9]/g, '_')}_${key}.jpg`, usuario: u.nombre });
+            archivos.push({ url, path: `${carpeta}/${nombre}/${key}.jpg` });
           }
         });
       }
     });
 
-    if (archivos.length === 0) {
-      alert('No hay archivos para descargar');
-      return;
-    }
+    if (archivos.length === 0) return alert('No hay archivos para descargar');
+    if (!window.JSZip) return alert('Error: recarga la página e intenta de nuevo.');
 
-    alert(`⏳ Descargando ${archivos.length} archivos... Espera un momento.`);
+    const zip = new window.JSZip();
+    let ok = 0;
 
-    // Descargar cada archivo individualmente
     for (const archivo of archivos) {
       try {
-        const response = await fetch(archivo.url);
-        const blob = await response.blob();
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.href = url;
-        link.download = archivo.nombre;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        URL.revokeObjectURL(url);
-        // Esperar 500ms entre descargas para no saturar
-        await new Promise(r => setTimeout(r, 500));
-      } catch (err) {
-        console.error('Error descargando:', archivo.nombre, err);
-      }
+        // Usar proxy del backend para evitar CORS
+        const proxyUrl = `${api.defaults.baseURL}/upload/proxy?url=${encodeURIComponent(archivo.url)}`;
+        const token = await (await import('../firebase')).auth.currentUser?.getIdToken();
+        const res = await fetch(proxyUrl, { headers: { 'Authorization': `Bearer ${token}` } });
+        if (res.ok) {
+          const blob = await res.blob();
+          zip.file(archivo.path, blob);
+          ok++;
+        }
+      } catch {}
     }
 
-    alert(`✅ ${archivos.length} archivos descargados a tu carpeta de Descargas.`);
+    if (ok === 0) return alert('No se pudieron descargar. Intenta de nuevo en unos minutos.');
+
+    const blob = await zip.generateAsync({ type: 'blob' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `UntaXtame_Archivos_${new Date().toISOString().split('T')[0]}.zip`;
+    a.click();
+    URL.revokeObjectURL(url);
+    alert(`✅ ZIP descargado con ${ok} archivos.`);
   };
 
   // ── LISTA DE USUARIOS ──

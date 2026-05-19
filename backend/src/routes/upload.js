@@ -123,3 +123,23 @@ router.post('/documentos', verifyToken, upload.fields(camposDocumentos), async (
 });
 
 module.exports = router;
+
+
+// Proxy para descargar archivos de Firebase Storage (evita CORS)
+router.get('/proxy', verifyToken, async (req, res) => {
+  const { url } = req.query;
+  if (!url) return res.status(400).json({ error: 'URL requerida' });
+
+  try {
+    const fetch = require('node-fetch');
+    const response = await fetch(url);
+    if (!response.ok) return res.status(404).json({ error: 'Archivo no encontrado' });
+
+    const contentType = response.headers.get('content-type') || 'application/octet-stream';
+    res.setHeader('Content-Type', contentType);
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    response.body.pipe(res);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
