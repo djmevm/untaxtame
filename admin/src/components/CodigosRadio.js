@@ -60,8 +60,10 @@ export default function CodigosRadio() {
   const reproducirAlerta = () => {
     try {
       if (!audioRef.current) {
-        audioRef.current = new Audio('data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbsGczIj2NxN/Uu1Y3Ij2Hw9zVvFk5JD+Dw9nUvFk5JD+Dw9nUvFk5');
+        audioRef.current = new Audio('https://actions.google.com/sounds/v1/alarms/alarm_clock.ogg');
       }
+      audioRef.current.currentTime = 0;
+      audioRef.current.volume = 1.0;
       audioRef.current.play().catch(() => {});
     } catch {}
   };
