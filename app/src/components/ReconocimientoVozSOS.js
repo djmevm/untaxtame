@@ -78,28 +78,40 @@ export default function ReconocimientoVozSOS({ servicioId, usuarioUid }) {
   const [ultimaDeteccion, setUltimaDeteccion] = useState(null);
   const [enviando, setEnviando] = useState(false);
   const cooldownRef = useRef(false);
+  const ultimoCodigoRef = useRef(null);
   const appStateRef = useRef(AppState.currentState);
 
+  // Auto-iniciar al montar
   useEffect(() => {
-    const solicitarPermisos = async () => {
+    const autoIniciar = async () => {
       const result = await ExpoSpeechRecognitionModule.requestPermissionsAsync();
       setPermisoOk(result.granted);
+      if (result.granted) {
+        setTimeout(() => iniciarEscucha(), 500);
+      }
     };
-    solicitarPermisos();
+    autoIniciar();
+    return () => { try { ExpoSpeechRecognitionModule.stop(); } catch {} };
   }, []);
 
   useEffect(() => {
     const subscription = AppState.addEventListener('change', (nextState) => {
       if (appStateRef.current.match(/active/) && nextState.match(/background|inactive/)) {
-        detenerEscucha();
+        try { ExpoSpeechRecognitionModule.stop(); } catch {}
+        setEscuchando(false);
+      } else if (nextState === 'active' && permisoOk) {
+        // Reiniciar al volver a la app
+        setTimeout(() => iniciarEscucha(), 300);
       }
       appStateRef.current = nextState;
     });
     return () => subscription?.remove();
-  }, []);
+  }, [permisoOk]);
 
   // Evento: resultado del reconocimiento de voz
   useSpeechRecognitionEvent('result', (event) => {
+    if (cooldownRef.current) return; // Ignorar si está en cooldown
+
     const textos = event.results?.map(r => r?.transcript?.toLowerCase().trim()) || [];
 
     for (const texto of textos) {
@@ -108,6 +120,10 @@ export default function ReconocimientoVozSOS({ servicioId, usuarioUid }) {
       // Primero buscar códigos de radio 20-X (más específicos)
       for (const [clave, config] of Object.entries(CODIGOS_RADIO)) {
         if (texto.includes(clave)) {
+          // Evitar duplicado del mismo código
+          if (ultimoCodigoRef.current === config.codigo) return;
+          ultimoCodigoRef.current = config.codigo;
+          setTimeout(() => { ultimoCodigoRef.current = null; }, 15000);
           ejecutarCodigoRadio(config);
           return;
         }
@@ -116,6 +132,9 @@ export default function ReconocimientoVozSOS({ servicioId, usuarioUid }) {
       // Luego buscar claves de emergencia H1/H2
       for (const [clave, config] of Object.entries(CLAVES_EMERGENCIA)) {
         if (texto.includes(clave)) {
+          if (ultimoCodigoRef.current === config.tipo) return;
+          ultimoCodigoRef.current = config.tipo;
+          setTimeout(() => { ultimoCodigoRef.current = null; }, 30000);
           activarEmergencia(config);
           return;
         }
@@ -124,11 +143,12 @@ export default function ReconocimientoVozSOS({ servicioId, usuarioUid }) {
   });
 
   useSpeechRecognitionEvent('error', () => {
-    if (escuchando) setTimeout(() => iniciarEscucha(), 1000);
+    if (escuchando) setTimeout(() => iniciarEscucha(), 300);
   });
 
   useSpeechRecognitionEvent('end', () => {
-    if (escuchando) setTimeout(() => iniciarEscucha(), 500);
+    // Reiniciar inmediatamente para mantener siempre activo
+    if (escuchando) setTimeout(() => iniciarEscucha(), 100);
   });
 
   const iniciarEscucha = async () => {
