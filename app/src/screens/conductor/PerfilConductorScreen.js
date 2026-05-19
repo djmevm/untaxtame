@@ -32,8 +32,12 @@ const DOCS_CON_VENCIMIENTO = [
 
 function diasRestantes(fechaStr) {
   if (!fechaStr) return null;
-  const hoy = new Date(); hoy.setHours(0, 0, 0, 0);
-  const fecha = new Date(fechaStr); fecha.setHours(0, 0, 0, 0);
+  const hoy = new Date();
+  hoy.setHours(0, 0, 0, 0);
+  // Parsear fecha como local (no UTC) agregando T12:00:00
+  const partes = fechaStr.split('-');
+  const fecha = new Date(parseInt(partes[0]), parseInt(partes[1]) - 1, parseInt(partes[2]));
+  fecha.setHours(0, 0, 0, 0);
   return Math.ceil((fecha - hoy) / (1000 * 60 * 60 * 24));
 }
 
@@ -285,7 +289,12 @@ export default function PerfilConductorScreen() {
       fd.append('imagen', { uri, name: `${campo}.${ext}`, type: `image/${ext === 'png' ? 'png' : 'jpeg'}` });
       const response = await fetch(`${api.defaults.baseURL}/upload/imagen`, { method: 'POST', headers: { 'Authorization': `Bearer ${token}` }, body: fd });
       const data = await response.json();
-      if (response.ok && data.url) return `http://192.168.0.101:3000${data.url}`;
+      if (response.ok && data.url) {
+        // Si la URL ya es completa (Firebase Storage), usarla directamente
+        if (data.url.startsWith('http')) return data.url;
+        // Si es relativa, agregar base URL
+        return `${api.defaults.baseURL.replace('/api', '')}${data.url}`;
+      }
     } catch {}
     return uri;
   };

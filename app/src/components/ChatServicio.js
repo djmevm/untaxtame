@@ -2,10 +2,12 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity,
   StyleSheet, FlatList, Platform,
-  ActivityIndicator, Modal
+  ActivityIndicator, Modal, Keyboard, Dimensions
 } from 'react-native';
 import { useAuth } from '../context/AuthContext';
 import api from '../config/api';
+
+const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 
 export default function ChatServicio({ servicioId, visible, onCerrar }) {
   const { perfil } = useAuth();
@@ -13,9 +15,24 @@ export default function ChatServicio({ servicioId, visible, onCerrar }) {
   const [texto, setTexto] = useState('');
   const [enviando, setEnviando] = useState(false);
   const [cargandoInicial, setCargandoInicial] = useState(true);
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
   const flatListRef = useRef(null);
   const cantidadAnterior = useRef(0);
   const intervaloRef = useRef(null);
+
+  // Detectar teclado manualmente
+  useEffect(() => {
+    const showSub = Keyboard.addListener('keyboardDidShow', (e) => {
+      setKeyboardHeight(e.endCoordinates.height);
+    });
+    const hideSub = Keyboard.addListener('keyboardDidHide', () => {
+      setKeyboardHeight(0);
+    });
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
+  }, []);
 
   const cargarMensajes = useCallback(async () => {
     if (!servicioId) return;
@@ -49,7 +66,7 @@ export default function ChatServicio({ servicioId, visible, onCerrar }) {
         flatListRef.current?.scrollToEnd({ animated: true });
       }, 150);
     }
-  }, [mensajes.length]);
+  }, [mensajes.length, keyboardHeight]);
 
   const enviarMensaje = async () => {
     const textoLimpio = texto.trim();
@@ -71,8 +88,8 @@ export default function ChatServicio({ servicioId, visible, onCerrar }) {
   const esMio = (msg) => msg.uid === perfil?.uid;
 
   return (
-    <Modal visible={visible} animationType="slide" onRequestClose={onCerrar} statusBarTranslucent presentationStyle="fullScreen">
-      <View style={styles.container}>
+    <Modal visible={visible} animationType="slide" onRequestClose={onCerrar}>
+      <View style={[styles.container, { paddingBottom: keyboardHeight }]}>
         {/* Header */}
         <View style={styles.header}>
           <TouchableOpacity onPress={onCerrar} style={styles.btnCerrar}>
@@ -83,44 +100,37 @@ export default function ChatServicio({ servicioId, visible, onCerrar }) {
         </View>
 
         {/* Mensajes */}
-        {cargandoInicial ? (
-          <View style={styles.cargando}>
-            <ActivityIndicator size="large" color="#F97316" />
-          </View>
-        ) : (
-          <FlatList
-            ref={flatListRef}
-            data={mensajes}
-            keyExtractor={(item, i) => item.id || `m-${i}`}
-            style={styles.lista}
-            contentContainerStyle={mensajes.length === 0 ? styles.listaVacia : styles.listaContent}
-            keyboardShouldPersistTaps="always"
-            keyboardDismissMode="none"
-            ListEmptyComponent={
-              <View style={styles.vacio}>
-                <Text style={{ fontSize: 40 }}>💬</Text>
-                <Text style={styles.vacioTexto}>Sin mensajes aún</Text>
-              </View>
-            }
-            renderItem={({ item }) => (
-              <View style={[styles.burbuja, esMio(item) ? styles.burbujaMia : styles.burbujaOtra]}>
-                {!esMio(item) && (
-                  <Text style={styles.remitente}>
-                    {item.rol === 'admin' ? '🛡️ Admin' : item.rol === 'cliente' ? '👤' : '🚕'} {item.nombre}
-                  </Text>
-                )}
-                <Text style={[styles.burbujaTexto, esMio(item) && { color: '#fff' }]}>
-                  {item.texto}
+        <FlatList
+          ref={flatListRef}
+          data={mensajes}
+          keyExtractor={(item, i) => item.id || `m-${i}`}
+          style={styles.lista}
+          contentContainerStyle={mensajes.length === 0 ? styles.listaVacia : styles.listaContent}
+          keyboardShouldPersistTaps="always"
+          ListEmptyComponent={
+            <View style={styles.vacio}>
+              <Text style={{ fontSize: 40 }}>💬</Text>
+              <Text style={styles.vacioTexto}>Sin mensajes aún</Text>
+            </View>
+          }
+          renderItem={({ item }) => (
+            <View style={[styles.burbuja, esMio(item) ? styles.burbujaMia : styles.burbujaOtra]}>
+              {!esMio(item) && (
+                <Text style={styles.remitente}>
+                  {item.rol === 'admin' ? '🛡️ Admin' : item.rol === 'cliente' ? '👤' : '🚕'} {item.nombre}
                 </Text>
-                <Text style={[styles.hora, esMio(item) && { color: 'rgba(255,255,255,0.7)' }]}>
-                  {item.creadoEn ? new Date(item.creadoEn).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' }) : ''}
-                </Text>
-              </View>
-            )}
-          />
-        )}
+              )}
+              <Text style={[styles.burbujaTexto, esMio(item) && { color: '#fff' }]}>
+                {item.texto}
+              </Text>
+              <Text style={[styles.hora, esMio(item) && { color: 'rgba(255,255,255,0.7)' }]}>
+                {item.creadoEn ? new Date(item.creadoEn).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' }) : ''}
+              </Text>
+            </View>
+          )}
+        />
 
-        {/* Input */}
+        {/* Input siempre visible */}
         <View style={styles.inputContainer}>
           <TextInput
             style={styles.input}
@@ -153,7 +163,6 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     backgroundColor: '#fff', paddingHorizontal: 16, paddingVertical: 14,
-    paddingTop: Platform.OS === 'ios' ? 54 : 14,
     borderBottomWidth: 1, borderBottomColor: '#eee',
   },
   btnCerrar: {
@@ -163,7 +172,6 @@ const styles = StyleSheet.create({
   btnCerrarTexto: { fontSize: 18, fontWeight: 'bold', color: '#333' },
   headerTitulo: { fontSize: 16, fontWeight: 'bold', color: '#333' },
   headerContador: { fontSize: 12, color: '#999', fontWeight: '600' },
-  cargando: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   lista: { flex: 1 },
   listaContent: { padding: 16, paddingBottom: 8 },
   listaVacia: { flex: 1, justifyContent: 'center', alignItems: 'center' },
