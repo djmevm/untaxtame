@@ -138,7 +138,7 @@ export default function ReconocimientoVozSOS({ servicioId, usuarioUid }) {
     try {
       ExpoSpeechRecognitionModule.start({
         lang: 'es-CO',
-        interimResults: true,
+        interimResults: false,
         continuous: true,
         requiresOnDeviceRecognition: false,
       });

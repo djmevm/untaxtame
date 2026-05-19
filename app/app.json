@@ -2,7 +2,7 @@
   "expo": {
     "name": "UntaXtame",
     "slug": "untaxtame",
-    "version": "1.8.0",
+    "version": "1.9.0",
     "orientation": "portrait",
     "icon": "./assets/icon_adaptive.jpg",
     "userInterfaceStyle": "light",
@@ -30,7 +30,7 @@
         "backgroundColor": "#000000"
       },
       "package": "com.untaxtame.app",
-      "versionCode": 8,
+      "versionCode": 9,
       "permissions": [
         "android.permission.ACCESS_FINE_LOCATION",
         "android.permission.ACCESS_COARSE_LOCATION",

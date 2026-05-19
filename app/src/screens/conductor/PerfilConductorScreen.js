@@ -8,6 +8,7 @@ import * as Location from 'expo-location';
 import { Audio } from 'expo-av';
 import { useAuth } from '../../context/AuthContext';
 import api from '../../config/api';
+import MensajesAdmin from '../../components/MensajesAdmin';
 
 const ESTADO_CONFIG = {
   pendiente: { color: '#FFC107', textColor: '#000', icon: '⏳', titulo: 'En revisión', mensaje: 'Tus documentos están siendo verificados.' },
@@ -362,6 +363,9 @@ export default function PerfilConductorScreen() {
           </>)}
         </TouchableOpacity>
       )}
+
+      {/* ═══ MENSAJES DEL ADMINISTRADOR ═══ */}
+      <MensajesAdmin uid={perfil?.uid} />
 
       {/* ═══ COMANDOS DE RADIO ═══ */}
       <View style={styles.seccion}>

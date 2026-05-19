@@ -117,28 +117,28 @@ module.exports = router;
 router.post('/directo/:uid/mensaje', verifyToken, async (req, res) => {
   const { uid } = req.params;
   const { texto } = req.body;
-  const adminUid = req.user.uid;
+  const senderUid = req.user.uid;
 
   if (!texto || !texto.trim()) {
     return res.status(400).json({ error: 'El mensaje no puede estar vacío' });
   }
 
   try {
-    // Verificar que es admin
-    const adminDoc = await db.collection('usuarios').doc(adminUid).get();
-    if (!adminDoc.exists || adminDoc.data().rol !== 'admin') {
-      return res.status(403).json({ error: 'Solo administradores pueden enviar mensajes directos' });
-    }
+    const senderDoc = await db.collection('usuarios').doc(senderUid).get();
+    const senderData = senderDoc.exists ? senderDoc.data() : {};
 
     const mensaje = {
-      uid: adminUid,
-      nombre: 'Administrador',
-      rol: 'admin',
+      uid: senderUid,
+      nombre: senderData.rol === 'admin' ? 'Administrador' : (senderData.nombre || 'Usuario'),
+      rol: senderData.rol || 'usuario',
       texto: texto.trim(),
       creadoEn: new Date().toISOString(),
     };
 
-    await db.collection('chats_directos').doc(uid).collection('mensajes').add(mensaje);
+    // Si es admin, guarda en el chat del usuario destino
+    // Si es usuario, guarda en su propio chat (para que admin lo vea)
+    const chatUid = senderData.rol === 'admin' ? uid : senderUid;
+    await db.collection('chats_directos').doc(chatUid).collection('mensajes').add(mensaje);
 
     res.status(201).json({ message: 'Mensaje enviado', mensaje });
   } catch (err) {
