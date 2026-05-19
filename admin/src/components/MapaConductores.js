@@ -4,29 +4,36 @@ import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import api from '../api';
 
-// Ícono de taxi con placa
-function crearIconoTaxi(placa) {
+// Ícono de taxi con nombre y placa
+function crearIconoTaxi(nombre, placa) {
+  const primerNombre = nombre?.split(' ')[0] || '';
+  const primerApellido = nombre?.split(' ').slice(1).find(p => p.length > 2) || nombre?.split(' ')[1] || '';
   return L.divIcon({
     className: '',
     html: `<div style="text-align:center">
-      <div style="font-size:32px">🚕</div>
-      <div style="background:#FFC107;color:#000;font-weight:bold;font-size:10px;padding:1px 6px;border-radius:4px;white-space:nowrap;margin-top:-4px">${placa || '---'}</div>
+      <div style="font-size:28px">🚕</div>
+      <div style="background:#FFC107;color:#000;font-weight:bold;font-size:9px;padding:2px 6px;border-radius:4px;white-space:nowrap;margin-top:-2px">${primerNombre} ${primerApellido}</div>
+      <div style="background:#333;color:#FFC107;font-weight:bold;font-size:8px;padding:1px 5px;border-radius:3px;margin-top:2px">${placa || '---'}</div>
     </div>`,
-    iconSize: [60, 50],
-    iconAnchor: [30, 50],
+    iconSize: [80, 60],
+    iconAnchor: [40, 60],
   });
 }
 
-// Ícono de cliente
-const iconoCliente = L.divIcon({
-  className: '',
-  html: `<div style="text-align:center">
-    <div style="font-size:28px">🧑</div>
-    <div style="background:#1565C0;color:#fff;font-size:9px;padding:1px 5px;border-radius:4px;margin-top:-4px">Cliente</div>
-  </div>`,
-  iconSize: [50, 45],
-  iconAnchor: [25, 45],
-});
+// Ícono de cliente con nombre
+function crearIconoCliente(nombre) {
+  const primerNombre = nombre?.split(' ')[0] || 'Cliente';
+  const primerApellido = nombre?.split(' ').slice(1).find(p => p.length > 2) || nombre?.split(' ')[1] || '';
+  return L.divIcon({
+    className: '',
+    html: `<div style="text-align:center">
+      <div style="font-size:26px">👤</div>
+      <div style="background:#1565C0;color:#fff;font-weight:bold;font-size:9px;padding:2px 6px;border-radius:4px;white-space:nowrap;margin-top:-2px">${primerNombre} ${primerApellido}</div>
+    </div>`,
+    iconSize: [80, 50],
+    iconAnchor: [40, 50],
+  });
+}
 
 // Componente para centrar el mapa
 function CentrarMapa({ centro }) {
@@ -99,7 +106,7 @@ export default function MapaConductores() {
             <Marker
               key={c.uid}
               position={[c.ubicacionActual.lat, c.ubicacionActual.lng]}
-              icon={crearIconoTaxi(c.placa)}
+              icon={crearIconoTaxi(c.nombre, c.placa)}
             >
               <Popup>
                 <div style={{ textAlign: 'center' }}>
@@ -119,7 +126,7 @@ export default function MapaConductores() {
             <Marker
               key={s.id}
               position={[s.ubicacionGPS.lat, s.ubicacionGPS.lng]}
-              icon={iconoCliente}
+              icon={crearIconoCliente(s.clienteNombre)}
             >
               <Popup>
                 <div style={{ textAlign: 'center' }}>

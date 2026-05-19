@@ -185,6 +185,7 @@ const styles = StyleSheet.create({
   hora: { fontSize: 10, color: '#bbb', marginTop: 4, textAlign: 'right' },
   inputContainer: {
     flexDirection: 'row', alignItems: 'flex-end', padding: 12,
+    paddingBottom: 18,
     backgroundColor: '#fff', borderTopWidth: 1, borderTopColor: '#eee', gap: 10,
   },
   input: {
