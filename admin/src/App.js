@@ -33,7 +33,7 @@ function AlertaSOS({ onVerEmergencias }) {
     };
 
     verificar();
-    const intervalo = setInterval(verificar, 5000); // Cada 5 seg para alertas en tiempo real
+    const intervalo = setInterval(verificar, 1000); // Cada 1 seg para alertas en tiempo real
     return () => clearInterval(intervalo);
   }, []);
 

@@ -22,7 +22,7 @@ export default function Emergencias() {
 
   useEffect(() => {
     cargar();
-    const intervalo = setInterval(cargar, 5000); // Actualizar cada 5 segundos en tiempo real
+    const intervalo = setInterval(cargar, 1000); // Actualizar cada 1 segundo en tiempo real
     return () => clearInterval(intervalo);
   }, []);
 
