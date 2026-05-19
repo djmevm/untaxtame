@@ -7,38 +7,19 @@ import {
 import { useAuth } from '../context/AuthContext';
 import api from '../config/api';
 
-const { height: SCREEN_HEIGHT } = Dimensions.get('window');
-
 export default function ChatServicio({ servicioId, visible, onCerrar }) {
   const { perfil } = useAuth();
   const [mensajes, setMensajes] = useState([]);
   const [texto, setTexto] = useState('');
   const [enviando, setEnviando] = useState(false);
   const [cargandoInicial, setCargandoInicial] = useState(true);
-  const [keyboardHeight, setKeyboardHeight] = useState(0);
   const flatListRef = useRef(null);
-  const cantidadAnterior = useRef(0);
   const intervaloRef = useRef(null);
-
-  // Detectar teclado manualmente
-  useEffect(() => {
-    const showSub = Keyboard.addListener('keyboardDidShow', (e) => {
-      setKeyboardHeight(e.endCoordinates.height);
-    });
-    const hideSub = Keyboard.addListener('keyboardDidHide', () => {
-      setKeyboardHeight(0);
-    });
-    return () => {
-      showSub.remove();
-      hideSub.remove();
-    };
-  }, []);
 
   const cargarMensajes = useCallback(async () => {
     if (!servicioId) return;
     try {
       const res = await api.get(`/chat/${servicioId}/mensajes`);
-      cantidadAnterior.current = res.data.length;
       setMensajes(res.data);
     } catch {}
     finally { setCargandoInicial(false); }
@@ -59,14 +40,6 @@ export default function ChatServicio({ servicioId, visible, onCerrar }) {
       if (intervaloRef.current) clearInterval(intervaloRef.current);
     };
   }, [servicioId, visible, cargarMensajes]);
-
-  useEffect(() => {
-    if (mensajes.length > 0) {
-      setTimeout(() => {
-        flatListRef.current?.scrollToEnd({ animated: true });
-      }, 150);
-    }
-  }, [mensajes.length, keyboardHeight]);
 
   const enviarMensaje = async () => {
     const textoLimpio = texto.trim();
@@ -89,7 +62,7 @@ export default function ChatServicio({ servicioId, visible, onCerrar }) {
 
   return (
     <Modal visible={visible} animationType="slide" onRequestClose={onCerrar}>
-      <View style={[styles.container, { paddingBottom: keyboardHeight }]}>
+      <View style={styles.container}>
         {/* Header */}
         <View style={styles.header}>
           <TouchableOpacity onPress={onCerrar} style={styles.btnCerrar}>
@@ -99,10 +72,36 @@ export default function ChatServicio({ servicioId, visible, onCerrar }) {
           <Text style={styles.headerContador}>{mensajes.length}</Text>
         </View>
 
-        {/* Mensajes */}
+        {/* Input ARRIBA - siempre visible */}
+        <View style={styles.inputContainer}>
+          <TextInput
+            style={styles.input}
+            placeholder="Escribe un mensaje..."
+            placeholderTextColor="#999"
+            value={texto}
+            onChangeText={setTexto}
+            maxLength={500}
+            blurOnSubmit={false}
+            returnKeyType="send"
+            onSubmitEditing={enviarMensaje}
+          />
+          <TouchableOpacity
+            style={[styles.btnEnviar, (!texto.trim() || enviando) && { backgroundColor: '#ddd' }]}
+            onPress={enviarMensaje}
+            disabled={!texto.trim() || enviando}
+          >
+            {enviando
+              ? <ActivityIndicator size="small" color="#fff" />
+              : <Text style={styles.btnEnviarTexto}>➤</Text>
+            }
+          </TouchableOpacity>
+        </View>
+
+        {/* Mensajes debajo - invertido para que los recientes estén arriba */}
         <FlatList
           ref={flatListRef}
-          data={mensajes}
+          data={[...mensajes].reverse()}
+          inverted
           keyExtractor={(item, i) => item.id || `m-${i}`}
           style={styles.lista}
           contentContainerStyle={mensajes.length === 0 ? styles.listaVacia : styles.listaContent}
@@ -129,30 +128,6 @@ export default function ChatServicio({ servicioId, visible, onCerrar }) {
             </View>
           )}
         />
-
-        {/* Input siempre visible */}
-        <View style={styles.inputContainer}>
-          <TextInput
-            style={styles.input}
-            placeholder="Escribe un mensaje..."
-            placeholderTextColor="#999"
-            value={texto}
-            onChangeText={setTexto}
-            multiline
-            maxLength={500}
-            blurOnSubmit={false}
-          />
-          <TouchableOpacity
-            style={[styles.btnEnviar, (!texto.trim() || enviando) && { backgroundColor: '#ddd' }]}
-            onPress={enviarMensaje}
-            disabled={!texto.trim() || enviando}
-          >
-            {enviando
-              ? <ActivityIndicator size="small" color="#fff" />
-              : <Text style={styles.btnEnviarTexto}>➤</Text>
-            }
-          </TouchableOpacity>
-        </View>
       </View>
     </Modal>
   );
@@ -172,10 +147,23 @@ const styles = StyleSheet.create({
   btnCerrarTexto: { fontSize: 18, fontWeight: 'bold', color: '#333' },
   headerTitulo: { fontSize: 16, fontWeight: 'bold', color: '#333' },
   headerContador: { fontSize: 12, color: '#999', fontWeight: '600' },
+  inputContainer: {
+    flexDirection: 'row', alignItems: 'center', padding: 10,
+    backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: '#eee', gap: 10,
+  },
+  input: {
+    flex: 1, borderWidth: 1, borderColor: '#ddd', borderRadius: 20,
+    paddingHorizontal: 16, paddingVertical: 8, fontSize: 15,
+    backgroundColor: '#fafafa', color: '#333',
+  },
+  btnEnviar: {
+    width: 40, height: 40, borderRadius: 20, backgroundColor: '#F97316',
+    alignItems: 'center', justifyContent: 'center',
+  },
+  btnEnviarTexto: { fontSize: 18, color: '#fff' },
   lista: { flex: 1 },
-  listaContent: { padding: 16, paddingBottom: 8 },
-  listaVacia: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  vacio: { alignItems: 'center' },
+  listaContent: { padding: 16, paddingTop: 8 },
+  vacio: { alignItems: 'center', paddingTop: 60 },
   vacioTexto: { fontSize: 14, color: '#999', marginTop: 8 },
   burbuja: { maxWidth: '80%', borderRadius: 16, padding: 12, marginBottom: 8 },
   burbujaMia: { backgroundColor: '#F97316', alignSelf: 'flex-end', borderBottomRightRadius: 4 },
@@ -183,19 +171,4 @@ const styles = StyleSheet.create({
   remitente: { fontSize: 11, fontWeight: '600', color: '#888', marginBottom: 3 },
   burbujaTexto: { fontSize: 15, color: '#333', lineHeight: 20 },
   hora: { fontSize: 10, color: '#bbb', marginTop: 4, textAlign: 'right' },
-  inputContainer: {
-    flexDirection: 'row', alignItems: 'flex-end', padding: 12,
-    paddingBottom: 18,
-    backgroundColor: '#fff', borderTopWidth: 1, borderTopColor: '#eee', gap: 10,
-  },
-  input: {
-    flex: 1, borderWidth: 1, borderColor: '#ddd', borderRadius: 20,
-    paddingHorizontal: 16, paddingVertical: 10, fontSize: 15,
-    maxHeight: 100, backgroundColor: '#fafafa', color: '#333',
-  },
-  btnEnviar: {
-    width: 42, height: 42, borderRadius: 21, backgroundColor: '#F97316',
-    alignItems: 'center', justifyContent: 'center',
-  },
-  btnEnviarTexto: { fontSize: 18, color: '#fff' },
 });
