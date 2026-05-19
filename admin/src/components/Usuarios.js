@@ -338,12 +338,12 @@ export default function Usuarios() {
 
     usuarios.forEach(u => {
       if (u.fotoPerfil && u.fotoPerfil.startsWith('http')) {
-        archivos.push({ url: u.fotoPerfil, nombre: `${u.rol}_${u.nombre?.replace(/\s/g, '_')}_perfil`, usuario: u.nombre });
+        archivos.push({ url: u.fotoPerfil, nombre: `${u.rol}_${u.nombre?.replace(/[^a-zA-Z0-9]/g, '_')}_perfil.jpg`, usuario: u.nombre });
       }
       if (u.documentos) {
         Object.entries(u.documentos).forEach(([key, url]) => {
           if (url && url.startsWith('http')) {
-            archivos.push({ url, nombre: `${u.nombre?.replace(/\s/g, '_')}_${key}`, usuario: u.nombre });
+            archivos.push({ url, nombre: `${u.nombre?.replace(/[^a-zA-Z0-9]/g, '_')}_${key}.jpg`, usuario: u.nombre });
           }
         });
       }
@@ -354,33 +354,29 @@ export default function Usuarios() {
       return;
     }
 
-    // Generar un HTML con todos los links de descarga
-    const fecha = new Date().toLocaleDateString('es-CO');
-    let html = `<html><head><title>Archivos UntaXtame - ${fecha}</title>
-      <style>body{font-family:Arial;padding:20px}h1{color:#F97316}table{width:100%;border-collapse:collapse}
-      th,td{border:1px solid #ddd;padding:10px;text-align:left}th{background:#FFC107}
-      a{color:#1565C0;font-weight:bold}img{max-width:150px;border-radius:8px}</style></head>
-      <body><h1>📁 Archivos UntaXtame S.A.S</h1><p>Fecha: ${fecha} | Total: ${archivos.length} archivos</p>
-      <table><tr><th>Usuario</th><th>Archivo</th><th>Vista previa</th><th>Descargar</th></tr>`;
+    alert(`⏳ Descargando ${archivos.length} archivos... Espera un momento.`);
 
-    archivos.forEach(a => {
-      html += `<tr><td>${a.usuario}</td><td>${a.nombre}</td>
-        <td><img src="${a.url}" onerror="this.style.display='none'"/></td>
-        <td><a href="${a.url}" target="_blank" download>⬇️ Descargar</a></td></tr>`;
-    });
+    // Descargar cada archivo individualmente
+    for (const archivo of archivos) {
+      try {
+        const response = await fetch(archivo.url);
+        const blob = await response.blob();
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = archivo.nombre;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+        // Esperar 500ms entre descargas para no saturar
+        await new Promise(r => setTimeout(r, 500));
+      } catch (err) {
+        console.error('Error descargando:', archivo.nombre, err);
+      }
+    }
 
-    html += `</table><br><p style="color:#888">Haz clic derecho en cada imagen → "Guardar imagen como..." para descargar individualmente.
-      O usa Ctrl+S para guardar esta página completa.</p></body></html>`;
-
-    const blob = new Blob([html], { type: 'text/html' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `archivos_untaxtame_${new Date().toISOString().split('T')[0]}.html`;
-    link.click();
-    URL.revokeObjectURL(url);
-
-    alert(`✅ Se generó un archivo HTML con ${archivos.length} archivos.\nÁbrelo en tu navegador para ver y descargar cada uno.`);
+    alert(`✅ ${archivos.length} archivos descargados a tu carpeta de Descargas.`);
   };
 
   // ── LISTA DE USUARIOS ──
