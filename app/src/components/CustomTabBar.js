@@ -1,5 +1,6 @@
 import React, { useRef, useEffect } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Animated } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Animated, Platform } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const TAB_ICONS = {
   PedirTaxi: '🚕',
@@ -63,8 +64,10 @@ function TabItem({ label, icon, isFocused, onPress, onLongPress }) {
 }
 
 export default function CustomTabBar({ state, descriptors, navigation }) {
+  const insets = useSafeAreaInsets();
+
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { paddingBottom: Math.max(insets.bottom, 8) }]}>
       {state.routes.map((route, index) => {
         const isFocused = state.index === index;
         const icon = TAB_ICONS[route.name] || '📌';

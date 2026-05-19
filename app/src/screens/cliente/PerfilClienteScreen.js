@@ -69,9 +69,9 @@ export default function PerfilClienteScreen() {
       });
       const data = await response.json();
 
-      // Guardar URL del servidor (no URI local)
+      // Guardar URL del servidor — Firebase Storage devuelve URL completa
       const fotoUrl = response.ok && data.url
-        ? `http://192.168.0.101:3000${data.url}`
+        ? (data.url.startsWith('http') ? data.url : `${apiInstance.defaults.baseURL.replace('/api', '')}${data.url}`)
         : uri;
 
       await apiInstance.put(`/auth/perfil/${uid}`, { fotoPerfil: fotoUrl });

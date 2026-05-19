@@ -153,22 +153,22 @@ export default function RegistroConductorScreen({ navigation }) {
         </View>
         <Text style={styles.pasoLabel}>Paso 1 de 2 — Datos personales</Text>
 
-        <TextInput style={styles.input} placeholder="Nombre completo" value={form.nombre}
+        <TextInput style={styles.input} placeholder="Nombre completo" placeholderTextColor="#999" value={form.nombre}
           onChangeText={v => set('nombre', v)} autoCapitalize="words" />
 
-        <TextInput style={styles.input} placeholder="Número de cédula" value={form.cedula}
+        <TextInput style={styles.input} placeholder="Número de cédula" placeholderTextColor="#999" value={form.cedula}
           onChangeText={v => set('cedula', v)} keyboardType="numeric" />
 
-        <TextInput style={styles.input} placeholder="Número de celular" value={form.telefono}
+        <TextInput style={styles.input} placeholder="Número de celular" placeholderTextColor="#999" value={form.telefono}
           onChangeText={v => set('telefono', v)} keyboardType="phone-pad" />
 
-        <TextInput style={styles.input} placeholder="Placa del taxi" value={form.placa}
+        <TextInput style={styles.input} placeholder="Placa del taxi" placeholderTextColor="#999" value={form.placa}
           onChangeText={v => set('placa', v.toUpperCase())} autoCapitalize="characters" />
 
-        <TextInput style={styles.input} placeholder="Correo electrónico" value={form.email}
+        <TextInput style={styles.input} placeholder="Correo electrónico" placeholderTextColor="#999" value={form.email}
           onChangeText={v => set('email', v)} keyboardType="email-address" autoCapitalize="none" />
 
-        <TextInput style={styles.input} placeholder="Contraseña" value={form.password}
+        <TextInput style={styles.input} placeholder="Contraseña" placeholderTextColor="#999" value={form.password}
           onChangeText={v => set('password', v)} secureTextEntry />
 
         <TouchableOpacity style={styles.btn} onPress={() => validarPaso1() && setPaso(2)}>

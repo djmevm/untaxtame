@@ -3,12 +3,14 @@ import {
   View, Text, FlatList, TouchableOpacity, StyleSheet,
   Alert, ActivityIndicator, RefreshControl, Linking, TextInput, Modal
 } from 'react-native';
+import { Feather } from '@expo/vector-icons';
 import { useAuth } from '../../context/AuthContext';
 import api from '../../config/api';
 import { useConductorServiciosListener, useConductorOfertaAceptada } from '../../hooks/useServicioListener';
 import BotonSOS from '../../components/BotonSOS';
 import AlertasConductores from '../../components/AlertasConductores';
 import ReconocimientoVozSOS from '../../components/ReconocimientoVozSOS';
+import BarraConductor, { useSaldoConductor } from '../../components/BarraConductor';
 import { reproducirSonido } from '../../services/sonido';
 
 export default function ServiciosPendientesScreen() {
@@ -28,6 +30,9 @@ export default function ServiciosPendientesScreen() {
   const [montoOferta, setMontoOferta] = useState('');
   const [mensajeOferta, setMensajeOferta] = useState('');
   const [enviandoOferta, setEnviandoOferta] = useState(false);
+
+  // Saldo del conductor
+  const { saldo, sinSaldo } = useSaldoConductor(perfil?.uid);
 
   const verificarServicioActivo = async () => {
     try {
@@ -68,7 +73,6 @@ export default function ServiciosPendientesScreen() {
 
   useEffect(() => {
     cargar();
-    // Recargar cada 8 segundos para mantener sincronizado
     const intervalo = setInterval(cargar, 30000);
     return () => clearInterval(intervalo);
   }, []);
@@ -78,7 +82,6 @@ export default function ServiciosPendientesScreen() {
     cargar();
   });
 
-  // Detectar cuando el cliente acepta la oferta
   useConductorOfertaAceptada(perfil?.uid, () => {
     cargar();
   });
@@ -86,6 +89,13 @@ export default function ServiciosPendientesScreen() {
   const abrirOferta = (servicio) => {
     if (perfil?.estadoVerificacion !== 'aprobado') {
       return Alert.alert('Cuenta no verificada', 'Tu cuenta debe ser aprobada por el administrador.');
+    }
+    if (sinSaldo) {
+      return Alert.alert(
+        '💰 Saldo insuficiente',
+        'Tu saldo es $0. Necesitas recargar tu billetera para poder ofertar servicios.\n\nContacta al administrador para recargar.',
+        [{ text: 'Entendido' }]
+      );
     }
     if (penalizado) {
       var horas = penalizadoHasta ? Math.ceil((new Date(penalizadoHasta) - new Date()) / (1000 * 60 * 60)) : 0;
@@ -122,7 +132,7 @@ export default function ServiciosPendientesScreen() {
         monto,
         mensaje: mensajeOferta,
       });
-      Alert.alert('¡Oferta enviada!', `Ofreciste $${monto.toLocaleString('es-CO')} para llevar a ${servicioSeleccionado.clienteNombre}. Espera a que el cliente acepte.`);
+      Alert.alert('¡Oferta enviada!', `Ofreciste ${monto.toLocaleString('es-CO')} para llevar a ${servicioSeleccionado.clienteNombre}. Espera a que el cliente acepte.`);
       setModalVisible(false);
       cargar();
     } catch (err) {
@@ -132,155 +142,222 @@ export default function ServiciosPendientesScreen() {
     }
   };
 
-  if (cargando) return <ActivityIndicator style={{ flex: 1 }} size="large" color="#FFC107" />;
+  if (cargando) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#F97316" />
+      </View>
+    );
+  }
 
   const noVerificado = perfil?.estadoVerificacion !== 'aprobado';
 
-  return (
-    <View style={styles.container}>
-      {noVerificado && (
-        <View style={styles.avisoCard}>
-          <Text style={styles.avisoIcon}>⏳</Text>
-          <Text style={styles.avisoTitulo}>Cuenta en revisión</Text>
-          <Text style={styles.avisoTexto}>
-            Podrás ofertar servicios cuando el administrador apruebe tus documentos.
-          </Text>
+  const renderServiceCard = ({ item }) => (
+    <View style={styles.card}>
+      {/* Client name */}
+      <View style={styles.cardHeader}>
+        <View style={styles.clientRow}>
+          <View style={styles.avatarCircle}>
+            <Feather name="user" size={16} color="#64748B" />
+          </View>
+          <Text style={styles.clientName} numberOfLines={1}>{item.clienteNombre}</Text>
         </View>
-      )}
-
-      {/* Aviso de penalización */}
-      {penalizado && (
-        <View style={styles.penalizadoCard}>
-          <Text style={{ fontSize: 28, marginBottom: 6 }}>🚫</Text>
-          <Text style={styles.penalizadoTitulo}>Penalización activa</Text>
-          <Text style={styles.penalizadoTexto}>
-            Has acumulado 5 cancelaciones. No puedes ofertar servicios hasta cumplir la penalización.
-          </Text>
-          <Text style={styles.penalizadoTiempo}>
-            ⏱️ Hasta: {penalizadoHasta ? new Date(penalizadoHasta).toLocaleString('es-CO', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true }) : '—'}
-          </Text>
-        </View>
-      )}
-
-      {/* Aviso de servicio activo */}
-      {servicioActivo && (
-        <View style={styles.activoCard}>
-          <Text style={{ fontSize: 28, marginBottom: 6 }}>🚕</Text>
-          <Text style={styles.activoTitulo}>Tienes un servicio en curso</Text>
-          <Text style={styles.activoCliente}>👤 {servicioActivo.clienteNombre}</Text>
-          <Text style={styles.activoRuta}>📍 {servicioActivo.origen} → {servicioActivo.destino}</Text>
-          <Text style={styles.activoEstado}>
-            Estado: {servicioActivo.estado === 'aceptado' ? '✅ Aceptado' : '🚗 En curso'}
-          </Text>
-          <Text style={styles.activoHint}>Completa o cancela este servicio para poder ofertar nuevos</Text>
-        </View>
-      )}
-
-      {/* Alertas de emergencia de compañeros */}
-      <AlertasConductores />
-
-      <View style={styles.encabezado}>
-        <Text style={styles.titulo}>Servicios Disponibles</Text>
-        {nuevos > 0 && (
-          <View style={styles.badge}>
-            <Text style={styles.badgeTexto}>{nuevos} nuevo{nuevos > 1 ? 's' : ''}</Text>
+        {item.totalOfertas > 0 && (
+          <View style={styles.offersbadge}>
+            <Feather name="tag" size={11} color="#F97316" />
+            <Text style={styles.offersBadgeText}>{item.totalOfertas}</Text>
           </View>
         )}
       </View>
 
+      {/* Route */}
+      <View style={styles.routeContainer}>
+        <View style={styles.routeDotsColumn}>
+          <View style={styles.routeDotGreen} />
+          <View style={styles.routeLine} />
+          <View style={styles.routeDotRed} />
+        </View>
+        <View style={styles.routeTexts}>
+          <Text style={styles.routeText} numberOfLines={1}>{item.origen}</Text>
+          <Text style={styles.routeText} numberOfLines={1}>{item.destino}</Text>
+        </View>
+      </View>
+
+      {/* Info row: payment + fare */}
+      <View style={styles.cardInfoRow}>
+        <View style={styles.paymentPill}>
+          <Feather name={item.metodoPago === 'efectivo' ? 'dollar-sign' : 'credit-card'} size={11} color="#64748B" />
+          <Text style={styles.paymentText}>{item.metodoPago?.toUpperCase()}</Text>
+        </View>
+        {item.tarifaEstimada && (
+          <Text style={styles.fareText}>
+            ${item.tarifaEstimada.tarifaEstimada?.toLocaleString('es-CO')}
+          </Text>
+        )}
+      </View>
+
+      {/* Requisitos */}
+      {item.requisitos && item.requisitos.length > 0 && (
+        <View style={styles.requisitosRow}>
+          {item.requisitos.map(r => (
+            <View key={r} style={styles.requisitoChip}>
+              <Feather
+                name={r === 'maletas' ? 'briefcase' : r === 'discapacitado' ? 'heart' : r === 'bicicleta' ? 'wind' : r === 'aireAcondicionado' ? 'thermometer' : r === 'mascotas' ? 'github' : 'check'}
+                size={11}
+                color="#64748B"
+              />
+              <Text style={styles.requisitoText}>
+                {r === 'maletas' ? 'Maletas' : r === 'discapacitado' ? 'Discapacitado' : r === 'bicicleta' ? 'Bicicleta' : r === 'aireAcondicionado' ? 'A/C' : r === 'mascotas' ? 'Mascotas' : r}
+              </Text>
+            </View>
+          ))}
+        </View>
+      )}
+
+      {/* Action buttons row */}
+      <View style={styles.cardActions}>
+        {item.clienteCelular && (
+          <TouchableOpacity style={styles.iconBtn} onPress={() => Linking.openURL(`tel:${item.clienteCelular}`)}>
+            <Feather name="phone" size={16} color="#64748B" />
+          </TouchableOpacity>
+        )}
+        {item.ubicacionGPS && (
+          <TouchableOpacity style={styles.iconBtn} onPress={() => Linking.openURL(`https://www.google.com/maps?q=${item.ubicacionGPS.lat},${item.ubicacionGPS.lng}`)}>
+            <Feather name="map-pin" size={16} color="#64748B" />
+          </TouchableOpacity>
+        )}
+        <TouchableOpacity
+          style={[styles.ofertarBtn, (noVerificado || servicioActivo || penalizado || sinSaldo) && styles.ofertarBtnDisabled]}
+          onPress={() => abrirOferta(item)}
+          activeOpacity={0.8}
+        >
+          <Text style={[styles.ofertarBtnText, (noVerificado || servicioActivo || penalizado || sinSaldo) && styles.ofertarBtnTextDisabled]}>
+            {noVerificado ? 'PENDIENTE' : penalizado ? 'PENALIZADO' : sinSaldo ? 'SIN SALDO' : servicioActivo ? 'EN SERVICIO' : 'OFERTAR'}
+          </Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+
+  return (
+    <View style={styles.container}>
+      {/* Header */}
+      <View style={styles.header}>
+        <View style={styles.headerLeft}>
+          <Text style={styles.brandName}>Untax</Text>
+          <View style={styles.countBadge}>
+            <Text style={styles.countBadgeText}>{servicios.length}</Text>
+          </View>
+        </View>
+        {nuevos > 0 && (
+          <View style={styles.newBadge}>
+            <Feather name="bell" size={12} color="#fff" />
+            <Text style={styles.newBadgeText}>{nuevos}</Text>
+          </View>
+        )}
+      </View>
+
+      {/* Wallet bar */}
+      <BarraConductor uid={perfil?.uid} />
+
+      {/* Verification notice */}
+      {noVerificado && (
+        <View style={styles.noticeCard}>
+          <Feather name="clock" size={20} color="#F97316" />
+          <View style={styles.noticeContent}>
+            <Text style={styles.noticeTitle}>Cuenta en revisión</Text>
+            <Text style={styles.noticeText}>Podrás ofertar cuando el administrador apruebe tus documentos.</Text>
+          </View>
+        </View>
+      )}
+
+      {/* Penalization notice */}
+      {penalizado && (
+        <View style={[styles.noticeCard, styles.noticeCardRed]}>
+          <Feather name="slash" size={20} color="#DC2626" />
+          <View style={styles.noticeContent}>
+            <Text style={[styles.noticeTitle, { color: '#DC2626' }]}>Penalización activa</Text>
+            <Text style={styles.noticeText}>
+              5 cancelaciones frecuentes. Hasta: {penalizadoHasta ? new Date(penalizadoHasta).toLocaleString('es-CO', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true }) : '—'}
+            </Text>
+          </View>
+        </View>
+      )}
+
+      {/* Active service notice */}
+      {servicioActivo && (
+        <View style={[styles.noticeCard, styles.noticeCardBlue]}>
+          <Feather name="navigation" size={20} color="#2563EB" />
+          <View style={styles.noticeContent}>
+            <Text style={[styles.noticeTitle, { color: '#2563EB' }]}>Servicio en curso</Text>
+            <Text style={styles.noticeText} numberOfLines={1}>
+              {servicioActivo.clienteNombre} — {servicioActivo.origen}
+            </Text>
+          </View>
+        </View>
+      )}
+
+      {/* Alertas de emergencia */}
+      <AlertasConductores />
+
+      {/* Error */}
       {error && (
         <View style={styles.errorCard}>
-          <Text style={styles.errorTexto}>⚠️ {error}</Text>
+          <Feather name="alert-triangle" size={16} color="#DC2626" />
+          <Text style={styles.errorText} numberOfLines={2}>{error}</Text>
           <TouchableOpacity onPress={cargar}>
             <Text style={styles.errorRetry}>Reintentar</Text>
           </TouchableOpacity>
         </View>
       )}
 
+      {/* Service list */}
       <FlatList
         data={servicios}
         keyExtractor={item => item.id}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); cargar(); }} />}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={() => { setRefreshing(true); cargar(); }}
+            colors={['#F97316']}
+            tintColor="#F97316"
+          />
+        }
+        contentContainerStyle={servicios.length === 0 ? styles.emptyListContainer : styles.listContent}
+        showsVerticalScrollIndicator={false}
         ListEmptyComponent={
-          <View style={styles.vacioContainer}>
-            <Text style={styles.vacioIcon}>📡</Text>
-            <Text style={styles.vacio}>No hay servicios pendientes</Text>
-            <Text style={styles.vacioSub}>Desliza hacia abajo para actualizar</Text>
+          <View style={styles.emptyState}>
+            <Feather name="radio" size={64} color="#CBD5E1" />
+            <Text style={styles.emptyTitle}>Sin servicios disponibles</Text>
+            <Text style={styles.emptySubtitle}>Desliza hacia abajo para actualizar</Text>
           </View>
         }
-        renderItem={({ item }) => (
-          <View style={styles.card}>
-            <Text style={styles.cliente}>👤 {item.clienteNombre}</Text>
-            <Text style={styles.ruta}>📍 {item.origen}</Text>
-            <Text style={styles.ruta}>🏁 {item.destino}</Text>
-            <View style={styles.infoRow}>
-              <Text style={styles.pago}>💳 {item.metodoPago?.toUpperCase()}</Text>
-              {item.tarifaEstimada && (
-                <Text style={styles.tarifaSugerida}>
-                  💰 Sugerida: ${item.tarifaEstimada.tarifaEstimada?.toLocaleString('es-CO')}
-                </Text>
-              )}
-            </View>
-            {item.totalOfertas > 0 && (
-              <Text style={styles.ofertasCount}>
-                🏷️ {item.totalOfertas} oferta{item.totalOfertas > 1 ? 's' : ''} recibida{item.totalOfertas > 1 ? 's' : ''}
-              </Text>
-            )}
-            {item.requisitos && item.requisitos.length > 0 && (
-              <View style={styles.requisitosContainer}>
-                <Text style={styles.requisitosLabel}>📋 Requisitos:</Text>
-                <View style={styles.requisitosChips}>
-                  {item.requisitos.map(r => (
-                    <View key={r} style={styles.requisitoChip}>
-                      <Text style={styles.requisitoChipTexto}>
-                        {r === 'maletas' ? '🧳 Maletas' : r === 'discapacitado' ? '♿ Discapacitado' : r === 'bicicleta' ? '🚲 Bicicleta' : r === 'aireAcondicionado' ? '❄️ A/C' : r === 'mascotas' ? '🐾 Mascotas' : r}
-                      </Text>
-                    </View>
-                  ))}
-                </View>
-              </View>
-            )}
-            {item.clienteCelular && (
-              <TouchableOpacity onPress={() => Linking.openURL(`tel:${item.clienteCelular}`)}>
-                <Text style={styles.telefono}>📞 {item.clienteCelular}</Text>
-              </TouchableOpacity>
-            )}
-            {item.ubicacionGPS && (
-              <TouchableOpacity onPress={() => Linking.openURL(`https://www.google.com/maps?q=${item.ubicacionGPS.lat},${item.ubicacionGPS.lng}`)}>
-                <Text style={styles.gps}>📌 Ver ubicación del cliente</Text>
-              </TouchableOpacity>
-            )}
-            <TouchableOpacity
-              style={[styles.btnOfertar, (noVerificado || servicioActivo || penalizado) && styles.btnDisabled]}
-              onPress={() => abrirOferta(item)}
-            >
-              <Text style={styles.btnTexto}>
-                {noVerificado ? '⏳ PENDIENTE' : penalizado ? '🚫 PENALIZADO' : servicioActivo ? '🚕 EN SERVICIO' : '💰 HACER OFERTA'}
-              </Text>
-            </TouchableOpacity>
-          </View>
-        )}
+        renderItem={renderServiceCard}
       />
 
-      {/* Botón SOS flotante */}
+      {/* FAB buttons */}
       <BotonSOS servicioId={null} />
-
-      {/* Reconocimiento de voz H1/H2 */}
       <ReconocimientoVozSOS servicioId={null} usuarioUid={perfil?.uid} />
 
       {/* Modal de oferta */}
       <Modal visible={modalVisible} transparent animationType="slide">
         <View style={styles.modalOverlay}>
           <View style={styles.modalCard}>
-            <Text style={styles.modalTitulo}>💰 Tu oferta</Text>
-            <Text style={styles.modalSub}>
+            {/* Modal handle */}
+            <View style={styles.modalHandle} />
+
+            <Text style={styles.modalTitle}>Tu oferta</Text>
+            <Text style={styles.modalSubtitle} numberOfLines={2}>
               {servicioSeleccionado?.clienteNombre} — {servicioSeleccionado?.origen} → {servicioSeleccionado?.destino}
             </Text>
 
             {servicioSeleccionado?.tarifaEstimada && (
-              <Text style={styles.modalSugerida}>
-                Tarifa sugerida: ${servicioSeleccionado.tarifaEstimada.tarifaEstimada?.toLocaleString('es-CO')}
-              </Text>
+              <View style={styles.suggestedFareRow}>
+                <Feather name="info" size={14} color="#16A34A" />
+                <Text style={styles.suggestedFareText}>
+                  Sugerida: ${servicioSeleccionado.tarifaEstimada.tarifaEstimada?.toLocaleString('es-CO')}
+                </Text>
+              </View>
             )}
 
             <Text style={styles.modalLabel}>¿Cuánto cobras? (mínimo $8,000)</Text>
@@ -290,26 +367,33 @@ export default function ServiciosPendientesScreen() {
               onChangeText={setMontoOferta}
               keyboardType="numeric"
               placeholder="8000"
+              placeholderTextColor="#94A3B8"
             />
 
             <Text style={styles.modalLabel}>Mensaje al cliente (opcional)</Text>
             <TextInput
-              style={[styles.modalInput, { height: 60 }]}
+              style={[styles.modalInput, { height: 64, textAlignVertical: 'top' }]}
               value={mensajeOferta}
               onChangeText={setMensajeOferta}
               placeholder="Ej: Estoy cerca, llego en 5 min"
+              placeholderTextColor="#94A3B8"
               multiline
             />
 
-            <TouchableOpacity style={styles.btnEnviarOferta} onPress={enviarOferta} disabled={enviandoOferta}>
+            <TouchableOpacity
+              style={styles.modalSubmitBtn}
+              onPress={enviarOferta}
+              disabled={enviandoOferta}
+              activeOpacity={0.8}
+            >
               {enviandoOferta
-                ? <ActivityIndicator color="#000" />
-                : <Text style={styles.btnEnviarTexto}>ENVIAR OFERTA ${parseInt(montoOferta || 0).toLocaleString('es-CO')}</Text>
+                ? <ActivityIndicator color="#fff" />
+                : <Text style={styles.modalSubmitText}>ENVIAR OFERTA ${parseInt(montoOferta || 0).toLocaleString('es-CO')}</Text>
               }
             </TouchableOpacity>
 
-            <TouchableOpacity style={styles.btnCancelarModal} onPress={() => setModalVisible(false)}>
-              <Text style={styles.btnCancelarTexto}>Cancelar</Text>
+            <TouchableOpacity style={styles.modalCancelBtn} onPress={() => setModalVisible(false)}>
+              <Text style={styles.modalCancelText}>Cancelar</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -318,78 +402,416 @@ export default function ServiciosPendientesScreen() {
   );
 }
 
+
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f5f5f5', padding: 16 },
-  avisoCard: {
-    backgroundColor: '#FFF3E0', borderRadius: 12, padding: 16,
-    marginBottom: 16, borderLeftWidth: 4, borderLeftColor: '#FFC107', alignItems: 'center',
+  container: {
+    flex: 1,
+    backgroundColor: '#F8FAFC',
+    paddingHorizontal: 16,
+    paddingTop: 12,
   },
-  avisoIcon: { fontSize: 32, marginBottom: 8 },
-  avisoTitulo: { fontSize: 16, fontWeight: 'bold', color: '#E65100' },
-  avisoTexto: { fontSize: 13, color: '#666', textAlign: 'center' },
-  activoCard: {
-    backgroundColor: '#E3F2FD', borderRadius: 12, padding: 16,
-    marginBottom: 16, borderLeftWidth: 4, borderLeftColor: '#1565C0', alignItems: 'center',
+  loadingContainer: {
+    flex: 1,
+    backgroundColor: '#F8FAFC',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-  activoTitulo: { fontSize: 16, fontWeight: 'bold', color: '#1565C0', marginBottom: 6 },
-  activoCliente: { fontSize: 15, fontWeight: '600', color: '#333' },
-  activoRuta: { fontSize: 13, color: '#555', marginTop: 2 },
-  activoEstado: { fontSize: 13, fontWeight: 'bold', color: '#1565C0', marginTop: 6 },
-  activoHint: { fontSize: 11, color: '#888', marginTop: 6, textAlign: 'center', fontStyle: 'italic' },
-  penalizadoCard: {
-    backgroundColor: '#FFEBEE', borderRadius: 12, padding: 16,
-    marginBottom: 16, borderLeftWidth: 4, borderLeftColor: '#B71C1C', alignItems: 'center',
+
+  // Header
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+    paddingTop: 4,
   },
-  penalizadoTitulo: { fontSize: 17, fontWeight: 'bold', color: '#B71C1C', marginBottom: 4 },
-  penalizadoTexto: { fontSize: 13, color: '#666', textAlign: 'center', marginBottom: 6 },
-  penalizadoTiempo: { fontSize: 14, fontWeight: 'bold', color: '#E53935' },
-  encabezado: { flexDirection: 'row', alignItems: 'center', marginBottom: 16, gap: 10 },
-  titulo: { fontSize: 22, fontWeight: 'bold' },
-  badge: { backgroundColor: '#E53935', borderRadius: 12, paddingHorizontal: 10, paddingVertical: 3 },
-  badgeTexto: { color: '#fff', fontWeight: 'bold', fontSize: 12 },
+  headerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  brandName: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    color: '#1E293B',
+  },
+  countBadge: {
+    backgroundColor: '#F1F5F9',
+    borderRadius: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 3,
+  },
+  countBadgeText: {
+    fontSize: 12,
+    fontWeight: 'bold',
+    color: '#64748B',
+  },
+  newBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#F97316',
+    borderRadius: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+  },
+  newBadgeText: {
+    fontSize: 12,
+    fontWeight: 'bold',
+    color: '#fff',
+  },
+
+  // Notice cards
+  noticeCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    backgroundColor: '#FFF7ED',
+    borderWidth: 1,
+    borderColor: '#FED7AA',
+    borderRadius: 12,
+    padding: 14,
+    marginBottom: 10,
+  },
+  noticeCardRed: {
+    backgroundColor: '#FEF2F2',
+    borderColor: '#FECACA',
+  },
+  noticeCardBlue: {
+    backgroundColor: '#EFF6FF',
+    borderColor: '#BFDBFE',
+  },
+  noticeContent: {
+    flex: 1,
+  },
+  noticeTitle: {
+    fontSize: 15,
+    fontWeight: 'bold',
+    color: '#F97316',
+    marginBottom: 2,
+  },
+  noticeText: {
+    fontSize: 12,
+    color: '#64748B',
+  },
+
+  // Error
   errorCard: {
-    backgroundColor: '#FFEBEE', borderRadius: 8, padding: 12, marginBottom: 12,
-    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#FEF2F2',
+    borderWidth: 1,
+    borderColor: '#FECACA',
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 10,
   },
-  errorTexto: { fontSize: 13, color: '#C62828', flex: 1 },
-  errorRetry: { color: '#1565C0', fontWeight: 'bold' },
-  card: { backgroundColor: '#fff', borderRadius: 12, padding: 16, marginBottom: 12, elevation: 2 },
-  cliente: { fontSize: 18, fontWeight: 'bold', marginBottom: 8 },
-  ruta: { fontSize: 15, marginBottom: 4, color: '#333' },
-  infoRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8, flexWrap: 'wrap' },
-  pago: { fontSize: 14, color: '#666' },
-  tarifaSugerida: { fontSize: 14, color: '#2E7D32', fontWeight: '600' },
-  ofertasCount: { fontSize: 13, color: '#1565C0', fontWeight: '600', marginBottom: 8 },
-  telefono: { fontSize: 14, color: '#1565C0', fontWeight: '600', marginBottom: 4 },
-  requisitosContainer: { marginBottom: 8 },
-  requisitosLabel: { fontSize: 13, fontWeight: '600', color: '#555', marginBottom: 4 },
-  requisitosChips: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
-  requisitoChip: { backgroundColor: '#E3F2FD', borderRadius: 8, paddingHorizontal: 8, paddingVertical: 4 },
-  requisitoChipTexto: { fontSize: 12, color: '#1565C0', fontWeight: '600' },
-  gps: { fontSize: 13, color: '#1565C0', marginBottom: 10 },
-  btnOfertar: { backgroundColor: '#FFC107', borderRadius: 8, padding: 12, alignItems: 'center', marginTop: 4 },
-  btnDisabled: { backgroundColor: '#ddd' },
-  btnTexto: { fontWeight: 'bold', fontSize: 15, color: '#000' },
-  vacioContainer: { alignItems: 'center', marginTop: 60 },
-  vacioIcon: { fontSize: 48, marginBottom: 12 },
-  vacio: { fontSize: 16, fontWeight: 'bold', color: '#999' },
-  vacioSub: { fontSize: 13, color: '#bbb', marginTop: 4 },
+  errorText: {
+    flex: 1,
+    fontSize: 12,
+    color: '#DC2626',
+  },
+  errorRetry: {
+    fontSize: 12,
+    fontWeight: 'bold',
+    color: '#2563EB',
+  },
+
+  // List
+  listContent: {
+    paddingBottom: 100,
+  },
+  emptyListContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+
+  // Empty state
+  emptyState: {
+    alignItems: 'center',
+    paddingTop: 60,
+  },
+  emptyTitle: {
+    fontSize: 15,
+    fontWeight: 'bold',
+    color: '#94A3B8',
+    marginTop: 16,
+  },
+  emptySubtitle: {
+    fontSize: 12,
+    color: '#CBD5E1',
+    marginTop: 4,
+  },
+
+  // Service card
+  card: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    padding: 20,
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    elevation: 1,
+  },
+  cardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 14,
+  },
+  clientRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    flex: 1,
+  },
+  avatarCircle: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#F1F5F9',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  clientName: {
+    fontSize: 15,
+    fontWeight: 'bold',
+    color: '#1E293B',
+    flex: 1,
+  },
+  offersbadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    backgroundColor: '#FFF7ED',
+    borderRadius: 10,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+  },
+  offersBadgeText: {
+    fontSize: 12,
+    fontWeight: 'bold',
+    color: '#F97316',
+  },
+
+  // Route
+  routeContainer: {
+    flexDirection: 'row',
+    gap: 10,
+    marginBottom: 14,
+  },
+  routeDotsColumn: {
+    alignItems: 'center',
+    paddingTop: 4,
+    width: 12,
+  },
+  routeDotGreen: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#16A34A',
+  },
+  routeLine: {
+    width: 1.5,
+    flex: 1,
+    backgroundColor: '#E2E8F0',
+    marginVertical: 3,
+  },
+  routeDotRed: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#DC2626',
+  },
+  routeTexts: {
+    flex: 1,
+    justifyContent: 'space-between',
+    gap: 8,
+  },
+  routeText: {
+    fontSize: 12,
+    color: '#64748B',
+  },
+
+  // Info row
+  cardInfoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+  },
+  paymentPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#F1F5F9',
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  paymentText: {
+    fontSize: 12,
+    color: '#64748B',
+    fontWeight: '600',
+  },
+  fareText: {
+    fontSize: 15,
+    fontWeight: 'bold',
+    color: '#16A34A',
+  },
+
+  // Requisitos
+  requisitosRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginBottom: 12,
+  },
+  requisitoChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#F1F5F9',
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  requisitoText: {
+    fontSize: 12,
+    color: '#64748B',
+  },
+
+  // Card actions
+  cardActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginTop: 4,
+  },
+  iconBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#F1F5F9',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  ofertarBtn: {
+    flex: 1,
+    backgroundColor: '#F97316',
+    borderRadius: 12,
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+  ofertarBtnDisabled: {
+    backgroundColor: '#E2E8F0',
+  },
+  ofertarBtnText: {
+    fontSize: 15,
+    fontWeight: 'bold',
+    color: '#FFFFFF',
+  },
+  ofertarBtnTextDisabled: {
+    color: '#94A3B8',
+  },
+
+  // FAB container
+  fabContainer: {
+    position: 'absolute',
+    bottom: 80,
+    right: 20,
+    alignItems: 'center',
+    gap: 12,
+  },
 
   // Modal
-  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
-  modalCard: { backgroundColor: '#fff', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24 },
-  modalTitulo: { fontSize: 22, fontWeight: 'bold', textAlign: 'center', marginBottom: 4 },
-  modalSub: { fontSize: 14, color: '#666', textAlign: 'center', marginBottom: 12 },
-  modalSugerida: { fontSize: 15, color: '#2E7D32', fontWeight: 'bold', textAlign: 'center', marginBottom: 16 },
-  modalLabel: { fontSize: 13, color: '#888', marginBottom: 6, fontWeight: '600' },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.5)',
+    justifyContent: 'flex-end',
+  },
+  modalCard: {
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    padding: 24,
+    paddingTop: 16,
+  },
+  modalHandle: {
+    width: 36,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: '#E2E8F0',
+    alignSelf: 'center',
+    marginBottom: 16,
+  },
+  modalTitle: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    color: '#1E293B',
+    textAlign: 'center',
+    marginBottom: 4,
+  },
+  modalSubtitle: {
+    fontSize: 12,
+    color: '#64748B',
+    textAlign: 'center',
+    marginBottom: 16,
+  },
+  suggestedFareRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    marginBottom: 20,
+  },
+  suggestedFareText: {
+    fontSize: 15,
+    fontWeight: 'bold',
+    color: '#16A34A',
+  },
+  modalLabel: {
+    fontSize: 12,
+    color: '#64748B',
+    marginBottom: 6,
+    fontWeight: '600',
+  },
   modalInput: {
-    borderWidth: 2, borderColor: '#ddd', borderRadius: 10,
-    padding: 12, fontSize: 16, marginBottom: 14, backgroundColor: '#fafafa',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 12,
+    padding: 14,
+    fontSize: 15,
+    color: '#1E293B',
+    backgroundColor: '#F8FAFC',
+    marginBottom: 14,
   },
-  btnEnviarOferta: {
-    backgroundColor: '#FFC107', borderRadius: 10, padding: 16, alignItems: 'center', marginTop: 8,
+  modalSubmitBtn: {
+    backgroundColor: '#F97316',
+    borderRadius: 14,
+    paddingVertical: 16,
+    alignItems: 'center',
+    marginTop: 8,
   },
-  btnEnviarTexto: { fontWeight: 'bold', fontSize: 16, color: '#000' },
-  btnCancelarModal: { padding: 14, alignItems: 'center', marginTop: 4 },
-  btnCancelarTexto: { color: '#999', fontWeight: 'bold', fontSize: 15 },
+  modalSubmitText: {
+    fontSize: 15,
+    fontWeight: 'bold',
+    color: '#FFFFFF',
+  },
+  modalCancelBtn: {
+    paddingVertical: 14,
+    alignItems: 'center',
+    marginTop: 4,
+  },
+  modalCancelText: {
+    fontSize: 15,
+    color: '#94A3B8',
+    fontWeight: '600',
+  },
 });

@@ -138,6 +138,7 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     backgroundColor: '#fff', paddingHorizontal: 16, paddingVertical: 14,
+    paddingTop: Platform.OS === 'ios' ? 54 : 14,
     borderBottomWidth: 1, borderBottomColor: '#eee',
   },
   btnCerrar: {

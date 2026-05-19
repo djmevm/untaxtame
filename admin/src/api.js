@@ -4,7 +4,7 @@ import { auth } from './firebase';
 // ═══ CONFIGURACIÓN DE API ═══
 // Para desarrollo: http://localhost:3000/api
 // Para producción: https://tu-dominio.com/api
-const BACKEND_URL = process.env.REACT_APP_API_URL || 'http://localhost:3000/api';
+const BACKEND_URL = process.env.REACT_APP_API_URL || 'https://untaxtame-production.up.railway.app/api';
 
 const api = axios.create({ baseURL: BACKEND_URL });
 

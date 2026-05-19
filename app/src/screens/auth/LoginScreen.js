@@ -58,9 +58,9 @@ export default function LoginScreen({ navigation }) {
         <Text style={styles.subtitulo}>S.A.S - Servicio con Calidad</Text>
       </View>
       <View style={styles.form}>
-        <TextInput style={styles.input} placeholder="Correo electrónico" value={email}
+        <TextInput style={styles.input} placeholder="Correo electrónico" placeholderTextColor="#999" value={email}
           onChangeText={setEmail} keyboardType="email-address" autoCapitalize="none" />
-        <TextInput style={styles.input} placeholder="Contraseña" value={password}
+        <TextInput style={styles.input} placeholder="Contraseña" placeholderTextColor="#999" value={password}
           onChangeText={setPassword} secureTextEntry />
         <TouchableOpacity onPress={handleRecuperarPassword}>
           <Text style={styles.olvidoTexto}>¿Olvidaste tu contraseña?</Text>

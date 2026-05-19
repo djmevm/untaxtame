@@ -90,6 +90,7 @@ export default function RegistroClienteScreen({ navigation }) {
       <TextInput
         style={styles.input}
         placeholder="Nombre completo"
+        placeholderTextColor="#999"
         value={form.nombre}
         onChangeText={v => set('nombre', v)}
         autoCapitalize="words"
@@ -97,6 +98,7 @@ export default function RegistroClienteScreen({ navigation }) {
       <TextInput
         style={styles.input}
         placeholder="Número de cédula"
+        placeholderTextColor="#999"
         value={form.cedula}
         onChangeText={v => set('cedula', v)}
         keyboardType="numeric"
@@ -104,6 +106,7 @@ export default function RegistroClienteScreen({ navigation }) {
       <TextInput
         style={styles.input}
         placeholder="Número de celular"
+        placeholderTextColor="#999"
         value={form.telefono}
         onChangeText={v => set('telefono', v)}
         keyboardType="phone-pad"
@@ -111,6 +114,7 @@ export default function RegistroClienteScreen({ navigation }) {
       <TextInput
         style={styles.input}
         placeholder="Dirección de residencia"
+        placeholderTextColor="#999"
         value={form.direccion}
         onChangeText={v => set('direccion', v)}
         autoCapitalize="words"
@@ -118,6 +122,7 @@ export default function RegistroClienteScreen({ navigation }) {
       <TextInput
         style={styles.input}
         placeholder="Correo electrónico"
+        placeholderTextColor="#999"
         value={form.email}
         onChangeText={v => set('email', v)}
         keyboardType="email-address"
@@ -126,6 +131,7 @@ export default function RegistroClienteScreen({ navigation }) {
       <TextInput
         style={styles.input}
         placeholder="Contraseña"
+        placeholderTextColor="#999"
         value={form.password}
         onChangeText={v => set('password', v)}
         secureTextEntry
