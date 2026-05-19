@@ -4,6 +4,7 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Text, ActivityIndicator, View } from 'react-native';
 import { useAuth } from '../context/AuthContext';
+import CustomTabBar from '../components/CustomTabBar';
 
 // Bienvenida
 import BienvenidaScreen from '../screens/auth/BienvenidaScreen';
@@ -30,28 +31,27 @@ const Tab = createBottomTabNavigator();
 
 function ClienteTabs() {
   return (
-    <Tab.Navigator screenOptions={{ tabBarActiveTintColor: '#FFC107' }}>
-      <Tab.Screen name="PedirTaxi" component={PedirTaxiScreen}
-        options={{ title: 'Pide Taxi', tabBarIcon: () => <Text>🚕</Text> }} />
-      <Tab.Screen name="HistorialCliente" component={HistorialClienteScreen}
-        options={{ title: 'Mis Viajes', tabBarIcon: () => <Text>📋</Text> }} />
-      <Tab.Screen name="HistorialPagos" component={HistorialPagosScreen}
-        options={{ title: 'Pagos', tabBarIcon: () => <Text>💳</Text> }} />
-      <Tab.Screen name="PerfilCliente" component={PerfilClienteScreen}
-        options={{ title: 'Mi Perfil', tabBarIcon: () => <Text>👤</Text> }} />
+    <Tab.Navigator
+      tabBar={(props) => <CustomTabBar {...props} />}
+      screenOptions={{ headerShown: false }}
+    >
+      <Tab.Screen name="PedirTaxi" component={PedirTaxiScreen} />
+      <Tab.Screen name="HistorialCliente" component={HistorialClienteScreen} />
+      <Tab.Screen name="HistorialPagos" component={HistorialPagosScreen} />
+      <Tab.Screen name="PerfilCliente" component={PerfilClienteScreen} />
     </Tab.Navigator>
   );
 }
 
 function ConductorTabs() {
   return (
-    <Tab.Navigator screenOptions={{ tabBarActiveTintColor: '#FFC107' }}>
-      <Tab.Screen name="Pendientes" component={ServiciosPendientesScreen}
-        options={{ title: 'Disponibles', tabBarIcon: () => <Text>📡</Text> }} />
-      <Tab.Screen name="MisServicios" component={MisServiciosScreen}
-        options={{ title: 'Mis Servicios', tabBarIcon: () => <Text>📋</Text> }} />
-      <Tab.Screen name="PerfilConductor" component={PerfilConductorScreen}
-        options={{ title: 'Mi Perfil', tabBarIcon: () => <Text>👤</Text> }} />
+    <Tab.Navigator
+      tabBar={(props) => <CustomTabBar {...props} />}
+      screenOptions={{ headerShown: false }}
+    >
+      <Tab.Screen name="Pendientes" component={ServiciosPendientesScreen} />
+      <Tab.Screen name="MisServicios" component={MisServiciosScreen} />
+      <Tab.Screen name="PerfilConductor" component={PerfilConductorScreen} />
     </Tab.Navigator>
   );
 }

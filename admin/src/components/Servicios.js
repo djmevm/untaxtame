@@ -338,6 +338,7 @@ export default function Servicios() {
             <th>Pago</th>
             <th>Tarifa</th>
             <th>Estado</th>
+            <th>Pagó</th>
             <th>Calificación</th>
             <th>Fecha</th>
             <th>Acciones</th>
@@ -364,6 +365,13 @@ export default function Servicios() {
                   : '—'}
               </td>
               <td><span className={`badge ${s.estado}`}>{s.estado}</span></td>
+              <td>
+                {s.estado === 'completado' ? (
+                  s.clientePago === true ? <span style={{ color: '#16A34A', fontWeight: 'bold' }}>✅ Sí</span>
+                  : s.clientePago === false ? <span style={{ color: '#DC2626', fontWeight: 'bold' }}>❌ No</span>
+                  : <span style={{ color: '#999' }}>—</span>
+                ) : <span style={{ color: '#999' }}>—</span>}
+              </td>
               <td>
                 {s.calificacion?.estrellas
                   ? <span title={s.calificacion.comentario || ''}>

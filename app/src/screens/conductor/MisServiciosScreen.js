@@ -77,24 +77,49 @@ export default function MisServiciosScreen() {
 
   const completar = async (servicio) => {
     Alert.alert(
-      '✅ Completar servicio',
-      `¿Confirmas que el viaje con ${servicio.clienteNombre} ha finalizado?`,
+      '✅ ¿Finalizar servicio?',
+      `¿Confirmas que el viaje con ${servicio.clienteNombre} terminó?`,
       [
         { text: 'No', style: 'cancel' },
         {
-          text: 'Sí, completar', onPress: async () => {
-            try {
-              await api.put(`/services/completar/${servicio.id}`);
-              reproducirSonido();
-              Alert.alert('✅ Servicio completado', 'El cliente recibirá una notificación para calificar tu servicio.');
-              cargar();
-            } catch {
-              Alert.alert('Error', 'No se pudo completar el servicio');
-            }
+          text: 'Sí, terminó', onPress: () => {
+            // Ahora preguntar si pagó
+            setTimeout(() => {
+              Alert.alert(
+                '💰 ¿El cliente pagó?',
+                `Método de pago: ${servicio.metodoPago?.toUpperCase() || 'EFECTIVO'}`,
+                [
+                  {
+                    text: '✅ Sí pagó', onPress: () => confirmarCompletado(servicio, true)
+                  },
+                  {
+                    text: '❌ No pagó', style: 'destructive', onPress: () => confirmarCompletado(servicio, false)
+                  },
+                ]
+              );
+            }, 500);
           }
-        }
+        },
       ]
     );
+  };
+
+  const confirmarCompletado = async (servicio, clientePago) => {
+    try {
+      await api.put(`/services/completar/${servicio.id}`, {
+        clientePago,
+        metodoPagoConfirmado: servicio.metodoPago,
+      });
+      reproducirSonido();
+      if (clientePago) {
+        Alert.alert('✅ Servicio completado', 'Pago confirmado. El cliente recibirá una notificación para calificar.');
+      } else {
+        Alert.alert('⚠️ Servicio completado', 'Se registró que el cliente NO pagó. Esto quedará en su historial.');
+      }
+      cargar();
+    } catch {
+      Alert.alert('Error', 'No se pudo completar el servicio');
+    }
   };
 
   const [motivoCancelacion, setMotivoCancelacion] = useState('');
