@@ -14,6 +14,54 @@ import './App.css';
 
 import { reproducirNotificacion, reproducirAlarmaSOS } from './utils/sonido';
 
+// ═══ CONTROL DE SESIÓN ÚNICA ═══
+const SESSION_ID = Date.now().toString(36) + Math.random().toString(36).substr(2);
+
+function useSesionUnica() {
+  const [bloqueado, setBloqueado] = useState(false);
+
+  useEffect(() => {
+    // Al abrir, registrar esta sesión
+    const registrar = () => {
+      localStorage.setItem('untaxtame_session', SESSION_ID);
+      localStorage.setItem('untaxtame_session_time', Date.now().toString());
+    };
+
+    // Verificar si hay otra sesión activa
+    const verificar = () => {
+      const sesionActual = localStorage.getItem('untaxtame_session');
+      if (sesionActual && sesionActual !== SESSION_ID) {
+        const tiempo = parseInt(localStorage.getItem('untaxtame_session_time') || '0');
+        // Si la otra sesión fue hace menos de 30 seg, está activa
+        if (Date.now() - tiempo < 30000) {
+          setBloqueado(true);
+          return;
+        }
+      }
+      setBloqueado(false);
+      registrar();
+    };
+
+    verificar();
+    const intervalo = setInterval(verificar, 10000);
+
+    // Escuchar cambios en localStorage (otra pestaña)
+    const onStorage = (e) => {
+      if (e.key === 'untaxtame_session' && e.newValue !== SESSION_ID) {
+        setBloqueado(true);
+      }
+    };
+    window.addEventListener('storage', onStorage);
+
+    return () => {
+      clearInterval(intervalo);
+      window.removeEventListener('storage', onStorage);
+    };
+  }, []);
+
+  return bloqueado;
+}
+
 // Componente de alerta SOS en tiempo real
 function AlertaSOS({ onVerEmergencias }) {
   const [alertas, setAlertas] = useState([]);
