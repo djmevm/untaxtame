@@ -9,6 +9,7 @@ import { Audio } from 'expo-av';
 import { useAuth } from '../../context/AuthContext';
 import api from '../../config/api';
 import MensajesAdmin from '../../components/MensajesAdmin';
+import ReporteSemanal from '../../components/ReporteSemanal';
 
 const ESTADO_CONFIG = {
   pendiente: { color: '#FFC107', textColor: '#000', icon: '⏳', titulo: 'En revisión', mensaje: 'Tus documentos están siendo verificados.' },
@@ -386,6 +387,9 @@ export default function PerfilConductorScreen() {
 
       {/* ═══ MENSAJES DEL ADMINISTRADOR ═══ */}
       <MensajesAdmin uid={perfil?.uid} />
+
+      {/* ═══ REPORTE SEMANAL ═══ */}
+      <ReporteSemanal uid={perfil?.uid} />
 
       {/* ═══ COMANDOS DE RADIO ═══ */}
       <View style={styles.seccion}>

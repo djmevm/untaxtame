@@ -1,5 +1,5 @@
 import { Audio } from 'expo-av';
-import { Vibration, Platform } from 'react-native';
+import { Vibration } from 'react-native';
 
 let soundObject = null;
 
@@ -14,71 +14,66 @@ async function inicializarAudio() {
   } catch {}
 }
 
-// Sonido de notificación normal
-export async function reproducirSonido() {
+async function reproducir(uri, volumen = 1.0, duracion = null) {
   try {
     await inicializarAudio();
-    Vibration.vibrate([0, 300, 100, 300]);
-
-    if (soundObject) {
-      try { await soundObject.unloadAsync(); } catch {}
-    }
-
-    const { sound } = await Audio.Sound.createAsync(
-      { uri: 'https://actions.google.com/sounds/v1/alarms/beep_short.ogg' },
-      { shouldPlay: true, volume: 1.0 }
-    );
+    if (soundObject) { try { await soundObject.unloadAsync(); } catch {} }
+    const { sound } = await Audio.Sound.createAsync({ uri }, { shouldPlay: true, volume: volumen });
     soundObject = sound;
-
-    sound.setOnPlaybackStatusUpdate((status) => {
-      if (status.didJustFinish) {
-        sound.unloadAsync().catch(() => {});
-      }
-    });
-  } catch {
-    // Fallback: solo vibrar
-    Vibration.vibrate([0, 300, 100, 300]);
-  }
+    if (duracion) {
+      setTimeout(async () => { try { await sound.stopAsync(); await sound.unloadAsync(); } catch {} }, duracion);
+    } else {
+      sound.setOnPlaybackStatusUpdate((status) => {
+        if (status.didJustFinish) sound.unloadAsync().catch(() => {});
+      });
+    }
+  } catch {}
 }
 
-// Sonido de alerta SOS (más fuerte y largo)
+// 🔔 Nuevo servicio disponible (conductor)
+export async function reproducirNuevoServicio() {
+  Vibration.vibrate([0, 300, 100, 300]);
+  await reproducir('https://actions.google.com/sounds/v1/alarms/beep_short.ogg');
+}
+
+// ✅ Servicio completado
+export async function reproducirSonido() {
+  Vibration.vibrate([0, 200, 100, 200]);
+  await reproducir('https://actions.google.com/sounds/v1/cartoon/pop.ogg');
+}
+
+// 🚨 Alerta SOS (fuerte y largo)
 export async function reproducirSonidoSOS() {
-  try {
-    await inicializarAudio();
-    Vibration.vibrate([0, 500, 200, 500, 200, 500]);
-
-    const { sound } = await Audio.Sound.createAsync(
-      { uri: 'https://actions.google.com/sounds/v1/alarms/alarm_clock.ogg' },
-      { shouldPlay: true, volume: 1.0 }
-    );
-
-    // Parar después de 3 segundos
-    setTimeout(async () => {
-      try { await sound.stopAsync(); await sound.unloadAsync(); } catch {}
-    }, 3000);
-  } catch {
-    Vibration.vibrate([0, 500, 200, 500, 200, 500]);
-  }
+  Vibration.vibrate([0, 500, 200, 500, 200, 800]);
+  await reproducir('https://actions.google.com/sounds/v1/alarms/alarm_clock.ogg', 1.0, 3000);
 }
 
-
-// Sonido de mensaje de chat (corto y tipo notificación)
+// 💬 Mensaje de chat recibido
 export async function reproducirSonidoChat() {
-  try {
-    await inicializarAudio();
-    Vibration.vibrate([0, 150, 80, 150]);
+  Vibration.vibrate([0, 100]);
+  await reproducir('https://actions.google.com/sounds/v1/cartoon/pop.ogg', 0.7);
+}
 
-    const { sound } = await Audio.Sound.createAsync(
-      { uri: 'https://actions.google.com/sounds/v1/cartoon/pop.ogg' },
-      { shouldPlay: true, volume: 0.8 }
-    );
+// 💰 Oferta recibida (cliente)
+export async function reproducirOfertaRecibida() {
+  Vibration.vibrate([0, 200, 100, 200, 100, 200]);
+  await reproducir('https://actions.google.com/sounds/v1/alarms/beep_short.ogg', 0.9);
+}
 
-    sound.setOnPlaybackStatusUpdate((status) => {
-      if (status.didJustFinish) {
-        sound.unloadAsync().catch(() => {});
-      }
-    });
-  } catch {
-    Vibration.vibrate([0, 150, 80, 150]);
-  }
+// 🚕 Conductor aceptado / en camino
+export async function reproducirConductorEnCamino() {
+  Vibration.vibrate([0, 300, 150, 300]);
+  await reproducir('https://actions.google.com/sounds/v1/transportation/car_horn_quick.ogg', 0.8);
+}
+
+// 📍 Conductor llegó al punto
+export async function reproducirConductorLlego() {
+  Vibration.vibrate([0, 500, 200, 500]);
+  await reproducir('https://actions.google.com/sounds/v1/transportation/car_horn_quick.ogg', 1.0);
+}
+
+// ⭐ Calificación recibida
+export async function reproducirCalificacion() {
+  Vibration.vibrate([0, 150]);
+  await reproducir('https://actions.google.com/sounds/v1/cartoon/pop.ogg', 0.6);
 }
