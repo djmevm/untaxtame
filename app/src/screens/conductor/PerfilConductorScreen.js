@@ -347,6 +347,28 @@ export default function PerfilConductorScreen() {
       <Text style={styles.nombre}>{perfil.nombre}</Text>
       <Text style={styles.rolTag}>🚕 Conductor</Text>
 
+      {/* Foto del vehículo */}
+      <TouchableOpacity style={styles.vehiculoCard} onPress={() => {
+        seleccionarImagen(async (uri) => {
+          try {
+            const url = await subirImagen(uri, 'vehiculo');
+            await api.put(`/auth/perfil/${perfil?.uid}`, { fotoVehiculo: url });
+            if (setPerfil) setPerfil(prev => ({ ...prev, fotoVehiculo: url }));
+            Alert.alert('✅', 'Foto del vehículo actualizada');
+          } catch {}
+        });
+      }}>
+        {perfil.fotoVehiculo ? (
+          <Image source={{ uri: perfil.fotoVehiculo }} style={styles.vehiculoImagen} />
+        ) : (
+          <View style={styles.vehiculoPlaceholder}>
+            <Text style={{ fontSize: 32 }}>🚕</Text>
+            <Text style={styles.vehiculoTexto}>Agregar foto del taxi</Text>
+          </View>
+        )}
+        <Text style={styles.vehiculoHint}>📷 {perfil.fotoVehiculo ? 'Cambiar foto del taxi' : 'Los clientes verán tu vehículo'}</Text>
+      </TouchableOpacity>
+
       <View style={[styles.estadoCard, { backgroundColor: estado.color }]}>
         <Text style={{ fontSize: 36, marginBottom: 8 }}>{estado.icon}</Text>
         <Text style={{ fontSize: 20, fontWeight: 'bold', color: estado.textColor, marginBottom: 6 }}>{estado.titulo}</Text>
@@ -543,4 +565,9 @@ const styles = StyleSheet.create({
   radioItem: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: '#f9f9f9', borderRadius: 10, padding: 12, borderLeftWidth: 4, borderLeftColor: '#E53935' },
   radioCode: { fontSize: 16, fontWeight: 'bold', color: '#333', minWidth: 50 },
   radioDesc: { fontSize: 13, color: '#555', flex: 1 },
+  vehiculoCard: { width: '100%', backgroundColor: '#fff', borderRadius: 14, padding: 14, marginBottom: 12, elevation: 2, alignItems: 'center' },
+  vehiculoImagen: { width: '100%', height: 150, borderRadius: 10, resizeMode: 'cover', marginBottom: 8 },
+  vehiculoPlaceholder: { width: '100%', height: 100, borderRadius: 10, backgroundColor: '#F8FAFC', borderWidth: 2, borderColor: '#E2E8F0', borderStyle: 'dashed', alignItems: 'center', justifyContent: 'center', marginBottom: 8 },
+  vehiculoTexto: { fontSize: 13, color: '#94A3B8', marginTop: 4 },
+  vehiculoHint: { fontSize: 12, color: '#64748B' },
 });
