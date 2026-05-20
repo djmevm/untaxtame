@@ -13,6 +13,9 @@ import ChatServicio from '../../components/ChatServicio';
 import OfertasRecibidas from '../../components/OfertasRecibidas';
 import ConductoresCercanos from '../../components/ConductoresCercanos';
 import MapaServicioActivo from '../../components/MapaServicioActivo';
+import CompartirViaje from '../../components/CompartirViaje';
+import RadarBuscando from '../../components/RadarBuscando';
+import DireccionesFavoritas from '../../components/DireccionesFavoritas';
 import useChatNotificacion from '../../hooks/useChatNotificacion';
 
 const { width } = Dimensions.get('window');
@@ -404,13 +407,14 @@ export default function PedirTaxiScreen() {
               </View>
 
               {/* Campo origen editable */}
+              <Text style={styles.inputHint}>📍 Escribe o usa GPS para tu ubicación</Text>
               <View style={styles.inputRow}>
                 <View style={styles.inputDot}>
                   <View style={styles.dotGreen} />
                 </View>
                 <TextInput
                   style={styles.inputField}
-                  placeholder="¿Dónde estás? (Origen)"
+                  placeholder="Ej: Calle 15 #10-25, Barrio Centro"
                   placeholderTextColor="#94A3B8"
                   value={origen}
                   onChangeText={setOrigen}
@@ -424,13 +428,14 @@ export default function PedirTaxiScreen() {
               </View>
 
               {/* Campo destino editable */}
+              <Text style={styles.inputHint}>🏁 Escribe o selecciona en el mapa tu destino</Text>
               <View style={styles.inputRow}>
                 <View style={styles.inputDot}>
                   <View style={styles.dotRed} />
                 </View>
                 <TextInput
                   style={styles.inputField}
-                  placeholder="¿Hacia dónde vamos? (Destino)"
+                  placeholder="Ej: Centro Comercial, Calle 20 #5-30"
                   placeholderTextColor="#94A3B8"
                   value={destino}
                   onChangeText={(text) => {
@@ -443,6 +448,9 @@ export default function PedirTaxiScreen() {
                   <Text style={styles.inputActionIcon}>📌</Text>
                 </TouchableOpacity>
               </View>
+
+              {/* Direcciones favoritas */}
+              <DireccionesFavoritas onSeleccionar={(dir) => setDestino(dir)} />
 
               {/* Conductores cercanos */}
               <ConductoresCercanos />
@@ -537,13 +545,14 @@ export default function PedirTaxiScreen() {
       <MapaServicioActivo servicioActivo={servicioActivo} destinoGPS={destinoGPS} />
 
       {/* Estado del servicio */}
-      <View style={[styles.estadoCard, { backgroundColor: estadoCfg.color }]}>
-        <Text style={styles.estadoIcon}>{estadoCfg.icon}</Text>
-        <Text style={[styles.estadoLabel, { color: estadoCfg.textColor }]}>{estadoCfg.label}</Text>
-        {servicioActivo.estado === 'pendiente' && (
-          <ActivityIndicator color={estadoCfg.textColor} style={{ marginTop: 6 }} />
-        )}
-      </View>
+      {servicioActivo.estado === 'pendiente' ? (
+        <RadarBuscando />
+      ) : (
+        <View style={[styles.estadoCard, { backgroundColor: estadoCfg.color }]}>
+          <Text style={styles.estadoIcon}>{estadoCfg.icon}</Text>
+          <Text style={[styles.estadoLabel, { color: estadoCfg.textColor }]}>{estadoCfg.label}</Text>
+        </View>
+      )}
 
       {/* Tarifa estimada en servicio activo */}
       {servicioActivo.tarifaEstimada && (
@@ -665,11 +674,14 @@ export default function PedirTaxiScreen() {
 
       {/* Chat y SOS — solo cuando hay conductor */}
       {servicioActivo.conductorNombre && ['pendiente', 'aceptado', 'conductor_en_sitio'].includes(servicioActivo.estado) && (
-        <View style={styles.chatSOSRow}>
-          <TouchableOpacity style={styles.btnChat} onPress={() => setMostrarChat(true)}>
-            <Text style={styles.btnChatTexto}>💬 Chat con conductor</Text>
-          </TouchableOpacity>
-        </View>
+        <>
+          <View style={styles.chatSOSRow}>
+            <TouchableOpacity style={styles.btnChat} onPress={() => setMostrarChat(true)}>
+              <Text style={styles.btnChatTexto}>💬 Chat con conductor</Text>
+            </TouchableOpacity>
+          </View>
+          <CompartirViaje servicioActivo={servicioActivo} />
+        </>
       )}
 
       {/* Acciones */}
@@ -788,6 +800,7 @@ const styles = StyleSheet.create({
   saludoSub: { fontSize: 13, color: '#888', marginTop: 2 },
 
   // Inputs editables
+  inputHint: { fontSize: 11, color: '#64748B', marginBottom: 4, marginLeft: 4 },
   inputRow: {
     flexDirection: 'row', alignItems: 'center', gap: 10,
     backgroundColor: '#fff', borderRadius: 14, padding: 14,

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator, Alert } from 'react-native';
 import api from '../config/api';
-import { reproducirSonido } from '../services/sonido';
+import { reproducirOfertaRecibida } from '../services/sonido';
 
 export default function OfertasRecibidas({ servicioId, onAceptar }) {
   const [ofertas, setOfertas] = useState([]);
@@ -13,7 +13,7 @@ export default function OfertasRecibidas({ servicioId, onAceptar }) {
     try {
       const res = await api.get(`/ofertas/${servicioId}`);
       if (res.data.length > cantidadAnterior.current && cantidadAnterior.current > 0) {
-        reproducirSonido();
+        reproducirOfertaRecibida();
       }
       cantidadAnterior.current = res.data.length;
       setOfertas(res.data);
@@ -24,7 +24,7 @@ export default function OfertasRecibidas({ servicioId, onAceptar }) {
   // Polling cada 5 segundos para ver nuevas ofertas
   useEffect(() => {
     cargarOfertas();
-    const intervalo = setInterval(cargarOfertas, 15000);
+    const intervalo = setInterval(cargarOfertas, 60000); // Cada 60 seg
     return () => clearInterval(intervalo);
   }, [servicioId]);
 

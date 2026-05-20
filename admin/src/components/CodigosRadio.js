@@ -53,7 +53,7 @@ export default function CodigosRadio() {
 
   useEffect(() => {
     cargar();
-    const intervalo = setInterval(cargar, 5000); // Cada 5 seg para reducir lecturas Firebase
+    const intervalo = setInterval(cargar, 60000); // Cada 60 seg
     return () => clearInterval(intervalo);
   }, []);
 
