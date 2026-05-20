@@ -11,41 +11,23 @@ import * as Location from 'expo-location';
 import api from '../config/api';
 
 // ═══ CÓDIGOS DE VOZ EN CLAVE ═══
-// Emergencias silenciosas (H1, H2)
-// Códigos operativos de radio (20-X)
+// H1 = Atraco / Robo (emergencia silenciosa)
+// H2 = Secuestro o Muerto en la vía (emergencia silenciosa)
 
 const CLAVES_EMERGENCIA = {
-  // H1 = Atraco (silenciosa)
+  // H1 = Atraco / Robo
   'h1': { tipo: 'robo', label: '🔫 Atraco / Robo', silenciosa: true, categoria: 'emergencia' },
   'hache1': { tipo: 'robo', label: '🔫 Atraco / Robo', silenciosa: true, categoria: 'emergencia' },
   'hache 1': { tipo: 'robo', label: '🔫 Atraco / Robo', silenciosa: true, categoria: 'emergencia' },
   'hache uno': { tipo: 'robo', label: '🔫 Atraco / Robo', silenciosa: true, categoria: 'emergencia' },
   'h uno': { tipo: 'robo', label: '🔫 Atraco / Robo', silenciosa: true, categoria: 'emergencia' },
-  // H2 = Accidente
-  'h2': { tipo: 'accidente', label: '🚗💥 Accidente', silenciosa: false, categoria: 'emergencia' },
-  'hache2': { tipo: 'accidente', label: '🚗💥 Accidente', silenciosa: false, categoria: 'emergencia' },
-  'hache 2': { tipo: 'accidente', label: '🚗💥 Accidente', silenciosa: false, categoria: 'emergencia' },
-  'hache dos': { tipo: 'accidente', label: '🚗💥 Accidente', silenciosa: false, categoria: 'emergencia' },
-  'h dos': { tipo: 'accidente', label: '🚗💥 Accidente', silenciosa: false, categoria: 'emergencia' },
+  // H2 = Secuestro o Muerto en la vía
+  'h2': { tipo: 'secuestro', label: '🚨 Secuestro / Muerto en la vía', silenciosa: true, categoria: 'emergencia' },
+  'hache2': { tipo: 'secuestro', label: '🚨 Secuestro / Muerto en la vía', silenciosa: true, categoria: 'emergencia' },
+  'hache 2': { tipo: 'secuestro', label: '🚨 Secuestro / Muerto en la vía', silenciosa: true, categoria: 'emergencia' },
+  'hache dos': { tipo: 'secuestro', label: '🚨 Secuestro / Muerto en la vía', silenciosa: true, categoria: 'emergencia' },
+  'h dos': { tipo: 'secuestro', label: '🚨 Secuestro / Muerto en la vía', silenciosa: true, categoria: 'emergencia' },
 };
-
-// ═══ CÓDIGOS DE RADIO 20-X (ordenados de más largo a más corto para evitar falsos positivos) ═══
-const CODIGOS_RADIO_LISTA = [
-  // 20-20 primero (más largo)
-  { claves: ['veinte veinte', '20-20', '2020', '20 20'], codigo: '20-20', label: '💀 Muerto en la vía', accion: 'muerto_via', color: '#000000' },
-  // 20-15
-  { claves: ['veinte quince', '20-15', '2015', '20 15'], codigo: '20-15', label: '⚠️ Carrera sospechosa', accion: 'sospechosa', color: '#880E4F' },
-  // 20-13
-  { claves: ['veinte trece', '20-13', '2013', '20 13'], codigo: '20-13', label: '🔧 Estoy varado', accion: 'varado', color: '#E65100' },
-  // 20-4
-  { claves: ['veinte cuatro', '20-4', '204', '20 4'], codigo: '20-4', label: '❌ Servicio cancelado', accion: 'cancelar_servicio', color: '#E53935' },
-  // 20-3
-  { claves: ['veinte tres', '20-3', '203', '20 3'], codigo: '20-3', label: '✅ Terminé el servicio', accion: 'terminar_servicio', color: '#2E7D32' },
-  // 20-2
-  { claves: ['veinte dos', '20-2', '202', '20 2'], codigo: '20-2', label: '📍 Ya recogí el pasajero', accion: 'recoger_servicio', color: '#FF9800' },
-  // 20-1
-  { claves: ['veinte uno', '20-1', '201', '20 1'], codigo: '20-1', label: '🚕 Tomé el servicio', accion: 'tomar_servicio', color: '#1565C0' },
-];
 
 export default function ReconocimientoVozSOS({ servicioId, usuarioUid }) {
   const [escuchando, setEscuchando] = useState(false);
@@ -56,16 +38,13 @@ export default function ReconocimientoVozSOS({ servicioId, usuarioUid }) {
   const ultimoCodigoRef = useRef(null);
   const appStateRef = useRef(AppState.currentState);
 
-  // Auto-iniciar al montar
+  // Solicitar permisos al montar (pero NO auto-iniciar)
   useEffect(() => {
-    const autoIniciar = async () => {
+    const solicitarPermisos = async () => {
       const result = await ExpoSpeechRecognitionModule.requestPermissionsAsync();
       setPermisoOk(result.granted);
-      if (result.granted) {
-        setTimeout(() => iniciarEscucha(), 500);
-      }
     };
-    autoIniciar();
+    solicitarPermisos();
     return () => { try { ExpoSpeechRecognitionModule.stop(); } catch {} };
   }, []);
 
@@ -74,9 +53,6 @@ export default function ReconocimientoVozSOS({ servicioId, usuarioUid }) {
       if (appStateRef.current.match(/active/) && nextState.match(/background|inactive/)) {
         try { ExpoSpeechRecognitionModule.stop(); } catch {}
         setEscuchando(false);
-      } else if (nextState === 'active' && permisoOk) {
-        // Reiniciar al volver a la app
-        setTimeout(() => iniciarEscucha(), 300);
       }
       appStateRef.current = nextState;
     });
@@ -91,18 +67,6 @@ export default function ReconocimientoVozSOS({ servicioId, usuarioUid }) {
 
     for (const texto of textos) {
       if (!texto) continue;
-
-      // Buscar códigos de radio (ordenados de más largo a más corto)
-      for (const config of CODIGOS_RADIO_LISTA) {
-        const encontrado = config.claves.some(clave => texto.includes(clave));
-        if (encontrado) {
-          if (ultimoCodigoRef.current === config.codigo) return;
-          ultimoCodigoRef.current = config.codigo;
-          setTimeout(() => { ultimoCodigoRef.current = null; }, 15000);
-          ejecutarCodigoRadio(config);
-          return;
-        }
-      }
 
       // Buscar claves de emergencia H1/H2
       for (const [clave, config] of Object.entries(CLAVES_EMERGENCIA)) {
@@ -158,46 +122,6 @@ export default function ReconocimientoVozSOS({ servicioId, usuarioUid }) {
     else iniciarEscucha();
   };
 
-  // ═══ EJECUTAR CÓDIGO DE RADIO 20-X ═══
-  const ejecutarCodigoRadio = async (config) => {
-    if (cooldownRef.current || enviando) return;
-    cooldownRef.current = true;
-    setEnviando(true);
-    setTimeout(() => { cooldownRef.current = false; }, 10000);
-
-    Vibration.vibrate([0, 150, 100, 150]);
-    setUltimaDeteccion(config.label);
-
-    try {
-      let ubicacion = null;
-      try {
-        const { status } = await Location.requestForegroundPermissionsAsync();
-        if (status === 'granted') {
-          const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
-          ubicacion = { lat: loc.coords.latitude, lng: loc.coords.longitude };
-        }
-      } catch {}
-
-      // Enviar código de radio al backend
-      await api.post('/radio/codigo', {
-        codigo: config.codigo,
-        accion: config.accion,
-        label: config.label,
-        servicioId: servicioId || null,
-        ubicacionLat: ubicacion?.lat || null,
-        ubicacionLng: ubicacion?.lng || null,
-      });
-
-      Alert.alert(
-        `📻 ${config.codigo}`,
-        `${config.label}\n\nReportado al panel de control.`
-      );
-    } catch (err) {
-      Alert.alert('Error', 'No se pudo enviar el código. Intenta de nuevo.');
-    } finally {
-      setEnviando(false);
-    }
-  };
 
   // ═══ ACTIVAR EMERGENCIA H1/H2 ═══
   const activarEmergencia = async (config) => {

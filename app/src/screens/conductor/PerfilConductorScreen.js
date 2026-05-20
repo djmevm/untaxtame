@@ -378,38 +378,13 @@ export default function PerfilConductorScreen() {
               <Text style={styles.radioCode}>H1</Text>
               <Text style={styles.radioDesc}>🔫 Atraco / Robo (alerta silenciosa)</Text>
             </View>
-            <View style={styles.radioItem}>
-              <Text style={styles.radioCode}>H2</Text>
-              <Text style={styles.radioDesc}>🚗💥 Accidente de tránsito</Text>
-            </View>
-            <View style={[styles.radioItem, { borderLeftColor: '#1565C0' }]}>
-              <Text style={styles.radioCode}>20-1</Text>
-              <Text style={styles.radioDesc}>🚕 Tomé el servicio</Text>
-            </View>
-            <View style={[styles.radioItem, { borderLeftColor: '#FF9800' }]}>
-              <Text style={styles.radioCode}>20-2</Text>
-              <Text style={styles.radioDesc}>📍 Ya recogí el pasajero</Text>
-            </View>
-            <View style={[styles.radioItem, { borderLeftColor: '#2E7D32' }]}>
-              <Text style={styles.radioCode}>20-3</Text>
-              <Text style={styles.radioDesc}>✅ Terminé el servicio</Text>
-            </View>
-            <View style={[styles.radioItem, { borderLeftColor: '#E53935' }]}>
-              <Text style={styles.radioCode}>20-4</Text>
-              <Text style={styles.radioDesc}>❌ Servicio cancelado</Text>
-            </View>
-            <View style={[styles.radioItem, { borderLeftColor: '#E65100' }]}>
-              <Text style={styles.radioCode}>20-13</Text>
-              <Text style={styles.radioDesc}>🔧 Estoy varado</Text>
-            </View>
             <View style={[styles.radioItem, { borderLeftColor: '#880E4F' }]}>
-              <Text style={styles.radioCode}>20-15</Text>
-              <Text style={styles.radioDesc}>⚠️ Carrera sospechosa</Text>
+              <Text style={styles.radioCode}>H2</Text>
+              <Text style={styles.radioDesc}>🚨 Secuestro / Muerto en la vía (alerta silenciosa)</Text>
             </View>
-            <View style={[styles.radioItem, { borderLeftColor: '#000' }]}>
-              <Text style={styles.radioCode}>20-20</Text>
-              <Text style={styles.radioDesc}>💀 Muerto en la vía</Text>
-            </View>
+            <Text style={{ fontSize: 11, color: '#888', marginTop: 8, fontStyle: 'italic' }}>
+              Activa el micrófono (botón VOZ) cuando te sientas inseguro. Di el código en voz baja.
+            </Text>
           </View>
         )}
       </View>
