@@ -3,12 +3,22 @@ import {
   View, Text, TouchableOpacity, StyleSheet,
   Alert, Vibration, AppState
 } from 'react-native';
-import {
-  ExpoSpeechRecognitionModule,
-  useSpeechRecognitionEvent,
-} from 'expo-speech-recognition';
-import * as Location from 'expo-location';
 import api from '../config/api';
+
+// Import seguro de expo-speech-recognition
+let ExpoSpeechRecognitionModule = null;
+let useSpeechRecognitionEvent = null;
+try {
+  const mod = require('expo-speech-recognition');
+  ExpoSpeechRecognitionModule = mod.ExpoSpeechRecognitionModule;
+  useSpeechRecognitionEvent = mod.useSpeechRecognitionEvent;
+} catch (e) {
+  // Módulo no disponible
+}
+
+// Import seguro de expo-location
+let Location = null;
+try { Location = require('expo-location'); } catch {}
 
 // ═══ CÓDIGOS DE VOZ EN CLAVE ═══
 // H1 = Atraco / Robo (emergencia silenciosa)
@@ -30,6 +40,15 @@ const CLAVES_EMERGENCIA = {
 };
 
 export default function ReconocimientoVozSOS({ servicioId, usuarioUid }) {
+  // Si el módulo no está disponible, no renderizar nada
+  if (!ExpoSpeechRecognitionModule) {
+    return null;
+  }
+
+  return <ReconocimientoVozInterno servicioId={servicioId} usuarioUid={usuarioUid} />;
+}
+
+function ReconocimientoVozInterno({ servicioId, usuarioUid }) {
   const [escuchando, setEscuchando] = useState(false);
   const [permisoOk, setPermisoOk] = useState(false);
   const [ultimaDeteccion, setUltimaDeteccion] = useState(null);
@@ -41,8 +60,10 @@ export default function ReconocimientoVozSOS({ servicioId, usuarioUid }) {
   // Solicitar permisos al montar (pero NO auto-iniciar)
   useEffect(() => {
     const solicitarPermisos = async () => {
-      const result = await ExpoSpeechRecognitionModule.requestPermissionsAsync();
-      setPermisoOk(result.granted);
+      try {
+        const result = await ExpoSpeechRecognitionModule.requestPermissionsAsync();
+        setPermisoOk(result.granted);
+      } catch {}
     };
     solicitarPermisos();
     return () => { try { ExpoSpeechRecognitionModule.stop(); } catch {} };
@@ -141,10 +162,12 @@ export default function ReconocimientoVozSOS({ servicioId, usuarioUid }) {
     try {
       let ubicacion = null;
       try {
-        const { status } = await Location.requestForegroundPermissionsAsync();
-        if (status === 'granted') {
-          const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
-          ubicacion = { lat: loc.coords.latitude, lng: loc.coords.longitude };
+        if (Location) {
+          const { status } = await Location.requestForegroundPermissionsAsync();
+          if (status === 'granted') {
+            const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
+            ubicacion = { lat: loc.coords.latitude, lng: loc.coords.longitude };
+          }
         }
       } catch {}
 
