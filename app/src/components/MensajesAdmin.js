@@ -5,7 +5,6 @@ import {
   SafeAreaView
 } from 'react-native';
 import api from '../config/api';
-import useWebSocket from '../hooks/useWebSocket';
 
 export default function MensajesAdmin({ uid }) {
   const [mensajes, setMensajes] = useState([]);
@@ -15,45 +14,16 @@ export default function MensajesAdmin({ uid }) {
   const flatRef = useRef(null);
   const intervaloRef = useRef(null);
 
-  // ═══ WEBSOCKET: Recibir mensajes en tiempo real ═══
-  const { conectado, onMensaje } = useWebSocket(uid, 'cliente');
-
-  useEffect(() => {
-    if (!conectado || !uid) return;
-    const cleanup = onMensaje('chat_directo', (data) => {
-      // Solo agregar si es un mensaje del admin para este usuario
-      if (data.senderRol === 'admin' || data.senderUid !== uid) {
-        setMensajes(prev => {
-          // Evitar duplicados
-          if (prev.some(m => m.creadoEn === new Date(data.timestamp).toISOString() && m.texto === data.texto)) {
-            return prev;
-          }
-          return [...prev, {
-            uid: data.senderUid,
-            nombre: data.senderNombre,
-            rol: data.senderRol === 'admin' ? 'admin' : 'usuario',
-            texto: data.texto,
-            creadoEn: new Date(data.timestamp).toISOString(),
-          }];
-        });
-      }
-    });
-    return cleanup;
-  }, [conectado, uid, onMensaje]);
-
-  // Carga inicial + polling adaptativo
+  // Polling rápido: 8 segundos (el WebSocket del AuthContext ya maneja la conexión)
   useEffect(() => {
     if (!uid || !mostrar) {
       if (intervaloRef.current) clearInterval(intervaloRef.current);
       return;
     }
     cargar();
-    // Con WebSocket: polling cada 60s como respaldo
-    // Sin WebSocket: polling cada 10s
-    const intervaloMs = conectado ? 60000 : 10000;
-    intervaloRef.current = setInterval(cargar, intervaloMs);
+    intervaloRef.current = setInterval(cargar, 8000);
     return () => { if (intervaloRef.current) clearInterval(intervaloRef.current); };
-  }, [uid, mostrar, conectado]);
+  }, [uid, mostrar]);
 
   const cargar = async () => {
     try {
@@ -210,6 +180,7 @@ const styles = StyleSheet.create({
   inputRow: {
     flexDirection: 'row', alignItems: 'center', gap: 8,
     paddingHorizontal: 16, paddingVertical: 10,
+    paddingBottom: Platform.OS === 'android' ? 28 : 10,
     backgroundColor: '#fff', borderTopWidth: 1, borderTopColor: '#eee',
   },
   input: {

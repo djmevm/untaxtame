@@ -6,7 +6,6 @@ import {
 } from 'react-native';
 import { useAuth } from '../context/AuthContext';
 import api from '../config/api';
-import { useChatWebSocket } from '../hooks/useWebSocket';
 
 export default function ChatServicio({ servicioId, visible, onCerrar }) {
   const { perfil } = useAuth();
@@ -21,42 +20,16 @@ export default function ChatServicio({ servicioId, visible, onCerrar }) {
     if (!servicioId) return;
     try {
       const res = await api.get(`/chat/${servicioId}/mensajes`);
-      setMensajes(res.data);
+      setMensajes(res.data || []);
     } catch {}
     finally { setCargandoInicial(false); }
   }, [servicioId]);
-
-  // ═══ WEBSOCKET: Recibir mensajes en tiempo real ═══
-  const { mensajesNuevos, conectado: wsConectado } = useChatWebSocket(
-    perfil?.uid,
-    visible ? servicioId : null
-  );
-
-  // Agregar mensajes recibidos por WebSocket
-  useEffect(() => {
-    if (mensajesNuevos.length > 0) {
-      setMensajes(prev => {
-        const nuevos = mensajesNuevos.filter(
-          n => !prev.some(p => p.timestamp === n.timestamp && p.texto === n.texto)
-        );
-        return [...prev, ...nuevos.map(n => ({
-          uid: n.senderUid,
-          nombre: n.senderNombre,
-          rol: n.senderRol,
-          texto: n.texto,
-          creadoEn: new Date(n.timestamp).toISOString(),
-        }))];
-      });
-    }
-  }, [mensajesNuevos]);
 
   useEffect(() => {
     if (visible && servicioId) {
       setCargandoInicial(true);
       cargarMensajes();
-      // Polling como fallback: 15s si WS conectado, 5s si no
-      const intervaloMs = wsConectado ? 15000 : 5000;
-      intervaloRef.current = setInterval(cargarMensajes, intervaloMs);
+      intervaloRef.current = setInterval(cargarMensajes, 5000);
     } else {
       if (intervaloRef.current) {
         clearInterval(intervaloRef.current);
@@ -66,7 +39,7 @@ export default function ChatServicio({ servicioId, visible, onCerrar }) {
     return () => {
       if (intervaloRef.current) clearInterval(intervaloRef.current);
     };
-  }, [servicioId, visible, cargarMensajes, wsConectado]);
+  }, [servicioId, visible, cargarMensajes]);
 
   const enviarMensaje = async () => {
     const textoLimpio = texto.trim();

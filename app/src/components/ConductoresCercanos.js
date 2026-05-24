@@ -1,11 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { View, Text, StyleSheet, Image } from 'react-native';
 import * as Location from 'expo-location';
-import { useUbicacionesConductores } from '../hooks/useWebSocket';
-import { useAuth } from '../context/AuthContext';
 import api from '../config/api';
 
 function calcularDistancia(lat1, lng1, lat2, lng2) {
+  if (!lat1 || !lng1 || !lat2 || !lng2) return null;
   const R = 6371;
   const dLat = (lat2 - lat1) * Math.PI / 180;
   const dLng = (lng2 - lng1) * Math.PI / 180;
@@ -16,27 +15,7 @@ function calcularDistancia(lat1, lng1, lat2, lng2) {
 export default function ConductoresCercanos() {
   const [conductores, setConductores] = useState([]);
   const [miUbicacion, setMiUbicacion] = useState(null);
-  const { usuario } = useAuth();
 
-  // ═══ WEBSOCKET: Recibir ubicaciones en tiempo real ═══
-  const { conductores: conductoresWS, conectado } = useUbicacionesConductores(
-    usuario?.uid,
-    'cliente'
-  );
-
-  // Actualizar conductores desde WebSocket
-  useEffect(() => {
-    if (conectado && conductoresWS.length > 0) {
-      setConductores(conductoresWS.map(c => ({
-        uid: c.uid,
-        nombre: c.nombre,
-        placa: c.placa,
-        ubicacionActual: { lat: c.lat, lng: c.lng },
-      })));
-    }
-  }, [conductoresWS, conectado]);
-
-  // Obtener mi ubicación
   useEffect(() => {
     const obtenerUbicacion = async () => {
       try {
@@ -48,36 +27,33 @@ export default function ConductoresCercanos() {
       } catch {}
     };
     obtenerUbicacion();
-    const intervalo = setInterval(obtenerUbicacion, 30000);
-    return () => clearInterval(intervalo);
   }, []);
 
-  // Fallback HTTP si WebSocket no está conectado
   useEffect(() => {
-    if (conectado) return; // WS activo, no necesitamos polling HTTP
-
     const cargar = async () => {
       try {
         const res = await api.get('/users/conductores/en-servicio');
-        setConductores(res.data.filter(c => c.ubicacionActual?.lat));
+        setConductores((res.data || []).filter(c => c.ubicacionActual?.lat));
       } catch {}
     };
 
     cargar();
-    const intervalo = setInterval(cargar, 60000); // Fallback cada 60s (antes 30s)
+    const intervalo = setInterval(cargar, 30000);
     return () => clearInterval(intervalo);
-  }, [conectado]);
+  }, []);
 
-  if (conductores.length === 0) return null;
+  // Memoizar cálculo de distancias
+  const conDistancia = useMemo(() => {
+    return conductores.map(c => {
+      const dist = miUbicacion && c.ubicacionActual
+        ? calcularDistancia(miUbicacion.lat, miUbicacion.lng, c.ubicacionActual.lat, c.ubicacionActual.lng)
+        : null;
+      const minutos = dist ? Math.round((dist * 1.4 / 25) * 60) : null;
+      return { ...c, distancia: dist, tiempoEstimado: minutos };
+    }).sort((a, b) => (a.distancia || 999) - (b.distancia || 999));
+  }, [conductores, miUbicacion]);
 
-  // Calcular distancia y ordenar por cercanía
-  const conDistancia = conductores.map(c => {
-    const dist = miUbicacion && c.ubicacionActual
-      ? calcularDistancia(miUbicacion.lat, miUbicacion.lng, c.ubicacionActual.lat, c.ubicacionActual.lng)
-      : null;
-    const minutos = dist ? Math.round((dist * 1.4 / 25) * 60) : null;
-    return { ...c, distancia: dist, tiempoEstimado: minutos };
-  }).sort((a, b) => (a.distancia || 999) - (b.distancia || 999));
+  if (conDistancia.length === 0) return null;
 
   return (
     <View style={styles.container}>

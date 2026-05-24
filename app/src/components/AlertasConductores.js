@@ -1,7 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Linking } from 'react-native';
-import { useAuth } from '../context/AuthContext';
-import { useAlertasWebSocket } from '../hooks/useWebSocket';
 import api from '../config/api';
 import { reproducirSonidoSOS } from '../services/sonido';
 
@@ -18,24 +16,7 @@ const COLORES = {
 export default function AlertasConductores() {
   const [alertas, setAlertas] = useState([]);
   const cantidadAnterior = useRef(0);
-  const { usuario } = useAuth();
 
-  // ═══ WEBSOCKET: Recibir alertas en tiempo real ═══
-  const { alertas: alertasWS, conectado } = useAlertasWebSocket(usuario?.uid);
-
-  // Agregar alertas recibidas por WebSocket
-  useEffect(() => {
-    if (alertasWS.length > 0) {
-      const ultima = alertasWS[0];
-      setAlertas(prev => {
-        if (prev.some(a => a.emergenciaId === ultima.emergenciaId)) return prev;
-        reproducirSonidoSOS();
-        return [ultima, ...prev];
-      });
-    }
-  }, [alertasWS]);
-
-  // Carga inicial + fallback polling (cada 120s si WS conectado, 60s si no)
   useEffect(() => {
     const cargar = async () => {
       try {
@@ -50,10 +31,9 @@ export default function AlertasConductores() {
     };
 
     cargar();
-    const intervaloMs = conectado ? 120000 : 60000; // 2min con WS, 1min sin WS
-    const intervalo = setInterval(cargar, intervaloMs);
+    const intervalo = setInterval(cargar, 60000);
     return () => clearInterval(intervalo);
-  }, [conectado]);
+  }, []);
 
   if (alertas.length === 0) return null;
 
