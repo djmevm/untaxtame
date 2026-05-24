@@ -138,6 +138,66 @@ const estilosSOS = {
   },
 };
 
+// Componente de notificación de mensajes directos
+function NotificacionMensajes({ onVerUsuarios }) {
+  const [mensajesNuevos, setMensajesNuevos] = React.useState([]);
+  const cantidadAnterior = React.useRef(0);
+
+  React.useEffect(() => {
+    const verificar = async () => {
+      try {
+        const res = await api.get('/users/todos');
+        const usuarios = res.data || [];
+        const nuevos = [];
+
+        for (const u of usuarios) {
+          try {
+            const chatRes = await api.get(`/chat/directo/${u.uid}/mensajes`);
+            const msgs = chatRes.data || [];
+            // Buscar mensajes no del admin en los últimos 5 minutos
+            const recientes = msgs.filter(m => m.rol !== 'admin' && (Date.now() - new Date(m.creadoEn).getTime()) < 300000);
+            if (recientes.length > 0) {
+              nuevos.push({ nombre: u.nombre, uid: u.uid, mensaje: recientes[recientes.length - 1].texto, rol: u.rol });
+            }
+          } catch {}
+        }
+
+        if (nuevos.length > cantidadAnterior.current && cantidadAnterior.current >= 0) {
+          // Sonido de notificación
+          try { new Audio('https://actions.google.com/sounds/v1/cartoon/pop.ogg').play(); } catch {}
+        }
+        cantidadAnterior.current = nuevos.length;
+        setMensajesNuevos(nuevos);
+      } catch {}
+    };
+
+    verificar();
+    const intervalo = setInterval(verificar, 60000); // Cada 60 seg
+    return () => clearInterval(intervalo);
+  }, []);
+
+  if (mensajesNuevos.length === 0) return null;
+
+  return (
+    <div style={{ background: 'linear-gradient(90deg, #1565C0, #1976D2)', padding: '10px 24px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+        <span style={{ fontSize: 22 }}>💬</span>
+        <div style={{ flex: 1, color: '#fff' }}>
+          <strong>{mensajesNuevos.length} mensaje{mensajesNuevos.length > 1 ? 's' : ''} nuevo{mensajesNuevos.length > 1 ? 's' : ''}</strong>
+          {mensajesNuevos.slice(0, 2).map((m, i) => (
+            <div key={i} style={{ fontSize: 12, opacity: 0.9 }}>
+              {m.rol === 'cliente' ? '👤' : '🚕'} {m.nombre}: "{m.mensaje?.substring(0, 40)}{m.mensaje?.length > 40 ? '...' : ''}"
+            </div>
+          ))}
+        </div>
+        <button onClick={onVerUsuarios} style={{ background: '#fff', color: '#1565C0', border: 'none', borderRadius: 8, padding: '8px 16px', fontWeight: 'bold', cursor: 'pointer' }}>
+          Ver mensajes
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export default function App() {
   const [usuario, setUsuario] = useState(null);
   const [perfil, setPerfil] = useState(null);
@@ -195,6 +255,9 @@ export default function App() {
     <div className="app">
       {/* Alerta SOS en tiempo real */}
       <AlertaSOS onVerEmergencias={() => setTab('emergencias')} />
+
+      {/* Notificación de mensajes directos nuevos */}
+      <NotificacionMensajes onVerUsuarios={() => setTab('usuarios')} />
 
       <header className="header">
         <div style={{ flex: 1 }}>
