@@ -46,6 +46,7 @@ router.post('/imagen', verifyToken, upload.single('imagen'), async (req, res) =>
   if (!req.file) return res.status(400).json({ error: 'No se envió imagen' });
 
   const uid = req.user.uid;
+  const carpetaParam = req.body.carpeta; // Carpeta opcional enviada por el frontend
 
   try {
     // Obtener datos del usuario
@@ -56,16 +57,13 @@ router.post('/imagen', verifyToken, upload.single('imagen'), async (req, res) =>
     // Generar nombre único
     const ext = req.file.mimetype.split('/')[1] || 'jpg';
     const nombreArchivo = `${uid}_${Date.now()}.${ext}`;
-    const carpeta = `perfiles/${rol}s`;
+    const carpeta = carpetaParam || `perfiles/${rol}s`;
 
     // Subir a Firebase Storage
     const url = await subirAFirebase(req.file.buffer, req.file.mimetype, carpeta, nombreArchivo);
 
-    // Guardar URL en el perfil del usuario
-    await db.collection('usuarios').doc(uid).update({
-      fotoPerfil: url,
-      fotoPerfilActualizada: new Date().toISOString(),
-    });
+    // NO actualizar fotoPerfil automáticamente — el frontend decide qué campo actualizar
+    // Esto permite usar el mismo endpoint para foto de perfil, vehículo, documentos, etc.
 
     res.json({ message: 'Imagen subida', url });
   } catch (err) {
