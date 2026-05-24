@@ -5,11 +5,14 @@ import {
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import * as Location from 'expo-location';
-import { Audio } from 'expo-av';
 import { useAuth } from '../../context/AuthContext';
 import api from '../../config/api';
 import MensajesAdmin from '../../components/MensajesAdmin';
 import ReporteSemanal from '../../components/ReporteSemanal';
+
+// Audio import seguro
+let Audio = null;
+try { Audio = require('expo-av').Audio; } catch {}
 
 const ESTADO_CONFIG = {
   pendiente: { color: '#FFC107', textColor: '#000', icon: '⏳', titulo: 'En revisión', mensaje: 'Tus documentos están siendo verificados.' },
@@ -168,9 +171,11 @@ export default function PerfilConductorScreen() {
       }
       if (alertas.length > 0) {
         try {
-          await Audio.setAudioModeAsync({ allowsRecordingIOS: false, playsInSilentModeIOS: true, shouldDuckAndroid: true, playThroughEarpieceAndroid: false });
-          const { sound } = await Audio.Sound.createAsync({ uri: 'https://actions.google.com/sounds/v1/alarms/alarm_clock.ogg' }, { shouldPlay: true, volume: 1.0 });
-          setTimeout(async () => { try { await sound.stopAsync(); await sound.unloadAsync(); } catch {} }, 2500);
+          if (Audio) {
+            await Audio.setAudioModeAsync({ allowsRecordingIOS: false, playsInSilentModeIOS: true, shouldDuckAndroid: true, playThroughEarpieceAndroid: false });
+            const { sound } = await Audio.Sound.createAsync({ uri: 'https://actions.google.com/sounds/v1/alarms/alarm_clock.ogg' }, { shouldPlay: true, volume: 1.0 });
+            setTimeout(async () => { try { await sound.stopAsync(); await sound.unloadAsync(); } catch {} }, 2500);
+          }
         } catch {}
         Vibration.vibrate([0, 500, 200, 500, 200, 800]);
         const msgs = alertas.map(a => {
@@ -214,6 +219,7 @@ export default function PerfilConductorScreen() {
   };
 
   useEffect(() => {
+    if (!perfil?.uid) return;
     const enviarUbicacion = async () => {
       try {
         const { status } = await Location.requestForegroundPermissionsAsync();
