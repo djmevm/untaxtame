@@ -283,7 +283,7 @@ router.put('/perfil/:uid', verifyToken, async (req, res) => {
     return res.status(403).json({ error: 'No puedes editar el perfil de otro usuario' });
   }
 
-  const camposPermitidos = ['nombre', 'telefono', 'direccion', 'cedula', 'placa', 'fotoPerfil', 'vencimientoDocumentos'];
+  const camposPermitidos = ['nombre', 'telefono', 'direccion', 'cedula', 'placa', 'fotoPerfil', 'fotoVehiculo', 'vencimientoDocumentos', 'serviciosOfrecidos'];
   const actualizacion = {};
 
   for (const campo of camposPermitidos) {
