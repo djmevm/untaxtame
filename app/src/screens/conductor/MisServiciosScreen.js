@@ -53,26 +53,10 @@ export default function MisServiciosScreen() {
     cargar();
     const intervalo = setInterval(cargar, 30000);
 
-    // Verificar notificaciones de calificación
-    const verificarNotificaciones = async () => {
-      if (!perfil?.uid) return;
-      try {
-        const res = await api.get(`/users/notificaciones/${perfil.uid}`);
-        const calificaciones = res.data.filter(n => n.tipo === 'calificacion');
-        for (const notif of calificaciones) {
-          reproducirSonido();
-          Alert.alert(notif.titulo, notif.mensaje);
-          // Marcar como leída
-          try { await api.put(`/users/notificaciones/${notif.id}/leer`); } catch {}
-        }
-      } catch {}
-    };
+    // Las notificaciones de calificación ahora llegan por push notifications
+    // Ya no necesitamos polling cada 15 segundos
 
-    verificarNotificaciones();
-    const intervaloNotif = setInterval(verificarNotificaciones, 15000);
-
-    return () => { clearInterval(intervalo); clearInterval(intervaloNotif); };
-    return () => clearInterval(intervalo);
+    return () => { clearInterval(intervalo); };
   }, []);
 
   const completar = async (servicio) => {

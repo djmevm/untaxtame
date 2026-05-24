@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Descargar UntaXtame - App de Taxis</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: linear-gradient(135deg, #1a1a1a 0%, #333 100%); min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 20px; }
+    .card { background: #fff; border-radius: 24px; padding: 40px; max-width: 420px; width: 100%; text-align: center; box-shadow: 0 20px 60px rgba(0,0,0,0.3); }
+    .logo { width: 100px; height: 100px; border-radius: 20px; margin: 0 auto 20px; object-fit: cover; }
+    h1 { font-size: 28px; color: #1a1a1a; margin-bottom: 4px; }
+    .subtitle { color: #666; font-size: 14px; margin-bottom: 24px; }
+    .version { background: #F97316; color: #fff; display: inline-block; padding: 4px 14px; border-radius: 20px; font-size: 12px; font-weight: bold; margin-bottom: 24px; }
+    .btn-download { display: block; background: linear-gradient(135deg, #F97316, #EA580C); color: #fff; text-decoration: none; padding: 18px 32px; border-radius: 14px; font-size: 18px; font-weight: bold; margin-bottom: 16px; transition: transform 0.2s; }
+    .btn-download:hover { transform: scale(1.03); }
+    .btn-download:active { transform: scale(0.97); }
+    .qr-section { margin: 24px 0; }
+    .qr-section img { width: 180px; height: 180px; border-radius: 12px; border: 3px solid #F97316; }
+    .qr-label { font-size: 12px; color: #888; margin-top: 8px; }
+    .features { text-align: left; margin: 24px 0; padding: 20px; background: #F8FAFC; border-radius: 12px; }
+    .features h3 { font-size: 14px; color: #333; margin-bottom: 12px; }
+    .feature { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; font-size: 13px; color: #555; }
+    .instructions { background: #FFF7ED; border-radius: 12px; padding: 16px; margin-top: 20px; text-align: left; }
+    .instructions h3 { font-size: 13px; color: #F97316; margin-bottom: 8px; }
+    .instructions ol { padding-left: 20px; font-size: 12px; color: #666; line-height: 1.8; }
+    .footer { margin-top: 20px; font-size: 11px; color: #bbb; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <img src="./icon_adaptive.jpg" alt="UntaXtame" class="logo" onerror="this.style.display='none'">
+    <h1>UntaXtame</h1>
+    <p class="subtitle">S.A.S ZOMAC — App de Taxis Segura</p>
+    <span class="version">v2.2.0 • Android</span>
+
+    <a href="./UntaXtame.apk" class="btn-download" download>
+      ⬇️ Descargar APK
+    </a>
+
+    <div class="qr-section">
+      <img src="https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=https://untaxtame.vercel.app/descargar.html" alt="QR">
+      <p class="qr-label">Escanea para descargar</p>
+    </div>
+
+    <div class="features">
+      <h3>✨ Novedades v2.2</h3>
+      <div class="feature">🔔 Notificaciones push en segundo plano</div>
+      <div class="feature">⚡ Ubicación en tiempo real (WebSocket)</div>
+      <div class="feature">💬 Chat instantáneo optimizado</div>
+      <div class="feature">🚨 Alertas SOS inmediatas con app cerrada</div>
+      <div class="feature">📻 Códigos de radio H1/H2 en background</div>
+      <div class="feature">🔋 -75% consumo de datos y batería</div>
+    </div>
+
+    <div class="features">
+      <h3>📱 Funciones principales</h3>
+      <div class="feature">🚕 Pide taxi en segundos</div>
+      <div class="feature">📍 GPS en tiempo real</div>
+      <div class="feature">💬 Chat con tu conductor</div>
+      <div class="feature">📤 Comparte tu viaje por WhatsApp</div>
+      <div class="feature">⭐ Califica y elige por reputación</div>
+      <div class="feature">🔒 Sistema de seguridad por voz</div>
+      <div class="feature">💳 Paga con Daviplata, Nequi o Efectivo</div>
+    </div>
+
+    <div class="instructions">
+      <h3>📱 ¿Cómo instalar?</h3>
+      <ol>
+        <li>Toca "Descargar APK"</li>
+        <li>Abre el archivo descargado</li>
+        <li>Si dice "fuente desconocida", toca "Configuración" → Activa "Permitir esta fuente"</li>
+        <li>Toca "Instalar"</li>
+        <li>¡Listo! Abre UntaXtame y regístrate</li>
+      </ol>
+    </div>
+
+    <p class="footer">© 2026 UntaXtame S.A.S ZOMAC — Tame, Arauca, Colombia</p>
+  </div>
+</body>
+</html>

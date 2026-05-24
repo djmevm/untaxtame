@@ -186,6 +186,20 @@ export default function PerfilConductorScreen() {
     return () => clearInterval(intervalo);
   }, [perfil?.vencimientoDocumentos, vencimientos]);
 
+  // Togglear servicios que ofrece el conductor
+  const [serviciosOfrecidos, setServiciosOfrecidos] = useState(perfil?.serviciosOfrecidos || []);
+
+  const toggleServicio = async (key) => {
+    const nuevos = serviciosOfrecidos.includes(key)
+      ? serviciosOfrecidos.filter(s => s !== key)
+      : [...serviciosOfrecidos, key];
+    setServiciosOfrecidos(nuevos);
+    try {
+      await api.put(`/auth/perfil/${perfil?.uid}`, { serviciosOfrecidos: nuevos });
+      if (setPerfil) setPerfil(prev => ({ ...prev, serviciosOfrecidos: nuevos }));
+    } catch {}
+  };
+
   const guardarVencimiento = async (key, fecha) => {
     const nuevos = { ...vencimientos, [key]: fecha };
     setVencimientos(nuevos);
@@ -352,11 +366,28 @@ export default function PerfilConductorScreen() {
       <TouchableOpacity style={styles.vehiculoCard} onPress={() => {
         seleccionarImagen(async (uri) => {
           try {
-            const url = await subirImagen(uri, 'vehiculo');
-            await api.put(`/auth/perfil/${perfil?.uid}`, { fotoVehiculo: url });
-            if (setPerfil) setPerfil(prev => ({ ...prev, fotoVehiculo: url }));
-            Alert.alert('✅', 'Foto del vehículo actualizada');
-          } catch {}
+            const AsyncStorage = require('@react-native-async-storage/async-storage').default;
+            const token = await AsyncStorage.getItem('authToken');
+            const fd = new FormData();
+            const ext = uri.split('.').pop()?.toLowerCase() || 'jpg';
+            fd.append('imagen', { uri, name: `vehiculo.${ext}`, type: `image/${ext === 'png' ? 'png' : 'jpeg'}` });
+            const response = await fetch(`${api.defaults.baseURL}/upload/imagen`, {
+              method: 'POST',
+              headers: { 'Authorization': `Bearer ${token}` },
+              body: fd,
+            });
+            const data = await response.json();
+            if (response.ok && data.url) {
+              const url = data.url.startsWith('http') ? data.url : `${api.defaults.baseURL.replace('/api', '')}${data.url}`;
+              await api.put(`/auth/perfil/${perfil?.uid}`, { fotoVehiculo: url });
+              if (setPerfil) setPerfil(prev => ({ ...prev, fotoVehiculo: url }));
+              Alert.alert('✅', 'Foto del vehículo actualizada');
+            } else {
+              Alert.alert('Error', data.error || 'No se pudo subir');
+            }
+          } catch (err) {
+            Alert.alert('Error', err.message || 'No se pudo subir la foto');
+          }
         });
       }}>
         {perfil.fotoVehiculo ? (
@@ -384,6 +415,32 @@ export default function PerfilConductorScreen() {
           </>)}
         </TouchableOpacity>
       )}
+
+      {/* ═══ SERVICIOS QUE OFREZCO ═══ */}
+      <View style={styles.seccion}>
+        <Text style={styles.seccionTitulo}>🚕 Servicios que ofrezco</Text>
+        <Text style={{ fontSize: 12, color: '#888', marginBottom: 12 }}>Marca los servicios que tu taxi puede ofrecer. Los clientes verán esto al solicitar.</Text>
+        {[
+          { key: 'maletas', icon: '🧳', label: 'Maletas extras' },
+          { key: 'discapacitado', icon: '♿', label: 'Pasajero discapacitado' },
+          { key: 'bicicleta', icon: '🚲', label: 'Soporte bicicleta' },
+          { key: 'aireAcondicionado', icon: '❄️', label: 'Aire acondicionado' },
+          { key: 'mascotas', icon: '🐾', label: 'Mascotas permitidas' },
+        ].map(req => {
+          const activo = serviciosOfrecidos.includes(req.key);
+          return (
+            <TouchableOpacity
+              key={req.key}
+              style={[styles.requisitoItem, activo && styles.requisitoItemActivo]}
+              onPress={() => toggleServicio(req.key)}
+            >
+              <Text style={styles.requisitoIcono}>{req.icon}</Text>
+              <Text style={[styles.requisitoLabel, activo && { color: '#16A34A', fontWeight: 'bold' }]}>{req.label}</Text>
+              <Text style={styles.requisitoCheck}>{activo ? '✅' : '⬜'}</Text>
+            </TouchableOpacity>
+          );
+        })}
+      </View>
 
       {/* ═══ MENSAJES DEL ADMINISTRADOR ═══ */}
       <MensajesAdmin uid={perfil?.uid} />
@@ -569,6 +626,11 @@ const styles = StyleSheet.create({
   radioItem: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: '#f9f9f9', borderRadius: 10, padding: 12, borderLeftWidth: 4, borderLeftColor: '#E53935' },
   radioCode: { fontSize: 16, fontWeight: 'bold', color: '#333', minWidth: 50 },
   radioDesc: { fontSize: 13, color: '#555', flex: 1 },
+  requisitoItem: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: '#F8FAFC', borderRadius: 10, padding: 12, marginBottom: 8, borderWidth: 1, borderColor: '#E2E8F0' },
+  requisitoItemActivo: { backgroundColor: '#F0FDF4', borderColor: '#16A34A' },
+  requisitoIcono: { fontSize: 22 },
+  requisitoLabel: { flex: 1, fontSize: 14, color: '#555' },
+  requisitoCheck: { fontSize: 18 },
   vehiculoCard: { width: '100%', backgroundColor: '#fff', borderRadius: 14, padding: 14, marginBottom: 12, elevation: 2, alignItems: 'center' },
   vehiculoImagen: { width: '100%', height: 150, borderRadius: 10, resizeMode: 'cover', marginBottom: 8 },
   vehiculoPlaceholder: { width: '100%', height: 100, borderRadius: 10, backgroundColor: '#F8FAFC', borderWidth: 2, borderColor: '#E2E8F0', borderStyle: 'dashed', alignItems: 'center', justifyContent: 'center', marginBottom: 8 },

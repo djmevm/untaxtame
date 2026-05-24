@@ -19,13 +19,14 @@ const limiteGeneral = rateLimit({
   legacyHeaders: false,
 });
 
-// Límite estricto para login: 5 intentos por 15 minutos
+// Límite estricto para login: 3 intentos por 30 minutos (bloqueo por IP)
 const limiteLogin = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 5,
-  message: { error: 'Demasiados intentos de inicio de sesión. Intenta en 15 minutos.' },
+  windowMs: 30 * 60 * 1000,
+  max: 3,
+  message: { error: 'Cuenta bloqueada temporalmente. Demasiados intentos fallidos. Intenta en 30 minutos.' },
   standardHeaders: true,
   legacyHeaders: false,
+  skipSuccessfulRequests: true,
 });
 
 // Límite para registro: 3 por hora por IP
@@ -144,4 +145,24 @@ module.exports = {
   sanitizeInput,
   securityLogger,
   corsConfig,
+  validarPasswordFuerte,
+  logAcceso,
 };
+
+// ═══ VALIDACIÓN DE CONTRASEÑA FUERTE ═══
+function validarPasswordFuerte(password) {
+  if (!password || password.length < 8) return { valida: false, error: 'La contraseña debe tener al menos 8 caracteres' };
+  if (!/[A-Z]/.test(password)) return { valida: false, error: 'Debe contener al menos una mayúscula' };
+  if (!/[a-z]/.test(password)) return { valida: false, error: 'Debe contener al menos una minúscula' };
+  if (!/[0-9]/.test(password)) return { valida: false, error: 'Debe contener al menos un número' };
+  if (!/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(password)) return { valida: false, error: 'Debe contener al menos un carácter especial (!@#$%...)' };
+  return { valida: true };
+}
+
+// ═══ LOG DE ACCESO ═══
+function logAcceso(req, tipo, detalle) {
+  const ip = req.ip || req.headers['x-forwarded-for'] || req.connection?.remoteAddress || 'desconocida';
+  const userAgent = req.headers['user-agent'] || 'desconocido';
+  const timestamp = new Date().toISOString();
+  console.log(`[ACCESO] ${timestamp} | ${tipo} | IP: ${ip} | ${detalle} | UA: ${userAgent.substring(0, 80)}`);
+}

@@ -2,6 +2,8 @@ const express = require('express');
 const router = express.Router();
 const { db } = require('../firebase');
 const verifyToken = require('../middleware/verifyToken');
+const { enviarPushAConductores } = require('../services/pushNotifications');
+const { notificarCodigoRadio } = require('../services/websocket');
 
 // ═══ CÓDIGOS DE RADIO 20-X ═══
 // Sistema de comunicación por voz para conductores
@@ -85,6 +87,25 @@ router.post('/codigo', verifyToken, async (req, res) => {
         servicio: registro.servicio,
         creadoEn: new Date().toISOString(),
         resuelta: false,
+      });
+
+      // ═══ PUSH: Alertar a TODOS los conductores (código de seguridad/emergencia) ═══
+      enviarPushAConductores({
+        titulo: `📻 ALERTA: ${codigo}`,
+        cuerpo: `${codigoInfo.label} — ${userData.nombre || 'Conductor'} ${userData.placa ? '(' + userData.placa + ')' : ''}`,
+        datos: { tipo: 'radio', codigo, codigoId: docRef.id, prioridad: 'max' },
+        canal: 'radio',
+      }).catch(err => console.warn('[PUSH] Error notificando radio:', err.message));
+
+      // ═══ WEBSOCKET: Alertar en tiempo real ═══
+      notificarCodigoRadio({
+        codigoId: docRef.id,
+        codigo,
+        label: codigoInfo.label,
+        nombre: userData.nombre,
+        placa: userData.placa,
+        ubicacion: registro.ubicacion,
+        prioridad: codigoInfo.prioridad,
       });
     }
 

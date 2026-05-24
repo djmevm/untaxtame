@@ -3,6 +3,7 @@ import {
   View, Text, FlatList, TouchableOpacity, StyleSheet,
   Alert, ActivityIndicator, RefreshControl, Linking, TextInput, Modal
 } from 'react-native';
+import MapView, { Marker } from 'react-native-maps';
 import { Feather } from '@expo/vector-icons';
 import { useAuth } from '../../context/AuthContext';
 import api from '../../config/api';
@@ -299,6 +300,39 @@ export default function ServiciosPendientesScreen() {
 
       {/* Alertas de emergencia */}
       <AlertasConductores />
+
+      {/* Mini mapa con servicios pendientes */}
+      {servicios.filter(s => s.ubicacionGPS?.lat).length > 0 && (
+        <View style={styles.miniMapaContainer}>
+          <MapView
+            style={styles.miniMapa}
+            initialRegion={{
+              latitude: servicios.find(s => s.ubicacionGPS?.lat)?.ubicacionGPS?.lat || 7.08,
+              longitude: servicios.find(s => s.ubicacionGPS?.lat)?.ubicacionGPS?.lng || -73.17,
+              latitudeDelta: 0.05,
+              longitudeDelta: 0.05,
+            }}
+            showsUserLocation={true}
+          >
+            {servicios.filter(s => s.ubicacionGPS?.lat).map(s => (
+              <Marker
+                key={s.id}
+                coordinate={{ latitude: s.ubicacionGPS.lat, longitude: s.ubicacionGPS.lng }}
+                title={s.clienteNombre}
+                description={s.origen}
+              >
+                <View style={{ alignItems: 'center' }}>
+                  <Text style={{ fontSize: 20 }}>👤</Text>
+                  <View style={{ backgroundColor: '#F97316', borderRadius: 4, paddingHorizontal: 4, paddingVertical: 1 }}>
+                    <Text style={{ fontSize: 8, color: '#fff', fontWeight: 'bold' }}>{s.clienteNombre?.split(' ')[0]}</Text>
+                  </View>
+                </View>
+              </Marker>
+            ))}
+          </MapView>
+          <Text style={styles.miniMapaLabel}>📍 {servicios.filter(s => s.ubicacionGPS?.lat).length} clientes esperando</Text>
+        </View>
+      )}
 
       {/* Error */}
       {error && (
@@ -719,6 +753,27 @@ const styles = StyleSheet.create({
   },
   ofertarBtnTextDisabled: {
     color: '#94A3B8',
+  },
+
+  // Mini mapa
+  miniMapaContainer: {
+    borderRadius: 14,
+    overflow: 'hidden',
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  miniMapa: {
+    width: '100%',
+    height: 150,
+  },
+  miniMapaLabel: {
+    backgroundColor: '#fff',
+    padding: 8,
+    fontSize: 12,
+    color: '#64748B',
+    fontWeight: '600',
+    textAlign: 'center',
   },
 
   // FAB container

@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { db } = require('../firebase');
 const verifyToken = require('../middleware/verifyToken');
+const { enviarPushAUsuario } = require('../services/pushNotifications');
 
 // Enviar mensaje en un servicio
 router.post('/:servicioId/mensaje', verifyToken, async (req, res) => {
@@ -139,6 +140,17 @@ router.post('/directo/:uid/mensaje', verifyToken, async (req, res) => {
     // Si es usuario, guarda en su propio chat (para que admin lo vea)
     const chatUid = senderData.rol === 'admin' ? uid : senderUid;
     await db.collection('chats_directos').doc(chatUid).collection('mensajes').add(mensaje);
+
+    // ═══ PUSH: Notificar al destinatario del mensaje ═══
+    const destinoUid = senderData.rol === 'admin' ? uid : null; // Solo push si admin envía
+    if (destinoUid) {
+      enviarPushAUsuario(destinoUid, {
+        titulo: '💬 Mensaje del Administrador',
+        cuerpo: texto.trim().substring(0, 100),
+        datos: { tipo: 'chat_directo', senderUid },
+        canal: 'chat',
+      }).catch(err => console.warn('[PUSH] Error notificando chat:', err.message));
+    }
 
     res.status(201).json({ message: 'Mensaje enviado', mensaje });
   } catch (err) {

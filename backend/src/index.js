@@ -87,6 +87,12 @@ app.get('/', (req, res) => {
   res.json({ status: 'ok' });
 });
 
+// ═══ WEBSOCKET: Estadísticas de conexiones ═══
+app.get('/api/ws/stats', (req, res) => {
+  const { obtenerEstadisticas } = require('./services/websocket');
+  res.json(obtenerEstadisticas());
+});
+
 // ═══ SEGURIDAD — Capa 8: Manejo de errores global ═══
 app.use((err, req, res, next) => {
   // No exponer detalles del error en producción
@@ -115,8 +121,16 @@ app.use('*', (req, res) => {
 
 const PORT = process.env.PORT || 3000;
 const HOST = process.env.HOST || '0.0.0.0'; // Escuchar en todas las interfaces (WiFi + datos móviles)
-app.listen(PORT, HOST, () => {
+
+// ═══ WEBSOCKET — Tiempo real ═══
+const { inicializarWebSocket } = require('./services/websocket');
+const http = require('http');
+const server = http.createServer(app);
+inicializarWebSocket(server);
+
+server.listen(PORT, HOST, () => {
   console.log(`[UntaXtame] Servidor corriendo en ${HOST}:${PORT} — ${process.env.NODE_ENV || 'development'}`);
   console.log('[SEGURIDAD] Helmet, Rate Limiting, HPP, Sanitización, CORS — ACTIVOS');
+  console.log('[WEBSOCKET] Tiempo real activo en /ws');
   console.log('[RED] Accesible desde WiFi y datos móviles');
 });

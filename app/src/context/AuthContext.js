@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import api from '../config/api';
+import { registrarTokenPush, configurarListeners, limpiarBadge } from '../services/notificaciones';
 
 const AuthContext = createContext();
 
@@ -19,6 +20,9 @@ export const AuthProvider = ({ children }) => {
           const res = await api.get(`/auth/perfil/${uid}`);
           setUsuario({ uid });
           setPerfil(res.data);
+
+          // Registrar push token al restaurar sesión
+          registrarTokenPush(uid).catch(() => {});
         }
       } catch {
         // Token expirado o inválido, limpiar
@@ -30,6 +34,27 @@ export const AuthProvider = ({ children }) => {
     verificarSesion();
   }, []);
 
+  // Configurar listeners de notificaciones cuando hay usuario
+  useEffect(() => {
+    if (!usuario?.uid) return;
+
+    limpiarBadge();
+
+    const cleanup = configurarListeners(
+      // Cuando llega notificación en primer plano
+      (data) => {
+        console.log('[NOTIF] Recibida en primer plano:', data.tipo);
+      },
+      // Cuando el usuario toca la notificación
+      (data) => {
+        console.log('[NOTIF] Usuario tocó notificación:', data.tipo);
+        // Aquí se puede navegar a la pantalla correspondiente
+      }
+    );
+
+    return cleanup;
+  }, [usuario?.uid]);
+
   const login = async (email, password) => {
     const res = await api.post('/auth/login', { email, password });
     await AsyncStorage.setItem('authToken', res.data.token);
@@ -37,6 +62,10 @@ export const AuthProvider = ({ children }) => {
     await AsyncStorage.setItem('userUid', res.data.uid);
     setUsuario({ uid: res.data.uid, email: res.data.email });
     setPerfil(res.data.perfil);
+
+    // Registrar push token al hacer login
+    registrarTokenPush(res.data.uid).catch(() => {});
+
     return res.data;
   };
 

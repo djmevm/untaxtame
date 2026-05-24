@@ -2,6 +2,8 @@ const express = require('express');
 const router = express.Router();
 const { db } = require('../firebase');
 const verifyToken = require('../middleware/verifyToken');
+const { enviarPushAConductores } = require('../services/pushNotifications');
+const { notificarEmergencia } = require('../services/websocket');
 
 // Reportar emergencia SOS
 router.post('/sos', verifyToken, async (req, res) => {
@@ -62,6 +64,23 @@ router.post('/sos', verifyToken, async (req, res) => {
       servicio: emergencia.servicio,
       creadoEn: new Date().toISOString(),
       resuelta: false,
+    });
+
+    // ═══ PUSH: Alertar a TODOS los conductores (emergencia) ═══
+    enviarPushAConductores({
+      titulo: '🚨 ¡EMERGENCIA SOS!',
+      cuerpo: `${userData.nombre || 'Usuario'}: ${mensaje || 'Emergencia SOS'} — ${tipoEmergencia || 'otro'}`,
+      datos: { tipo: 'emergencia', emergenciaId: docRef.id, tipoEmergencia, prioridad: 'max' },
+      canal: 'emergencias',
+    }).catch(err => console.warn('[PUSH] Error notificando SOS:', err.message));
+
+    // ═══ WEBSOCKET: Alertar en tiempo real ═══
+    notificarEmergencia({
+      emergenciaId: docRef.id,
+      tipoEmergencia: tipoEmergencia || 'otro',
+      mensaje: mensaje || 'Emergencia SOS',
+      nombre: userData.nombre,
+      ubicacion: emergencia.ubicacion,
     });
 
     res.status(201).json({

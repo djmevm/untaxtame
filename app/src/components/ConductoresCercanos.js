@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, Image } from 'react-native';
 import * as Location from 'expo-location';
+import { useUbicacionesConductores } from '../hooks/useWebSocket';
+import { useAuth } from '../context/AuthContext';
 import api from '../config/api';
 
 function calcularDistancia(lat1, lng1, lat2, lng2) {
@@ -14,27 +16,57 @@ function calcularDistancia(lat1, lng1, lat2, lng2) {
 export default function ConductoresCercanos() {
   const [conductores, setConductores] = useState([]);
   const [miUbicacion, setMiUbicacion] = useState(null);
+  const { usuario } = useAuth();
 
+  // ═══ WEBSOCKET: Recibir ubicaciones en tiempo real ═══
+  const { conductores: conductoresWS, conectado } = useUbicacionesConductores(
+    usuario?.uid,
+    'cliente'
+  );
+
+  // Actualizar conductores desde WebSocket
   useEffect(() => {
-    const cargar = async () => {
+    if (conectado && conductoresWS.length > 0) {
+      setConductores(conductoresWS.map(c => ({
+        uid: c.uid,
+        nombre: c.nombre,
+        placa: c.placa,
+        ubicacionActual: { lat: c.lat, lng: c.lng },
+      })));
+    }
+  }, [conductoresWS, conectado]);
+
+  // Obtener mi ubicación
+  useEffect(() => {
+    const obtenerUbicacion = async () => {
       try {
-        // Obtener mi ubicación
         const { status } = await Location.requestForegroundPermissionsAsync();
         if (status === 'granted') {
           const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
           setMiUbicacion({ lat: loc.coords.latitude, lng: loc.coords.longitude });
         }
+      } catch {}
+    };
+    obtenerUbicacion();
+    const intervalo = setInterval(obtenerUbicacion, 30000);
+    return () => clearInterval(intervalo);
+  }, []);
 
-        // Obtener conductores en servicio
+  // Fallback HTTP si WebSocket no está conectado
+  useEffect(() => {
+    if (conectado) return; // WS activo, no necesitamos polling HTTP
+
+    const cargar = async () => {
+      try {
         const res = await api.get('/users/conductores/en-servicio');
         setConductores(res.data.filter(c => c.ubicacionActual?.lat));
       } catch {}
     };
 
     cargar();
-    const intervalo = setInterval(cargar, 30000);
+    const intervalo = setInterval(cargar, 60000); // Fallback cada 60s (antes 30s)
     return () => clearInterval(intervalo);
-  }, []);
+  }, [conectado]);
 
   if (conductores.length === 0) return null;
 

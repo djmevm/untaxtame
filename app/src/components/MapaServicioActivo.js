@@ -1,9 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, ActivityIndicator } from 'react-native';
 import MapView, { Marker, Polyline } from 'react-native-maps';
+import { useUbicacionesConductores } from '../hooks/useWebSocket';
 import api from '../config/api';
 
 const ESTADO_MENSAJES = {
+  pendiente: { texto: 'Esperando ofertas de taxistas cercanos', color: '#F97316', icon: '📡' },
   aceptado: { texto: 'Tu conductor viene en camino', color: '#1565C0', icon: '🚕' },
   conductor_en_sitio: { texto: '¡Tu conductor llegó! Sal al punto', color: '#FF9800', icon: '📍' },
   en_curso: { texto: 'En camino a tu destino', color: '#2E7D32', icon: '🛣️' },
@@ -15,8 +17,43 @@ export default function MapaServicioActivo({ servicioActivo, destinoGPS }) {
   const [distancia, setDistancia] = useState(null);
   const mapRef = useRef(null);
 
-  // Polling ubicación del conductor cada 3 segundos
+  // ═══ WEBSOCKET: Recibir ubicaciones en tiempo real (reemplaza polling 3s) ═══
+  const { conductores, conectado } = useUbicacionesConductores(
+    servicioActivo?.clienteUid,
+    'cliente'
+  );
+
+  // Actualizar ubicación del conductor desde WebSocket
   useEffect(() => {
+    if (!servicioActivo?.conductorUid || !conductores.length) return;
+    if (!['aceptado', 'conductor_en_sitio'].includes(servicioActivo.estado)) return;
+
+    const conductor = conductores.find(c => c.uid === servicioActivo.conductorUid);
+    if (conductor?.lat) {
+      setUbicacionConductor({ lat: conductor.lat, lng: conductor.lng });
+
+      // Calcular distancia y tiempo estimado
+      const clienteLat = servicioActivo?.ubicacionGPS?.lat;
+      const clienteLng = servicioActivo?.ubicacionGPS?.lng;
+      if (clienteLat && clienteLng) {
+        const dist = calcularDistancia(conductor.lat, conductor.lng, clienteLat, clienteLng);
+        setDistancia(dist);
+        setTiempoEstimado(Math.max(1, Math.round((dist / 30) * 60)));
+      }
+
+      // Ajustar mapa
+      if (mapRef.current && clienteLat) {
+        mapRef.current.fitToCoordinates([
+          { latitude: conductor.lat, longitude: conductor.lng },
+          { latitude: clienteLat, longitude: clienteLng },
+        ], { edgePadding: { top: 60, right: 60, bottom: 60, left: 60 }, animated: true });
+      }
+    }
+  }, [conductores, servicioActivo?.conductorUid, servicioActivo?.estado]);
+
+  // Fallback: polling HTTP si WebSocket no está conectado
+  useEffect(() => {
+    if (conectado) return; // WebSocket activo, no necesitamos polling
     if (!servicioActivo?.conductorUid) return;
     if (!['aceptado', 'conductor_en_sitio'].includes(servicioActivo.estado)) return;
 
@@ -26,8 +63,6 @@ export default function MapaServicioActivo({ servicioActivo, destinoGPS }) {
         const conductor = res.data.find(c => c.uid === servicioActivo.conductorUid);
         if (conductor?.ubicacionActual?.lat) {
           setUbicacionConductor(conductor.ubicacionActual);
-
-          // Calcular distancia y tiempo estimado
           const clienteLat = servicioActivo?.ubicacionGPS?.lat;
           const clienteLng = servicioActivo?.ubicacionGPS?.lng;
           if (clienteLat && clienteLng) {
@@ -36,31 +71,22 @@ export default function MapaServicioActivo({ servicioActivo, destinoGPS }) {
               clienteLat, clienteLng
             );
             setDistancia(dist);
-            // Estimado: 30 km/h promedio en ciudad
             setTiempoEstimado(Math.max(1, Math.round((dist / 30) * 60)));
-          }
-
-          // Ajustar mapa para mostrar ambos puntos
-          if (mapRef.current && clienteLat) {
-            mapRef.current.fitToCoordinates([
-              { latitude: conductor.ubicacionActual.lat, longitude: conductor.ubicacionActual.lng },
-              { latitude: clienteLat, longitude: clienteLng },
-            ], { edgePadding: { top: 60, right: 60, bottom: 60, left: 60 }, animated: true });
           }
         }
       } catch {}
     };
 
     cargar();
-    const intervalo = setInterval(cargar, 3000);
+    const intervalo = setInterval(cargar, 10000); // Fallback cada 10s (antes era 3s)
     return () => clearInterval(intervalo);
-  }, [servicioActivo?.conductorUid, servicioActivo?.estado]);
+  }, [conectado, servicioActivo?.conductorUid, servicioActivo?.estado]);
 
   if (!servicioActivo?.ubicacionGPS && !destinoGPS && !ubicacionConductor) return null;
 
   const clienteLat = servicioActivo?.ubicacionGPS?.lat || 0;
   const clienteLng = servicioActivo?.ubicacionGPS?.lng || 0;
-  const estadoInfo = ESTADO_MENSAJES[servicioActivo?.estado] || ESTADO_MENSAJES.aceptado;
+  const estadoInfo = ESTADO_MENSAJES[servicioActivo?.estado] || ESTADO_MENSAJES.pendiente;
 
   // Puntos para la línea de ruta
   const rutaPuntos = [];

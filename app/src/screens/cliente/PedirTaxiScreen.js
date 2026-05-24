@@ -14,7 +14,7 @@ import OfertasRecibidas from '../../components/OfertasRecibidas';
 import ConductoresCercanos from '../../components/ConductoresCercanos';
 import MapaServicioActivo from '../../components/MapaServicioActivo';
 import CompartirViaje from '../../components/CompartirViaje';
-import RadarBuscando from '../../components/RadarBuscando';
+import RadarBuscando, { RadarSoloAnimacion, ConductoresCercanosList } from '../../components/RadarBuscando';
 import DireccionesFavoritas from '../../components/DireccionesFavoritas';
 import useChatNotificacion from '../../hooks/useChatNotificacion';
 
@@ -541,13 +541,23 @@ export default function PedirTaxiScreen() {
     <ScrollView contentContainerStyle={styles.container}>
       <Text style={styles.titulo}>🚕 Pide Taxi</Text>
 
-      {/* Mapa en tiempo real */}
-      <MapaServicioActivo servicioActivo={servicioActivo} destinoGPS={destinoGPS} />
+      {/* Mapa en tiempo real con radar superpuesto */}
+      <View style={styles.mapaConRadar}>
+        <MapaServicioActivo servicioActivo={servicioActivo} destinoGPS={destinoGPS} />
+        {servicioActivo.estado === 'pendiente' && (
+          <View style={styles.radarOverlay}>
+            <RadarSoloAnimacion />
+          </View>
+        )}
+      </View>
 
-      {/* Estado del servicio */}
-      {servicioActivo.estado === 'pendiente' ? (
-        <RadarBuscando />
-      ) : (
+      {/* Lista de conductores cercanos (debajo del mapa) */}
+      {servicioActivo.estado === 'pendiente' && (
+        <ConductoresCercanosList />
+      )}
+
+      {/* Estado del servicio (solo cuando no es pendiente) */}
+      {servicioActivo.estado !== 'pendiente' && (
         <View style={[styles.estadoCard, { backgroundColor: estadoCfg.color }]}>
           <Text style={styles.estadoIcon}>{estadoCfg.icon}</Text>
           <Text style={[styles.estadoLabel, { color: estadoCfg.textColor }]}>{estadoCfg.label}</Text>
@@ -866,6 +876,12 @@ const styles = StyleSheet.create({
   btnSolicitarTexto: { fontWeight: 'bold', fontSize: 17, color: '#000' },
 
   // ═══ ESTILOS SERVICIO ACTIVO (se mantienen) ═══
+  mapaConRadar: { position: 'relative', marginBottom: 14 },
+  radarOverlay: {
+    position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
+    backgroundColor: 'rgba(255,255,255,0.35)', borderRadius: 16,
+    justifyContent: 'center', alignItems: 'center', zIndex: 5,
+  },
   container: { flexGrow: 1, backgroundColor: '#f5f5f5', padding: 16 },
   titulo: { fontSize: 24, fontWeight: 'bold', textAlign: 'center', marginBottom: 2 },
   subtitulo: { textAlign: 'center', color: '#666', marginBottom: 12 },

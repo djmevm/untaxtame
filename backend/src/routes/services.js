@@ -6,6 +6,8 @@ const verifyToken = require('../middleware/verifyToken');
 const verifyAdmin = require('../middleware/verifyAdmin');
 const { TARIFA_MINIMA } = require('../utils/tarifa');
 const { descontarComision } = require('./billetera');
+const { enviarPushAConductores, enviarPushAUsuario } = require('../services/pushNotifications');
+const { notificarNuevoServicio, notificarServicioActualizado } = require('../services/websocket');
 
 // Estados posibles: pendiente | aceptado | en_curso | conductor_en_sitio | completado | cancelado
 
@@ -57,6 +59,18 @@ router.post('/solicitar', verifyToken, async (req, res) => {
     };
 
     await db.collection('servicios').doc(servicioId).set(servicio);
+
+    // ═══ PUSH: Notificar a conductores disponibles ═══
+    enviarPushAConductores({
+      titulo: '🚕 Nuevo servicio disponible',
+      cuerpo: `${clienteNombre} necesita taxi: ${origen} → ${destino}`,
+      datos: { tipo: 'nuevo_servicio', servicioId, origen, destino },
+      canal: 'servicios',
+    }, { disponible: true }).catch(err => console.warn('[PUSH] Error notificando conductores:', err.message));
+
+    // ═══ WEBSOCKET: Notificar en tiempo real a conductores conectados ═══
+    notificarNuevoServicio(servicio);
+
     res.status(201).json({ message: 'Servicio solicitado', servicio });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -128,6 +142,26 @@ router.put('/aceptar/:servicioId', verifyToken, async (req, res) => {
 
     // Marcar conductor como no disponible
     await db.collection('usuarios').doc(conductorUid).update({ disponible: false });
+
+    // ═══ PUSH: Notificar al cliente que su taxi fue aceptado ═══
+    const servicioData2 = (await ref.get()).data();
+    if (servicioData2.clienteUid) {
+      enviarPushAUsuario(servicioData2.clienteUid, {
+        titulo: '✅ ¡Conductor en camino!',
+        cuerpo: `${conductorNombre} aceptó tu servicio. Placa: ${conductorData.placa || 'N/A'}`,
+        datos: { tipo: 'servicio_aceptado', servicioId: req.params.servicioId },
+        canal: 'servicios',
+      }).catch(err => console.warn('[PUSH] Error notificando cliente:', err.message));
+
+      // ═══ WEBSOCKET: Notificar al cliente en tiempo real ═══
+      notificarServicioActualizado(servicioData2.clienteUid, {
+        id: req.params.servicioId,
+        estado: 'aceptado',
+        conductorNombre,
+        conductorPlaca: conductorData.placa,
+        conductorCelular: conductorData.telefono,
+      });
+    }
 
     res.json({ message: 'Servicio aceptado', servicioId: req.params.servicioId });
   } catch (err) {

@@ -4,12 +4,11 @@ import api from '../config/api';
 import { reproducirSonidoChat } from '../services/sonido';
 
 // Hook que verifica mensajes nuevos de chat cuando el chat está CERRADO
-// y notifica con sonido + vibración
+// Notifica con sonido + vibración + alerta visual
 export default function useChatNotificacion(servicioId, miUid, chatAbierto) {
   const cantidadRef = useRef(null);
 
   useEffect(() => {
-    // Solo verificar cuando el chat está cerrado y hay un servicio activo
     if (!servicioId || !miUid || chatAbierto) {
       cantidadRef.current = null;
       return;
@@ -22,27 +21,26 @@ export default function useChatNotificacion(servicioId, miUid, chatAbierto) {
         const cantidad = mensajes.length;
 
         if (cantidadRef.current !== null && cantidad > cantidadRef.current) {
-          // Hay mensajes nuevos, verificar si son de otra persona
           const nuevos = mensajes.slice(cantidadRef.current);
-          const deOtro = nuevos.filter(function(m) { return m.uid !== miUid; });
+          const deOtro = nuevos.filter(m => m.uid !== miUid);
 
           if (deOtro.length > 0) {
             reproducirSonidoChat();
-            var ultimo = deOtro[deOtro.length - 1];
-            var emoji = ultimo.rol === 'cliente' ? '👤' : '🚕';
+            const ultimo = deOtro[deOtro.length - 1];
+            const emoji = ultimo.rol === 'cliente' ? '👤' : ultimo.rol === 'admin' ? '🛡️' : '🚕';
             Alert.alert(
-              '💬 Nuevo mensaje',
-              emoji + ' ' + (ultimo.nombre || 'Usuario') + ':\n"' + ultimo.texto + '"',
-              [{ text: 'OK' }]
+              '💬 Mensaje nuevo',
+              `${emoji} ${ultimo.nombre || 'Usuario'}:\n"${ultimo.texto}"\n\nAbre el chat para responder.`,
+              [{ text: 'Ver chat' }]
             );
           }
         }
         cantidadRef.current = cantidad;
-      } catch (e) {}
+      } catch {}
     };
 
     verificar();
-    var intervalo = setInterval(verificar, 8000);
-    return function() { clearInterval(intervalo); };
+    const intervalo = setInterval(verificar, 60000); // Cada 60 seg
+    return () => clearInterval(intervalo);
   }, [servicioId, miUid, chatAbierto]);
 }
