@@ -5,6 +5,7 @@ import {
   SafeAreaView
 } from 'react-native';
 import api from '../config/api';
+import useWebSocket from '../hooks/useWebSocket';
 
 export default function MensajesAdmin({ uid }) {
   const [mensajes, setMensajes] = useState([]);
@@ -12,13 +13,47 @@ export default function MensajesAdmin({ uid }) {
   const [enviando, setEnviando] = useState(false);
   const [mostrar, setMostrar] = useState(false);
   const flatRef = useRef(null);
+  const intervaloRef = useRef(null);
+
+  // ═══ WEBSOCKET: Recibir mensajes en tiempo real ═══
+  const { conectado, onMensaje } = useWebSocket(uid, 'cliente');
 
   useEffect(() => {
-    if (!uid || !mostrar) return;
+    if (!conectado || !uid) return;
+    const cleanup = onMensaje('chat_directo', (data) => {
+      // Solo agregar si es un mensaje del admin para este usuario
+      if (data.senderRol === 'admin' || data.senderUid !== uid) {
+        setMensajes(prev => {
+          // Evitar duplicados
+          if (prev.some(m => m.creadoEn === new Date(data.timestamp).toISOString() && m.texto === data.texto)) {
+            return prev;
+          }
+          return [...prev, {
+            uid: data.senderUid,
+            nombre: data.senderNombre,
+            rol: data.senderRol === 'admin' ? 'admin' : 'usuario',
+            texto: data.texto,
+            creadoEn: new Date(data.timestamp).toISOString(),
+          }];
+        });
+      }
+    });
+    return cleanup;
+  }, [conectado, uid, onMensaje]);
+
+  // Carga inicial + polling adaptativo
+  useEffect(() => {
+    if (!uid || !mostrar) {
+      if (intervaloRef.current) clearInterval(intervaloRef.current);
+      return;
+    }
     cargar();
-    const intervalo = setInterval(cargar, 60000);
-    return () => clearInterval(intervalo);
-  }, [uid, mostrar]);
+    // Con WebSocket: polling cada 60s como respaldo
+    // Sin WebSocket: polling cada 10s
+    const intervaloMs = conectado ? 60000 : 10000;
+    intervaloRef.current = setInterval(cargar, intervaloMs);
+    return () => { if (intervaloRef.current) clearInterval(intervaloRef.current); };
+  }, [uid, mostrar, conectado]);
 
   const cargar = async () => {
     try {

@@ -3,6 +3,7 @@ const router = express.Router();
 const { db } = require('../firebase');
 const verifyToken = require('../middleware/verifyToken');
 const { enviarPushAUsuario } = require('../services/pushNotifications');
+const { enviarAUsuario } = require('../services/websocket');
 
 // Enviar mensaje en un servicio
 router.post('/:servicioId/mensaje', verifyToken, async (req, res) => {
@@ -150,6 +151,34 @@ router.post('/directo/:uid/mensaje', verifyToken, async (req, res) => {
         datos: { tipo: 'chat_directo', senderUid },
         canal: 'chat',
       }).catch(err => console.warn('[PUSH] Error notificando chat:', err.message));
+    }
+
+    // ═══ WEBSOCKET: Notificar en tiempo real al destinatario ═══
+    const wsDestinoUid = senderData.rol === 'admin' ? uid : null;
+    // Notificar al usuario destino
+    enviarAUsuario(senderData.rol === 'admin' ? uid : senderUid, {
+      tipo: 'chat_directo',
+      texto: texto.trim(),
+      senderUid,
+      senderNombre: mensaje.nombre,
+      senderRol: mensaje.rol,
+      timestamp: Date.now(),
+    });
+    // Si es usuario enviando, notificar a todos los admins conectados
+    if (senderData.rol !== 'admin') {
+      // Buscar admins conectados y notificarles
+      const adminsSnap = await db.collection('usuarios').where('rol', '==', 'admin').get();
+      adminsSnap.forEach(doc => {
+        enviarAUsuario(doc.id, {
+          tipo: 'chat_directo',
+          texto: texto.trim(),
+          senderUid,
+          chatUid: senderUid, // UID del chat (del usuario)
+          senderNombre: senderData.nombre || 'Usuario',
+          senderRol: 'usuario',
+          timestamp: Date.now(),
+        });
+      });
     }
 
     res.status(201).json({ message: 'Mensaje enviado', mensaje });

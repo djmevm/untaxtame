@@ -115,6 +115,27 @@ function manejarMensaje(ws, uid, rol, msg) {
       }
       break;
 
+    case 'chat_directo':
+      // Chat directo admin ↔ usuario (instantáneo)
+      if (msg.destinoUid && msg.texto) {
+        enviarAUsuario(msg.destinoUid, {
+          tipo: 'chat_directo',
+          texto: msg.texto,
+          senderUid: uid,
+          senderNombre: msg.nombre || (rol === 'admin' ? 'Administrador' : 'Usuario'),
+          senderRol: rol,
+          timestamp: Date.now(),
+        });
+        // Confirmar al remitente que se envió
+        enviarAUsuario(uid, {
+          tipo: 'chat_directo_confirmado',
+          destinoUid: msg.destinoUid,
+          texto: msg.texto,
+          timestamp: Date.now(),
+        });
+      }
+      break;
+
     case 'suscribir_servicio':
       // Cliente se suscribe a actualizaciones de un servicio
       ws.servicioId = msg.servicioId;

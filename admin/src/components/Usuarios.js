@@ -438,12 +438,16 @@ export default function Usuarios() {
   );
 }
 
-// Componente de chat directo admin → usuario
+// Componente de chat directo admin → usuario (con WebSocket)
 function ChatDirectoAdmin({ uid, nombre }) {
   const [mensajes, setMensajes] = React.useState([]);
   const [texto, setTexto] = React.useState('');
   const [enviando, setEnviando] = React.useState(false);
   const [mostrar, setMostrar] = React.useState(false);
+  const [wsConectado, setWsConectado] = React.useState(false);
+  const wsRef = React.useRef(null);
+  const intervaloRef = React.useRef(null);
+  const chatEndRef = React.useRef(null);
 
   const cargar = async () => {
     try {
@@ -452,22 +456,84 @@ function ChatDirectoAdmin({ uid, nombre }) {
     } catch {}
   };
 
+  // WebSocket para recibir mensajes en tiempo real
   React.useEffect(() => {
-    if (mostrar) {
-      cargar();
-      const intervalo = setInterval(cargar, 3000);
-      return () => clearInterval(intervalo);
-    }
+    if (!mostrar) return;
+
+    // Conectar WebSocket
+    const adminUid = 'admin_panel'; // Identificador del admin
+    try {
+      const ws = new WebSocket(`wss://untaxtame-production.up.railway.app/ws?uid=${adminUid}&rol=admin`);
+      ws.onopen = () => setWsConectado(true);
+      ws.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          if (data.tipo === 'chat_directo' && (data.senderUid === uid || data.chatUid === uid)) {
+            // Mensaje nuevo recibido del usuario
+            setMensajes(prev => [...prev, {
+              uid: data.senderUid,
+              nombre: data.senderNombre,
+              rol: data.senderRol === 'admin' ? 'admin' : 'usuario',
+              texto: data.texto,
+              creadoEn: new Date(data.timestamp).toISOString(),
+            }]);
+          }
+        } catch {}
+      };
+      ws.onclose = () => setWsConectado(false);
+      wsRef.current = ws;
+    } catch {}
+
+    return () => {
+      if (wsRef.current) {
+        wsRef.current.close();
+        wsRef.current = null;
+      }
+      setWsConectado(false);
+    };
   }, [mostrar, uid]);
+
+  // Carga inicial + polling como fallback (30s con WS, 5s sin WS)
+  React.useEffect(() => {
+    if (!mostrar) {
+      if (intervaloRef.current) clearInterval(intervaloRef.current);
+      return;
+    }
+    cargar();
+    const intervaloMs = wsConectado ? 30000 : 5000;
+    intervaloRef.current = setInterval(cargar, intervaloMs);
+    return () => { if (intervaloRef.current) clearInterval(intervaloRef.current); };
+  }, [mostrar, uid, wsConectado]);
+
+  // Auto-scroll al último mensaje
+  React.useEffect(() => {
+    if (chatEndRef.current) {
+      chatEndRef.current.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [mensajes]);
 
   const enviar = async () => {
     if (!texto.trim() || enviando) return;
+    const textoEnviar = texto.trim();
     setEnviando(true);
+    setTexto('');
+
+    // Agregar mensaje optimista inmediatamente
+    const mensajeOptimista = {
+      uid: 'admin',
+      nombre: 'Administrador',
+      rol: 'admin',
+      texto: textoEnviar,
+      creadoEn: new Date().toISOString(),
+    };
+    setMensajes(prev => [...prev, mensajeOptimista]);
+
     try {
-      await api.post(`/chat/directo/${uid}/mensaje`, { texto: texto.trim() });
-      setTexto('');
-      cargar();
+      await api.post(`/chat/directo/${uid}/mensaje`, { texto: textoEnviar });
     } catch (err) {
+      // Revertir mensaje optimista si falla
+      setMensajes(prev => prev.filter(m => m !== mensajeOptimista));
+      setTexto(textoEnviar);
       alert('Error: ' + (err.response?.data?.error || err.message));
     } finally {
       setEnviando(false);
@@ -481,16 +547,23 @@ function ChatDirectoAdmin({ uid, nombre }) {
         padding: '10px 20px', cursor: 'pointer', fontWeight: 'bold', fontSize: 14,
       }}>
         💬 {mostrar ? 'Ocultar chat' : `Mensaje directo a ${nombre}`}
+        {wsConectado && mostrar && <span style={{ marginLeft: 8, fontSize: 10, opacity: 0.8 }}>● En vivo</span>}
       </button>
 
       {mostrar && (
         <div style={{ marginTop: 12, background: '#f9f9f9', borderRadius: 14, padding: 16, border: '1px solid #eee' }}>
-          <div style={{ maxHeight: 300, overflowY: 'auto', marginBottom: 12 }}>
+          {/* Indicador de conexión */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 10, fontSize: 11, color: wsConectado ? '#2E7D32' : '#999' }}>
+            <span style={{ width: 8, height: 8, borderRadius: 4, background: wsConectado ? '#2E7D32' : '#ccc', display: 'inline-block' }}></span>
+            {wsConectado ? 'Tiempo real activo' : 'Polling cada 5s'}
+          </div>
+
+          <div style={{ maxHeight: 350, overflowY: 'auto', marginBottom: 12 }}>
             {mensajes.length === 0 ? (
               <p style={{ color: '#999', textAlign: 'center' }}>Sin mensajes</p>
             ) : (
               mensajes.map((msg, i) => (
-                <div key={msg.id || i} style={{
+                <div key={msg.id || `m-${i}`} style={{
                   padding: '8px 12px', borderRadius: 10, marginBottom: 6, maxWidth: '80%',
                   background: msg.rol === 'admin' ? '#FFF3E0' : '#E3F2FD',
                   marginLeft: msg.rol === 'admin' ? 'auto' : 0,
@@ -506,6 +579,7 @@ function ChatDirectoAdmin({ uid, nombre }) {
                 </div>
               ))
             )}
+            <div ref={chatEndRef} />
           </div>
           <div style={{ display: 'flex', gap: 8 }}>
             <input
