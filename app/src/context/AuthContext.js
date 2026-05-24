@@ -1,17 +1,7 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import api from '../config/api';
-
-// Importaciones de notificaciones (opcionales — no crashear si fallan)
-let registrarTokenPush = async () => null;
-let configurarListeners = () => () => {};
-let limpiarBadge = async () => {};
-try {
-  const notif = require('../services/notificaciones');
-  registrarTokenPush = notif.registrarTokenPush || registrarTokenPush;
-  configurarListeners = notif.configurarListeners || configurarListeners;
-  limpiarBadge = notif.limpiarBadge || limpiarBadge;
-} catch {}
+import { registrarTokenPush, configurarListeners, limpiarBadge } from '../services/notificaciones';
 
 const AuthContext = createContext();
 
