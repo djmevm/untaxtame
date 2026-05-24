@@ -12,7 +12,7 @@ export default function MensajesAdmin({ uid }) {
   useEffect(() => {
     if (!uid || !mostrar) return;
     cargar();
-    const intervalo = setInterval(cargar, 5000);
+    const intervalo = setInterval(cargar, 60000);
     return () => clearInterval(intervalo);
   }, [uid, mostrar]);
 
@@ -34,10 +34,8 @@ export default function MensajesAdmin({ uid }) {
     finally { setEnviando(false); }
   };
 
-  // Contar mensajes no leídos
   const totalMensajes = mensajes.length;
 
-  // Auto-abrir si hay mensajes nuevos
   useEffect(() => {
     if (totalMensajes > 0 && !mostrar) {
       setMostrar(true);
@@ -60,6 +58,28 @@ export default function MensajesAdmin({ uid }) {
 
       {mostrar && (
         <View style={styles.chatContainer}>
+          <View style={styles.inputRow}>
+            <TextInput
+              style={styles.input}
+              placeholder="Escribe al admin..."
+              placeholderTextColor="#999"
+              value={texto}
+              onChangeText={setTexto}
+              maxLength={500}
+              blurOnSubmit={false}
+              returnKeyType="send"
+              onSubmitEditing={enviar}
+              autoFocus
+            />
+            <TouchableOpacity
+              style={[styles.btnEnviar, !texto.trim() && { backgroundColor: '#ddd' }]}
+              onPress={enviar}
+              disabled={!texto.trim() || enviando}
+            >
+              <Text style={styles.btnEnviarTexto}>➤</Text>
+            </TouchableOpacity>
+          </View>
+
           {mensajes.length === 0 ? (
             <Text style={styles.vacio}>Sin mensajes</Text>
           ) : (
@@ -82,28 +102,6 @@ export default function MensajesAdmin({ uid }) {
               )}
             />
           )}
-
-          {/* Input para responder */}
-          <View style={styles.inputRow}>
-            <TextInput
-              style={styles.input}
-              placeholder="Responder..."
-              placeholderTextColor="#999"
-              value={texto}
-              onChangeText={setTexto}
-              maxLength={500}
-              blurOnSubmit={false}
-              returnKeyType="send"
-              onSubmitEditing={enviar}
-            />
-            <TouchableOpacity
-              style={[styles.btnEnviar, !texto.trim() && { backgroundColor: '#ddd' }]}
-              onPress={enviar}
-              disabled={!texto.trim() || enviando}
-            >
-              <Text style={styles.btnEnviarTexto}>➤</Text>
-            </TouchableOpacity>
-          </View>
         </View>
       )}
     </View>
@@ -117,21 +115,19 @@ const styles = StyleSheet.create({
   },
   headerRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   titulo: { fontSize: 15, fontWeight: 'bold', color: '#333', flex: 1 },
-  badge: {
-    backgroundColor: '#F97316', borderRadius: 10, paddingHorizontal: 8, paddingVertical: 2,
-  },
+  badge: { backgroundColor: '#F97316', borderRadius: 10, paddingHorizontal: 8, paddingVertical: 2 },
   badgeText: { color: '#fff', fontSize: 11, fontWeight: 'bold' },
   flecha: { fontSize: 14, color: '#999' },
   chatContainer: { marginTop: 12 },
   vacio: { textAlign: 'center', color: '#999', padding: 20 },
-  lista: { maxHeight: 250 },
+  lista: { maxHeight: 150 },
   burbuja: { borderRadius: 12, padding: 10, marginBottom: 6, maxWidth: '85%' },
   burbujaAdmin: { backgroundColor: '#FFF3E0', alignSelf: 'flex-start', borderLeftWidth: 3, borderLeftColor: '#F97316' },
   burbujaMia: { backgroundColor: '#E3F2FD', alignSelf: 'flex-end', borderRightWidth: 3, borderRightColor: '#1565C0' },
   remitente: { fontSize: 10, color: '#888', fontWeight: '600', marginBottom: 2 },
   texto: { fontSize: 14, color: '#333' },
   hora: { fontSize: 9, color: '#bbb', marginTop: 3, textAlign: 'right' },
-  inputRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 10 },
+  inputRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 10 },
   input: {
     flex: 1, borderWidth: 1, borderColor: '#ddd', borderRadius: 20,
     paddingHorizontal: 14, paddingVertical: 8, fontSize: 14, color: '#333',

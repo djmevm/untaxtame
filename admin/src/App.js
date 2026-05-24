@@ -190,7 +190,7 @@ function NotificacionMensajes({ onVerUsuarios }) {
             </div>
           ))}
         </div>
-        <button onClick={onVerUsuarios} style={{ background: '#fff', color: '#1565C0', border: 'none', borderRadius: 8, padding: '8px 16px', fontWeight: 'bold', cursor: 'pointer' }}>
+        <button onClick={() => onVerUsuarios(mensajesNuevos[0]?.uid)} style={{ background: '#fff', color: '#1565C0', border: 'none', borderRadius: 8, padding: '8px 16px', fontWeight: 'bold', cursor: 'pointer' }}>
           Ver mensajes
         </button>
       </div>
@@ -257,7 +257,7 @@ export default function App() {
       <AlertaSOS onVerEmergencias={() => setTab('emergencias')} />
 
       {/* Notificación de mensajes directos nuevos */}
-      <NotificacionMensajes onVerUsuarios={() => setTab('usuarios')} />
+      <NotificacionMensajes onVerUsuarios={(uid) => { setTab('usuarios'); if (uid) setTimeout(() => window.dispatchEvent(new CustomEvent('abrirChat', { detail: uid })), 500); }} />
 
       <header className="header">
         <div style={{ flex: 1 }}>

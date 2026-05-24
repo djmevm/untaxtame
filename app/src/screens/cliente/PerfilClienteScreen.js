@@ -104,7 +104,7 @@ export default function PerfilClienteScreen() {
   };
 
   return (
-    <ScrollView contentContainerStyle={styles.container}>
+    <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
 
       {/* Foto de perfil */}
       <TouchableOpacity style={styles.fotoWrapper} onPress={cambiarFoto} disabled={actualizando}>

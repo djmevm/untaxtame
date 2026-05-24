@@ -33,6 +33,19 @@ export default function Usuarios() {
 
   useEffect(() => { cargar(); }, []);
 
+  // Escuchar evento para abrir chat directo desde notificación
+  useEffect(() => {
+    const handler = (e) => {
+      const uid = e.detail;
+      if (uid) {
+        const usuario = usuarios.find(u => u.uid === uid);
+        if (usuario) setSeleccionado(usuario);
+      }
+    };
+    window.addEventListener('abrirChat', handler);
+    return () => window.removeEventListener('abrirChat', handler);
+  }, [usuarios]);
+
   const verificar = async (uid, estado) => {
     try {
       await api.put(`/users/conductor/${uid}/verificacion`, { estado });
