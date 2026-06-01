@@ -99,7 +99,7 @@ export function useSaldoConductor(uid) {
       }
     };
     cargar();
-    const intervalo = setInterval(cargar, 30000); // Optimizado: 30s (antes 15s)
+    const intervalo = setInterval(cargar, 15000);
     return () => clearInterval(intervalo);
   }, [uid]);
 

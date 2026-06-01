@@ -21,6 +21,7 @@ export default function AlertasConductores() {
     const cargar = async () => {
       try {
         const res = await api.get('/emergencia/alertas-conductores');
+        // Filtrar solo alertas no resueltas
         const activas = res.data.filter(a => !a.resuelta);
         if (activas.length > cantidadAnterior.current && cantidadAnterior.current > 0) {
           reproducirSonidoSOS();
@@ -31,7 +32,7 @@ export default function AlertasConductores() {
     };
 
     cargar();
-    const intervalo = setInterval(cargar, 60000);
+    const intervalo = setInterval(cargar, 5000); // Cada 5 seg para sincronizar retiros
     return () => clearInterval(intervalo);
   }, []);
 

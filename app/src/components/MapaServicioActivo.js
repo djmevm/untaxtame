@@ -4,7 +4,6 @@ import MapView, { Marker, Polyline } from 'react-native-maps';
 import api from '../config/api';
 
 const ESTADO_MENSAJES = {
-  pendiente: { texto: 'Esperando ofertas de taxistas cercanos', color: '#F97316', icon: '📡' },
   aceptado: { texto: 'Tu conductor viene en camino', color: '#1565C0', icon: '🚕' },
   conductor_en_sitio: { texto: '¡Tu conductor llegó! Sal al punto', color: '#FF9800', icon: '📍' },
   en_curso: { texto: 'En camino a tu destino', color: '#2E7D32', icon: '🛣️' },
@@ -16,7 +15,7 @@ export default function MapaServicioActivo({ servicioActivo, destinoGPS }) {
   const [distancia, setDistancia] = useState(null);
   const mapRef = useRef(null);
 
-  // Polling ubicación del conductor cada 5 segundos (solo durante servicio activo)
+  // Polling ubicación del conductor cada 3 segundos
   useEffect(() => {
     if (!servicioActivo?.conductorUid) return;
     if (!['aceptado', 'conductor_en_sitio'].includes(servicioActivo.estado)) return;
@@ -24,10 +23,11 @@ export default function MapaServicioActivo({ servicioActivo, destinoGPS }) {
     const cargar = async () => {
       try {
         const res = await api.get('/users/conductores/en-servicio');
-        const conductor = (res.data || []).find(c => c.uid === servicioActivo.conductorUid);
+        const conductor = res.data.find(c => c.uid === servicioActivo.conductorUid);
         if (conductor?.ubicacionActual?.lat) {
           setUbicacionConductor(conductor.ubicacionActual);
 
+          // Calcular distancia y tiempo estimado
           const clienteLat = servicioActivo?.ubicacionGPS?.lat;
           const clienteLng = servicioActivo?.ubicacionGPS?.lng;
           if (clienteLat && clienteLng) {
@@ -36,9 +36,11 @@ export default function MapaServicioActivo({ servicioActivo, destinoGPS }) {
               clienteLat, clienteLng
             );
             setDistancia(dist);
+            // Estimado: 30 km/h promedio en ciudad
             setTiempoEstimado(Math.max(1, Math.round((dist / 30) * 60)));
           }
 
+          // Ajustar mapa para mostrar ambos puntos
           if (mapRef.current && clienteLat) {
             mapRef.current.fitToCoordinates([
               { latitude: conductor.ubicacionActual.lat, longitude: conductor.ubicacionActual.lng },
@@ -50,7 +52,7 @@ export default function MapaServicioActivo({ servicioActivo, destinoGPS }) {
     };
 
     cargar();
-    const intervalo = setInterval(cargar, 5000);
+    const intervalo = setInterval(cargar, 3000);
     return () => clearInterval(intervalo);
   }, [servicioActivo?.conductorUid, servicioActivo?.estado]);
 
@@ -58,7 +60,7 @@ export default function MapaServicioActivo({ servicioActivo, destinoGPS }) {
 
   const clienteLat = servicioActivo?.ubicacionGPS?.lat || 0;
   const clienteLng = servicioActivo?.ubicacionGPS?.lng || 0;
-  const estadoInfo = ESTADO_MENSAJES[servicioActivo?.estado] || ESTADO_MENSAJES.pendiente;
+  const estadoInfo = ESTADO_MENSAJES[servicioActivo?.estado] || ESTADO_MENSAJES.aceptado;
 
   // Puntos para la línea de ruta
   const rutaPuntos = [];

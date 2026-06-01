@@ -3,46 +3,6 @@ const router = express.Router();
 const { db, auth } = require('../firebase');
 const verifyToken = require('../middleware/verifyToken');
 
-// ═══ SEGURIDAD: Bloqueo por IP después de intentos fallidos ═══
-const intentosFallidos = {};
-const INTENTOS_MAX = 10;
-const BLOQUEO_MINUTOS = 30;
-
-function verificarBloqueoIP(ip) {
-  const registro = intentosFallidos[ip];
-  if (!registro) return false;
-  if (registro.intentos >= INTENTOS_MAX) {
-    const tiempoBloqueo = BLOQUEO_MINUTOS * 60 * 1000;
-    if (Date.now() - registro.ultimoIntento < tiempoBloqueo) return true;
-    delete intentosFallidos[ip]; // Expiró el bloqueo
-  }
-  return false;
-}
-
-function registrarIntentoFallido(ip) {
-  if (!intentosFallidos[ip]) intentosFallidos[ip] = { intentos: 0, ultimoIntento: 0 };
-  intentosFallidos[ip].intentos++;
-  intentosFallidos[ip].ultimoIntento = Date.now();
-}
-
-function limpiarIntentos(ip) {
-  delete intentosFallidos[ip];
-}
-
-// ═══ SEGURIDAD: Logs de acceso ═══
-async function registrarAcceso(uid, email, ip, exito, dispositivo) {
-  try {
-    await db.collection('logs_acceso').add({
-      uid: uid || null,
-      email,
-      ip,
-      exito,
-      dispositivo: dispositivo || 'desconocido',
-      fecha: new Date().toISOString(),
-    });
-  } catch {}
-}
-
 // Login - verificar credenciales y devolver custom token
 router.post('/login', async (req, res) => {
   const { email, password } = req.body;
@@ -50,25 +10,21 @@ router.post('/login', async (req, res) => {
     return res.status(400).json({ error: 'Se requiere email y password' });
   }
 
+  // Validar formato de email
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
   if (!emailRegex.test(email)) {
     return res.status(400).json({ error: 'Formato de email inválido' });
   }
 
+  // Validar longitud de password
   if (password.length < 6 || password.length > 128) {
     return res.status(400).json({ error: 'Contraseña inválida' });
   }
 
   const ip = req.ip || req.connection.remoteAddress;
-  const dispositivo = req.headers['user-agent'] || 'desconocido';
-
-  // Verificar bloqueo por IP
-  if (verificarBloqueoIP(ip)) {
-    console.warn('[SEGURIDAD] IP bloqueada:', ip);
-    return res.status(429).json({ error: 'Demasiados intentos fallidos. Intenta en 30 minutos.' });
-  }
 
   try {
+    // Usar Firebase Auth REST API para verificar credenciales
     const fetch = require('node-fetch');
     const apiKey = process.env.FIREBASE_API_KEY || 'AIzaSyCRZz6X7bWXTOsOYDyehKXGcqGRuWbzl9E';
     const response = await fetch(
@@ -83,15 +39,9 @@ router.post('/login', async (req, res) => {
     const data = await response.json();
 
     if (data.error) {
-      registrarIntentoFallido(ip);
-      registrarAcceso(null, email, ip, false, dispositivo);
-      console.warn('[AUTH] Login fallido:', email, 'IP:', ip, 'Intentos:', intentosFallidos[ip]?.intentos);
+      console.warn('[AUTH] Login fallido:', email, 'IP:', ip);
       return res.status(401).json({ error: 'Correo o contraseña incorrectos' });
     }
-
-    // Login exitoso — limpiar intentos
-    limpiarIntentos(ip);
-    registrarAcceso(data.localId, email, ip, true, dispositivo);
 
     // Obtener perfil del usuario
     const userDoc = await db.collection('usuarios').doc(data.localId).get();
@@ -123,20 +73,6 @@ router.post('/register-full', async (req, res) => {
 
   if (!email || !password || !nombre || !telefono || !rol) {
     return res.status(400).json({ error: 'Campos requeridos: email, password, nombre, telefono, rol' });
-  }
-
-  // Validar contraseña fuerte (mínimo 8 caracteres, mayúscula, minúscula, número)
-  if (password.length < 8) {
-    return res.status(400).json({ error: 'La contraseña debe tener mínimo 8 caracteres' });
-  }
-  if (!/[A-Z]/.test(password)) {
-    return res.status(400).json({ error: 'La contraseña debe tener al menos una mayúscula' });
-  }
-  if (!/[a-z]/.test(password)) {
-    return res.status(400).json({ error: 'La contraseña debe tener al menos una minúscula' });
-  }
-  if (!/[0-9]/.test(password)) {
-    return res.status(400).json({ error: 'La contraseña debe tener al menos un número' });
   }
 
   try {
@@ -304,26 +240,6 @@ router.put('/perfil/:uid', verifyToken, async (req, res) => {
     res.json({ message: 'Perfil actualizado', usuario: docActualizado.data() });
   } catch (err) {
     res.status(500).json({ error: err.message });
-  }
-});
-
-// ═══ PUSH TOKEN — Guardar/actualizar token de notificaciones ═══
-router.post('/push-token', verifyToken, async (req, res) => {
-  const { pushToken } = req.body;
-  const uid = req.user.uid;
-
-  if (!pushToken) {
-    return res.status(400).json({ error: 'Se requiere pushToken' });
-  }
-
-  try {
-    await db.collection('usuarios').doc(uid).update({
-      pushToken,
-      pushTokenActualizado: new Date().toISOString(),
-    });
-    res.json({ message: 'Push token guardado' });
-  } catch (err) {
-    res.status(500).json({ error: 'Error guardando push token' });
   }
 });
 

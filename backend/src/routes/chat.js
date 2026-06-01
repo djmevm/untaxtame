@@ -2,8 +2,6 @@ const express = require('express');
 const router = express.Router();
 const { db } = require('../firebase');
 const verifyToken = require('../middleware/verifyToken');
-const { enviarPushAUsuario } = require('../services/pushNotifications');
-const { enviarAUsuario, broadcastARol } = require('../services/websocket');
 
 // Enviar mensaje en un servicio
 router.post('/:servicioId/mensaje', verifyToken, async (req, res) => {
@@ -141,40 +139,6 @@ router.post('/directo/:uid/mensaje', verifyToken, async (req, res) => {
     // Si es usuario, guarda en su propio chat (para que admin lo vea)
     const chatUid = senderData.rol === 'admin' ? uid : senderUid;
     await db.collection('chats_directos').doc(chatUid).collection('mensajes').add(mensaje);
-
-    // ═══ PUSH: Notificar al destinatario del mensaje ═══
-    const destinoUid = senderData.rol === 'admin' ? uid : null; // Solo push si admin envía
-    if (destinoUid) {
-      enviarPushAUsuario(destinoUid, {
-        titulo: '💬 Mensaje del Administrador',
-        cuerpo: texto.trim().substring(0, 100),
-        datos: { tipo: 'chat_directo', senderUid },
-        canal: 'chat',
-      }).catch(err => console.warn('[PUSH] Error notificando chat:', err.message));
-    }
-
-    // ═══ WEBSOCKET: Notificar en tiempo real al destinatario ═══
-    // Notificar al usuario destino
-    enviarAUsuario(senderData.rol === 'admin' ? uid : senderUid, {
-      tipo: 'chat_directo',
-      texto: texto.trim(),
-      senderUid,
-      senderNombre: mensaje.nombre,
-      senderRol: mensaje.rol,
-      timestamp: Date.now(),
-    });
-    // Si es usuario/conductor enviando, broadcast a TODOS los admins conectados por WebSocket
-    if (senderData.rol !== 'admin') {
-      broadcastARol('admin', {
-        tipo: 'chat_directo',
-        texto: texto.trim(),
-        senderUid,
-        chatUid: senderUid,
-        senderNombre: senderData.nombre || 'Usuario',
-        senderRol: senderData.rol || 'usuario',
-        timestamp: Date.now(),
-      });
-    }
 
     res.status(201).json({ message: 'Mensaje enviado', mensaje });
   } catch (err) {

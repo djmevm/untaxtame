@@ -97,6 +97,8 @@ router.post('/:servicioId', verifyToken, async (req, res) => {
       conductorNombre,
       conductorPlaca: conductorData.placa || null,
       conductorCelular: conductorData.telefono || null,
+      fotoVehiculo: conductorData.fotoVehiculo || null,
+      serviciosOfrecidos: conductorData.serviciosOfrecidos || [],
       monto: parseInt(monto),
       mensaje: mensaje || '',
       estado: 'pendiente', // pendiente | aceptada | rechazada

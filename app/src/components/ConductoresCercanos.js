@@ -1,10 +1,9 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, Image } from 'react-native';
 import * as Location from 'expo-location';
 import api from '../config/api';
 
 function calcularDistancia(lat1, lng1, lat2, lng2) {
-  if (!lat1 || !lng1 || !lat2 || !lng2) return null;
   const R = 6371;
   const dLat = (lat2 - lat1) * Math.PI / 180;
   const dLng = (lng2 - lng1) * Math.PI / 180;
@@ -17,23 +16,18 @@ export default function ConductoresCercanos() {
   const [miUbicacion, setMiUbicacion] = useState(null);
 
   useEffect(() => {
-    const obtenerUbicacion = async () => {
+    const cargar = async () => {
       try {
+        // Obtener mi ubicación
         const { status } = await Location.requestForegroundPermissionsAsync();
         if (status === 'granted') {
           const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
           setMiUbicacion({ lat: loc.coords.latitude, lng: loc.coords.longitude });
         }
-      } catch {}
-    };
-    obtenerUbicacion();
-  }, []);
 
-  useEffect(() => {
-    const cargar = async () => {
-      try {
+        // Obtener conductores en servicio
         const res = await api.get('/users/conductores/en-servicio');
-        setConductores((res.data || []).filter(c => c.ubicacionActual?.lat));
+        setConductores(res.data.filter(c => c.ubicacionActual?.lat));
       } catch {}
     };
 
@@ -42,18 +36,16 @@ export default function ConductoresCercanos() {
     return () => clearInterval(intervalo);
   }, []);
 
-  // Memoizar cálculo de distancias
-  const conDistancia = useMemo(() => {
-    return conductores.map(c => {
-      const dist = miUbicacion && c.ubicacionActual
-        ? calcularDistancia(miUbicacion.lat, miUbicacion.lng, c.ubicacionActual.lat, c.ubicacionActual.lng)
-        : null;
-      const minutos = dist ? Math.round((dist * 1.4 / 25) * 60) : null;
-      return { ...c, distancia: dist, tiempoEstimado: minutos };
-    }).sort((a, b) => (a.distancia || 999) - (b.distancia || 999));
-  }, [conductores, miUbicacion]);
+  if (conductores.length === 0) return null;
 
-  if (conDistancia.length === 0) return null;
+  // Calcular distancia y ordenar por cercanía
+  const conDistancia = conductores.map(c => {
+    const dist = miUbicacion && c.ubicacionActual
+      ? calcularDistancia(miUbicacion.lat, miUbicacion.lng, c.ubicacionActual.lat, c.ubicacionActual.lng)
+      : null;
+    const minutos = dist ? Math.round((dist * 1.4 / 25) * 60) : null;
+    return { ...c, distancia: dist, tiempoEstimado: minutos };
+  }).sort((a, b) => (a.distancia || 999) - (b.distancia || 999));
 
   return (
     <View style={styles.container}>

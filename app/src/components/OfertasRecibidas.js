@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator, Alert } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator, Alert, Image } from 'react-native';
 import api from '../config/api';
-import { reproducirOfertaRecibida } from '../services/sonido';
+import { reproducirSonido } from '../services/sonido';
 
 export default function OfertasRecibidas({ servicioId, onAceptar }) {
   const [ofertas, setOfertas] = useState([]);
@@ -13,7 +13,7 @@ export default function OfertasRecibidas({ servicioId, onAceptar }) {
     try {
       const res = await api.get(`/ofertas/${servicioId}`);
       if (res.data.length > cantidadAnterior.current && cantidadAnterior.current > 0) {
-        reproducirOfertaRecibida();
+        reproducirSonido();
       }
       cantidadAnterior.current = res.data.length;
       setOfertas(res.data);
@@ -24,7 +24,7 @@ export default function OfertasRecibidas({ servicioId, onAceptar }) {
   // Polling cada 5 segundos para ver nuevas ofertas
   useEffect(() => {
     cargarOfertas();
-    const intervalo = setInterval(cargarOfertas, 60000); // Cada 60 seg
+    const intervalo = setInterval(cargarOfertas, 15000);
     return () => clearInterval(intervalo);
   }, [servicioId]);
 
@@ -82,6 +82,24 @@ export default function OfertasRecibidas({ servicioId, onAceptar }) {
             </View>
             <Text style={styles.ofertaMonto}>${oferta.monto.toLocaleString('es-CO')}</Text>
           </View>
+
+          {/* Foto del vehículo */}
+          {oferta.fotoVehiculo && (
+            <Image source={{ uri: oferta.fotoVehiculo }} style={{ width: '100%', height: 100, borderRadius: 10, marginBottom: 8, resizeMode: 'cover' }} />
+          )}
+
+          {/* Servicios que ofrece */}
+          {oferta.serviciosOfrecidos && oferta.serviciosOfrecidos.length > 0 && (
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 8 }}>
+              {oferta.serviciosOfrecidos.map((s) => (
+                <View key={s} style={{ backgroundColor: '#F0FDF4', borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3, borderWidth: 1, borderColor: '#BBF7D0' }}>
+                  <Text style={{ fontSize: 11, color: '#16A34A' }}>
+                    {s === 'maletas' ? '🧳' : s === 'discapacitado' ? '♿' : s === 'bicicleta' ? '🚲' : s === 'aireAcondicionado' ? '❄️' : s === 'mascotas' ? '🐾' : '✓'} {s === 'aireAcondicionado' ? 'A/C' : s}
+                  </Text>
+                </View>
+              ))}
+            </View>
+          )}
 
           {/* Reputación del conductor */}
           {oferta.reputacion && (

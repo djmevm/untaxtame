@@ -13,9 +13,6 @@ import ChatServicio from '../../components/ChatServicio';
 import OfertasRecibidas from '../../components/OfertasRecibidas';
 import ConductoresCercanos from '../../components/ConductoresCercanos';
 import MapaServicioActivo from '../../components/MapaServicioActivo';
-import CompartirViaje from '../../components/CompartirViaje';
-import RadarBuscando, { RadarSoloAnimacion, ConductoresCercanosList } from '../../components/RadarBuscando';
-import DireccionesFavoritas from '../../components/DireccionesFavoritas';
 import useChatNotificacion from '../../hooks/useChatNotificacion';
 
 const { width } = Dimensions.get('window');
@@ -407,14 +404,13 @@ export default function PedirTaxiScreen() {
               </View>
 
               {/* Campo origen editable */}
-              <Text style={styles.inputHint}>📍 Escribe o usa GPS para tu ubicación</Text>
               <View style={styles.inputRow}>
                 <View style={styles.inputDot}>
                   <View style={styles.dotGreen} />
                 </View>
                 <TextInput
                   style={styles.inputField}
-                  placeholder="Ej: Calle 15 #10-25, Barrio Centro"
+                  placeholder="¿Dónde estás? (Origen)"
                   placeholderTextColor="#94A3B8"
                   value={origen}
                   onChangeText={setOrigen}
@@ -428,14 +424,13 @@ export default function PedirTaxiScreen() {
               </View>
 
               {/* Campo destino editable */}
-              <Text style={styles.inputHint}>🏁 Escribe o selecciona en el mapa tu destino</Text>
               <View style={styles.inputRow}>
                 <View style={styles.inputDot}>
                   <View style={styles.dotRed} />
                 </View>
                 <TextInput
                   style={styles.inputField}
-                  placeholder="Ej: Centro Comercial, Calle 20 #5-30"
+                  placeholder="¿Hacia dónde vamos? (Destino)"
                   placeholderTextColor="#94A3B8"
                   value={destino}
                   onChangeText={(text) => {
@@ -448,9 +443,6 @@ export default function PedirTaxiScreen() {
                   <Text style={styles.inputActionIcon}>📌</Text>
                 </TouchableOpacity>
               </View>
-
-              {/* Direcciones favoritas */}
-              <DireccionesFavoritas onSeleccionar={(dir) => setDestino(dir)} />
 
               {/* Conductores cercanos */}
               <ConductoresCercanos />
@@ -541,28 +533,17 @@ export default function PedirTaxiScreen() {
     <ScrollView contentContainerStyle={styles.container}>
       <Text style={styles.titulo}>🚕 Pide Taxi</Text>
 
-      {/* Mapa en tiempo real con radar superpuesto */}
-      <View style={styles.mapaConRadar}>
-        <MapaServicioActivo servicioActivo={servicioActivo} destinoGPS={destinoGPS} />
+      {/* Mapa en tiempo real */}
+      <MapaServicioActivo servicioActivo={servicioActivo} destinoGPS={destinoGPS} />
+
+      {/* Estado del servicio */}
+      <View style={[styles.estadoCard, { backgroundColor: estadoCfg.color }]}>
+        <Text style={styles.estadoIcon}>{estadoCfg.icon}</Text>
+        <Text style={[styles.estadoLabel, { color: estadoCfg.textColor }]}>{estadoCfg.label}</Text>
         {servicioActivo.estado === 'pendiente' && (
-          <View style={styles.radarOverlay}>
-            <RadarSoloAnimacion />
-          </View>
+          <ActivityIndicator color={estadoCfg.textColor} style={{ marginTop: 6 }} />
         )}
       </View>
-
-      {/* Lista de conductores cercanos (debajo del mapa) */}
-      {servicioActivo.estado === 'pendiente' && (
-        <ConductoresCercanosList />
-      )}
-
-      {/* Estado del servicio (solo cuando no es pendiente) */}
-      {servicioActivo.estado !== 'pendiente' && (
-        <View style={[styles.estadoCard, { backgroundColor: estadoCfg.color }]}>
-          <Text style={styles.estadoIcon}>{estadoCfg.icon}</Text>
-          <Text style={[styles.estadoLabel, { color: estadoCfg.textColor }]}>{estadoCfg.label}</Text>
-        </View>
-      )}
 
       {/* Tarifa estimada en servicio activo */}
       {servicioActivo.tarifaEstimada && (
@@ -684,14 +665,11 @@ export default function PedirTaxiScreen() {
 
       {/* Chat y SOS — solo cuando hay conductor */}
       {servicioActivo.conductorNombre && ['pendiente', 'aceptado', 'conductor_en_sitio'].includes(servicioActivo.estado) && (
-        <>
-          <View style={styles.chatSOSRow}>
-            <TouchableOpacity style={styles.btnChat} onPress={() => setMostrarChat(true)}>
-              <Text style={styles.btnChatTexto}>💬 Chat con conductor</Text>
-            </TouchableOpacity>
-          </View>
-          <CompartirViaje servicioActivo={servicioActivo} />
-        </>
+        <View style={styles.chatSOSRow}>
+          <TouchableOpacity style={styles.btnChat} onPress={() => setMostrarChat(true)}>
+            <Text style={styles.btnChatTexto}>💬 Chat con conductor</Text>
+          </TouchableOpacity>
+        </View>
       )}
 
       {/* Acciones */}
@@ -810,7 +788,6 @@ const styles = StyleSheet.create({
   saludoSub: { fontSize: 13, color: '#888', marginTop: 2 },
 
   // Inputs editables
-  inputHint: { fontSize: 11, color: '#64748B', marginBottom: 4, marginLeft: 4 },
   inputRow: {
     flexDirection: 'row', alignItems: 'center', gap: 10,
     backgroundColor: '#fff', borderRadius: 14, padding: 14,
@@ -876,12 +853,6 @@ const styles = StyleSheet.create({
   btnSolicitarTexto: { fontWeight: 'bold', fontSize: 17, color: '#000' },
 
   // ═══ ESTILOS SERVICIO ACTIVO (se mantienen) ═══
-  mapaConRadar: { position: 'relative', marginBottom: 14 },
-  radarOverlay: {
-    position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
-    backgroundColor: 'rgba(255,255,255,0.35)', borderRadius: 16,
-    justifyContent: 'center', alignItems: 'center', zIndex: 5,
-  },
   container: { flexGrow: 1, backgroundColor: '#f5f5f5', padding: 16 },
   titulo: { fontSize: 24, fontWeight: 'bold', textAlign: 'center', marginBottom: 2 },
   subtitulo: { textAlign: 'center', color: '#666', marginBottom: 12 },

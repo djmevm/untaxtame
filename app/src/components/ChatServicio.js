@@ -20,7 +20,7 @@ export default function ChatServicio({ servicioId, visible, onCerrar }) {
     if (!servicioId) return;
     try {
       const res = await api.get(`/chat/${servicioId}/mensajes`);
-      setMensajes(res.data || []);
+      setMensajes(res.data);
     } catch {}
     finally { setCargandoInicial(false); }
   }, [servicioId]);
@@ -29,7 +29,7 @@ export default function ChatServicio({ servicioId, visible, onCerrar }) {
     if (visible && servicioId) {
       setCargandoInicial(true);
       cargarMensajes();
-      intervaloRef.current = setInterval(cargarMensajes, 5000);
+      intervaloRef.current = setInterval(cargarMensajes, 4000);
     } else {
       if (intervaloRef.current) {
         clearInterval(intervaloRef.current);
@@ -84,7 +84,6 @@ export default function ChatServicio({ servicioId, visible, onCerrar }) {
             blurOnSubmit={false}
             returnKeyType="send"
             onSubmitEditing={enviarMensaje}
-            autoFocus={true}
           />
           <TouchableOpacity
             style={[styles.btnEnviar, (!texto.trim() || enviando) && { backgroundColor: '#ddd' }]}

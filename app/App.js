@@ -4,8 +4,6 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { AuthProvider } from './src/context/AuthContext';
 import AppNavigator from './src/navigation/AppNavigator';
 
-// Notificaciones se configuran en src/services/notificaciones.js de forma segura
-
 export default function App() {
   return (
     <SafeAreaProvider>
