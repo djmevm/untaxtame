@@ -58,6 +58,18 @@ router.put('/conductor/:uid/verificacion', verifyToken, verifyAdmin, async (req,
   }
 });
 
+// Actualizar servicios ofrecidos (admin)
+router.put('/conductor/:uid/servicios', verifyToken, verifyAdmin, async (req, res) => {
+  const { serviciosOfrecidos } = req.body;
+  try {
+    var datos = Array.isArray(serviciosOfrecidos) ? serviciosOfrecidos : [];
+    await db.collection('usuarios').doc(req.params.uid).update({ serviciosOfrecidos: datos });
+    res.json({ message: 'Servicios actualizados' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Actualizar ubicación y estado del conductor
 router.put('/conductor/:uid/ubicacion', verifyToken, async (req, res) => {
   const { lat, lng, enServicio } = req.body;

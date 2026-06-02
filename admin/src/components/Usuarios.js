@@ -546,7 +546,7 @@ function ChatDirectoAdmin({ uid, nombre }) {
 
 // Componente Mi Taxi para admin
 function MiTaxiAdmin({ uid, perfil, onUpdate }) {
-  const [servicios, setServicios] = React.useState((perfil && perfil.serviciosOfrecidos) ? perfil.serviciosOfrecidos : []);
+  const [servicios, setServicios] = React.useState(Array.isArray(perfil?.serviciosOfrecidos) ? perfil.serviciosOfrecidos : []);
   const [guardando, setGuardando] = React.useState(false);
 
   const OPCIONES = [
@@ -567,8 +567,9 @@ function MiTaxiAdmin({ uid, perfil, onUpdate }) {
   const guardar = async () => {
     setGuardando(true);
     try {
-      await api.put(`/admin/conductor/${uid}/servicios`, { serviciosOfrecidos: servicios });
-      alert('✅ Servicios actualizados');
+      var datos = Array.isArray(servicios) ? servicios : [];
+      await api.put(`/users/conductor/${uid}/servicios`, { serviciosOfrecidos: datos });
+      alert('Servicios actualizados correctamente');
       if (onUpdate) onUpdate();
     } catch (err) {
       alert('Error: ' + (err.response?.data?.error || err.message));
