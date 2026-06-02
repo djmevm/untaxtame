@@ -243,6 +243,16 @@ router.put('/perfil/:uid', verifyToken, async (req, res) => {
   }
 });
 
+// Guardar push token
+router.post('/push-token', async (req, res) => {
+  const { pushToken, uid } = req.body;
+  if (!pushToken || !uid) return res.status(400).json({ error: 'Se requiere pushToken y uid' });
+  try {
+    await db.collection('usuarios').doc(uid).update({ pushToken, pushTokenActualizado: new Date().toISOString() });
+    res.json({ message: 'Token guardado' });
+  } catch (err) { res.status(500).json({ error: 'Error guardando token' }); }
+});
+
 // Recuperar contraseña
 router.post('/recuperar-password', async (req, res) => {
   const { email } = req.body;

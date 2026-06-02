@@ -64,6 +64,12 @@ router.post('/sos', verifyToken, async (req, res) => {
       resuelta: false,
     });
 
+    // Push SOS a todos los conductores
+    try {
+      const { enviarPushAConductores } = require('../services/pushNotifications');
+      enviarPushAConductores({ titulo: 'EMERGENCIA SOS', cuerpo: (userData.nombre || 'Usuario') + ': ' + (mensaje || 'SOS'), datos: { tipo: 'emergencia', emergenciaId: docRef.id } });
+    } catch (e) {}
+
     res.status(201).json({
       message: 'Emergencia reportada. La plataforma y conductores han sido alertados.',
       emergenciaId: docRef.id,

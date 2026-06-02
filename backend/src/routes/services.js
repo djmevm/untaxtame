@@ -57,6 +57,13 @@ router.post('/solicitar', verifyToken, async (req, res) => {
     };
 
     await db.collection('servicios').doc(servicioId).set(servicio);
+
+    // Push a conductores disponibles
+    try {
+      const { enviarPushAConductores } = require('../services/pushNotifications');
+      enviarPushAConductores({ titulo: 'Nuevo servicio', cuerpo: clienteNombre + ': ' + origen + ' -> ' + destino, datos: { tipo: 'nuevo_servicio', servicioId } });
+    } catch (e) {}
+
     res.status(201).json({ message: 'Servicio solicitado', servicio });
   } catch (err) {
     res.status(500).json({ error: err.message });

@@ -19,9 +19,10 @@ export const AuthProvider = ({ children }) => {
           const res = await api.get(`/auth/perfil/${uid}`);
           setUsuario({ uid });
           setPerfil(res.data);
+          // Registrar push token en segundo plano
+          try { require('../services/push').registrarPushToken(uid); } catch (e) {}
         }
       } catch {
-        // Token expirado o inválido, limpiar
         await AsyncStorage.multiRemove(['authToken', 'refreshToken', 'userUid']);
       } finally {
         setCargando(false);
@@ -37,6 +38,8 @@ export const AuthProvider = ({ children }) => {
     await AsyncStorage.setItem('userUid', res.data.uid);
     setUsuario({ uid: res.data.uid, email: res.data.email });
     setPerfil(res.data.perfil);
+    // Registrar push token en segundo plano
+    try { require('../services/push').registrarPushToken(res.data.uid); } catch (e) {}
     return res.data;
   };
 

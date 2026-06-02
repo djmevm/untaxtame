@@ -140,6 +140,14 @@ router.post('/directo/:uid/mensaje', verifyToken, async (req, res) => {
     const chatUid = senderData.rol === 'admin' ? uid : senderUid;
     await db.collection('chats_directos').doc(chatUid).collection('mensajes').add(mensaje);
 
+    // Push al destinatario si es admin enviando
+    if (senderData.rol === 'admin') {
+      try {
+        const { enviarPushAUsuario } = require('../services/pushNotifications');
+        enviarPushAUsuario(uid, { titulo: 'Mensaje del Admin', cuerpo: texto.trim().substring(0, 80), datos: { tipo: 'chat_directo' } });
+      } catch (e) {}
+    }
+
     res.status(201).json({ message: 'Mensaje enviado', mensaje });
   } catch (err) {
     res.status(500).json({ error: err.message });

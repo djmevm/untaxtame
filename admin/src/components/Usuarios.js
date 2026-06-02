@@ -88,9 +88,20 @@ export default function Usuarios() {
 
   // ── DETALLE DE PERFIL (cliente o conductor) ──
   if (seleccionado) {
-    const u = seleccionado;
+    const u = seleccionado || {};
     const esConductor = u.rol === 'conductor';
 
+    // Protección: si el objeto no tiene uid, no renderizar
+    if (!u.uid) {
+      return (
+        <div>
+          <button onClick={() => setSeleccionado(null)} style={styles.btnVolver}>← Volver a la lista</button>
+          <p>Error: este usuario no tiene datos válidos.</p>
+        </div>
+      );
+    }
+
+    try {
     return (
       <div>
         <button onClick={() => setSeleccionado(null)} style={styles.btnVolver}>← Volver a la lista</button>
@@ -101,16 +112,16 @@ export default function Usuarios() {
         <div style={styles.perfilCard}>
           {/* Foto de perfil */}
           <div style={styles.fotoSection}>
-            {u.fotoPerfil ? (
+            {u.fotoPerfil && u.fotoPerfil.startsWith && u.fotoPerfil.startsWith('http') ? (
               <img src={resolverUrl(u.fotoPerfil)} alt="Foto de perfil" style={styles.fotoPerfil} />
             ) : (
               <div style={styles.fotoPlaceholder}>
-                <span style={styles.fotoLetra}>{u.nombre?.charAt(0)?.toUpperCase() || '?'}</span>
+                <span style={styles.fotoLetra}>{(u.nombre || '?').charAt(0).toUpperCase()}</span>
               </div>
             )}
             <div>
-              <h3 style={{ margin: 0, fontSize: 22 }}>{u.nombre}</h3>
-              <span className={`badge ${u.rol}`} style={{ marginTop: 4, display: 'inline-block' }}>{u.rol?.toUpperCase()}</span>
+              <h3 style={{ margin: 0, fontSize: 22 }}>{u.nombre || 'Sin nombre'}</h3>
+              <span className={`badge ${u.rol || 'cliente'}`} style={{ marginTop: 4, display: 'inline-block' }}>{(u.rol || 'usuario').toUpperCase()}</span>
             </div>
           </div>
 
@@ -169,24 +180,24 @@ export default function Usuarios() {
           </div>
 
           {/* Reputación del conductor */}
-          {esConductor && u.reputacion && (
+          {esConductor && u.reputacion && typeof u.reputacion === 'object' && (
             <div style={{ marginTop: 20 }}>
               <h3 style={styles.subtitulo}>⭐ Reputación</h3>
               <div style={{ display: 'flex', gap: 20, alignItems: 'center', background: '#f9f9f9', borderRadius: 12, padding: 16 }}>
                 <div style={{ textAlign: 'center' }}>
-                  <div style={{ fontSize: 36, fontWeight: 'bold', color: u.reputacion.porcentaje >= 70 ? '#2E7D32' : u.reputacion.porcentaje >= 50 ? '#FFC107' : '#E53935' }}>
-                    {u.reputacion.porcentaje}%
+                  <div style={{ fontSize: 36, fontWeight: 'bold', color: (u.reputacion.porcentaje || 0) >= 70 ? '#2E7D32' : (u.reputacion.porcentaje || 0) >= 50 ? '#FFC107' : '#E53935' }}>
+                    {u.reputacion.porcentaje || 0}%
                   </div>
                   <div style={{ fontSize: 13, color: '#888' }}>Reputación</div>
                 </div>
                 <div style={{ flex: 1 }}>
                   <div style={{ height: 12, background: '#eee', borderRadius: 6, overflow: 'hidden', marginBottom: 8 }}>
-                    <div style={{ height: 12, borderRadius: 6, width: `${u.reputacion.porcentaje}%`, background: u.reputacion.porcentaje >= 70 ? '#2E7D32' : u.reputacion.porcentaje >= 50 ? '#FFC107' : '#E53935' }} />
+                    <div style={{ height: 12, borderRadius: 6, width: `${u.reputacion.porcentaje || 0}%`, background: (u.reputacion.porcentaje || 0) >= 70 ? '#2E7D32' : (u.reputacion.porcentaje || 0) >= 50 ? '#FFC107' : '#E53935' }} />
                   </div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: '#888' }}>
-                    <span>Promedio: {u.reputacion.promedio}/10</span>
-                    <span>{u.reputacion.totalCalificaciones} calificaciones</span>
-                    <span>{u.reputacion.totalServicios} servicios</span>
+                    <span>Promedio: {u.reputacion.promedio || 0}/10</span>
+                    <span>{u.reputacion.totalCalificaciones || 0} calificaciones</span>
+                    <span>{u.reputacion.totalServicios || 0} servicios</span>
                   </div>
                 </div>
               </div>
@@ -195,7 +206,7 @@ export default function Usuarios() {
 
           {/* Documentos del conductor */}
           {/* Vencimiento de documentos */}
-          {esConductor && u.vencimientoDocumentos && (
+          {esConductor && u.vencimientoDocumentos && typeof u.vencimientoDocumentos === 'object' && (
             <div style={{ marginTop: 20 }}>
               <h3 style={styles.subtitulo}>📅 Vencimiento de documentos</h3>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
@@ -223,7 +234,7 @@ export default function Usuarios() {
           )}
 
           {/* Chat directo con el usuario */}
-          <ChatDirectoAdmin uid={u.uid} nombre={u.nombre} />
+          <ChatDirectoAdmin uid={u.uid} nombre={u.nombre || 'Usuario'} />
 
           {esConductor && (
             <>
@@ -241,7 +252,7 @@ export default function Usuarios() {
                 ].map(({ key, label }) => (
                   <div key={key} style={styles.docItem}>
                     <p style={styles.docLabel}>{label}</p>
-                    {u.documentos?.[key] ? (
+                    {u.documentos && u.documentos[key] ? (
                       <img src={resolverUrl(u.documentos[key])} alt={label} style={styles.docImg}
                         onClick={() => window.open(resolverUrl(u.documentos[key]), '_blank')} />
                     ) : (
@@ -314,6 +325,18 @@ export default function Usuarios() {
         </div>
       </div>
     );
+    } catch (error) {
+      return (
+        <div>
+          <button onClick={() => setSeleccionado(null)} style={styles.btnVolver}>← Volver a la lista</button>
+          <div style={{ padding: 40, textAlign: 'center' }}>
+            <p style={{ fontSize: 18, color: '#E53935' }}>⚠️ Error al cargar el perfil</p>
+            <p style={{ color: '#666' }}>Este conductor tiene datos incompletos o corruptos.</p>
+            <p style={{ color: '#999', fontSize: 12 }}>{error?.message || 'Error desconocido'}</p>
+          </div>
+        </div>
+      );
+    }
   }
 
   // ── EXPORTAR CSV ──
@@ -523,7 +546,7 @@ function ChatDirectoAdmin({ uid, nombre }) {
 
 // Componente Mi Taxi para admin
 function MiTaxiAdmin({ uid, perfil, onUpdate }) {
-  const [servicios, setServicios] = React.useState(perfil?.serviciosOfrecidos || []);
+  const [servicios, setServicios] = React.useState((perfil && perfil.serviciosOfrecidos) ? perfil.serviciosOfrecidos : []);
   const [guardando, setGuardando] = React.useState(false);
 
   const OPCIONES = [
@@ -554,6 +577,8 @@ function MiTaxiAdmin({ uid, perfil, onUpdate }) {
     }
   };
 
+  if (!uid) return null;
+
   return (
     <div style={{ marginTop: 20, marginBottom: 20 }}>
       <h3 style={{ fontSize: 16, marginBottom: 12 }}>🚕 Mi Taxi — Servicios que ofrece</h3>
@@ -562,7 +587,7 @@ function MiTaxiAdmin({ uid, perfil, onUpdate }) {
       </p>
 
       {/* Foto del vehículo */}
-      {perfil?.fotoVehiculo && (
+      {perfil && perfil.fotoVehiculo && (
         <div style={{ marginBottom: 16 }}>
           <p style={{ fontSize: 13, fontWeight: '600', marginBottom: 8 }}>Foto del vehículo:</p>
           <img src={resolverUrl(perfil.fotoVehiculo)} alt="Vehículo" style={{ width: '100%', maxWidth: 400, height: 180, objectFit: 'cover', borderRadius: 12, border: '2px solid #FFC107' }} />

@@ -209,6 +209,12 @@ router.put('/:servicioId/aceptar/:ofertaId', verifyToken, async (req, res) => {
     // Marcar conductor como no disponible
     await db.collection('usuarios').doc(oferta.conductorUid).update({ disponible: false });
 
+    // Push al conductor: oferta aceptada
+    try {
+      const { enviarPushAUsuario } = require('../services/pushNotifications');
+      enviarPushAUsuario(oferta.conductorUid, { titulo: 'Oferta aceptada', cuerpo: 'Tu oferta fue aceptada. Ve al punto de recogida.', datos: { tipo: 'oferta_aceptada', servicioId } });
+    } catch (e) {}
+
     res.json({
       message: 'Oferta aceptada',
       conductor: oferta.conductorNombre,
