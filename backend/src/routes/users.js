@@ -32,10 +32,12 @@ router.get('/todos', verifyToken, verifyAdmin, async (req, res) => {
 
 // Actualizar disponibilidad conductor
 router.put('/conductor/:uid/disponibilidad', verifyToken, async (req, res) => {
-  const { disponible } = req.body;
+  const { disponible, serviciosOfrecidos } = req.body;
   try {
-    await db.collection('usuarios').doc(req.params.uid).update({ disponible });
-    res.json({ message: 'Disponibilidad actualizada' });
+    const update = { disponible };
+    if (Array.isArray(serviciosOfrecidos)) update.serviciosOfrecidos = serviciosOfrecidos;
+    await db.collection('usuarios').doc(req.params.uid).update(update);
+    res.json({ message: 'Actualizado' });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

@@ -239,7 +239,13 @@ export default function Usuarios() {
           {esConductor && (
             <>
               {/* Mi Taxi - Servicios y foto del vehículo */}
-              <MiTaxiAdmin uid={u.uid} perfil={u} onUpdate={cargar} />
+              <MiTaxiAdmin uid={u.uid} perfil={u} onUpdate={() => {
+                api.get('/users/todos').then(res => {
+                  setUsuarios(res.data);
+                  var actualizado = res.data.find(x => x.uid === u.uid);
+                  if (actualizado) setSeleccionado(actualizado);
+                }).catch(() => {});
+              }} />
 
               <h3 style={styles.subtitulo}>📄 Documentos adjuntos</h3>
               <div style={styles.docsGrid}>
@@ -549,6 +555,13 @@ function MiTaxiAdmin({ uid, perfil, onUpdate }) {
   const [servicios, setServicios] = React.useState(Array.isArray(perfil?.serviciosOfrecidos) ? perfil.serviciosOfrecidos : []);
   const [guardando, setGuardando] = React.useState(false);
 
+  // Sincronizar cuando el perfil se recarga
+  React.useEffect(() => {
+    if (Array.isArray(perfil?.serviciosOfrecidos)) {
+      setServicios(perfil.serviciosOfrecidos);
+    }
+  }, [perfil?.serviciosOfrecidos]);
+
   const OPCIONES = [
     { key: 'maletas', label: '🧳 Maletas extras' },
     { key: 'discapacitado', label: '♿ Pasajero discapacitado' },
@@ -568,8 +581,10 @@ function MiTaxiAdmin({ uid, perfil, onUpdate }) {
     setGuardando(true);
     try {
       var datos = Array.isArray(servicios) ? servicios : [];
-      await api.put(`/users/conductor/${uid}/servicios`, { serviciosOfrecidos: datos });
-      alert('Servicios actualizados correctamente');
+      // Usar endpoint de disponibilidad que ya funciona en Railway
+      await api.put(`/users/conductor/${uid}/disponibilidad`, { disponible: true, serviciosOfrecidos: datos });
+      setServicios(datos);
+      alert('Servicios guardados correctamente');
       if (onUpdate) onUpdate();
     } catch (err) {
       alert('Error: ' + (err.response?.data?.error || err.message));
