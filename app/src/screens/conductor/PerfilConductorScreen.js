@@ -148,7 +148,6 @@ export default function PerfilConductorScreen() {
   const [guardandoVenc, setGuardandoVenc] = useState(false);
   const [mostrarRadio, setMostrarRadio] = useState(false);
   const alertasMostradas = useRef({});
-  const [serviciosOfrecidos, setServiciosOfrecidos] = useState(perfil?.serviciosOfrecidos || []);
 
   // Verificar vencimientos al cargar y cada 60s
   useEffect(() => {
@@ -312,29 +311,6 @@ export default function PerfilConductorScreen() {
     });
   };
 
-  const cambiarFotoVehiculo = () => {
-    seleccionarImagen(async (uri) => {
-      if (setPerfil) setPerfil(prev => ({ ...prev, fotoVehiculo: uri }));
-      try {
-        const url = await subirImagen(uri, 'vehiculo');
-        await api.put(`/auth/perfil/${perfil?.uid}`, { fotoVehiculo: url });
-        if (setPerfil) setPerfil(prev => ({ ...prev, fotoVehiculo: url }));
-        Alert.alert('✅', 'Foto del taxi actualizada');
-      } catch {}
-    });
-  };
-
-  const toggleServicio = async (key) => {
-    const nuevos = serviciosOfrecidos.includes(key)
-      ? serviciosOfrecidos.filter(s => s !== key)
-      : [...serviciosOfrecidos, key];
-    setServiciosOfrecidos(nuevos);
-    try {
-      await api.put(`/auth/perfil/${perfil?.uid}`, { serviciosOfrecidos: nuevos });
-      if (setPerfil) setPerfil(prev => ({ ...prev, serviciosOfrecidos: nuevos }));
-    } catch {}
-  };
-
   const cambiarDocumento = (key, label) => {
     seleccionarImagen(async (uri) => {
       if (setPerfil) setPerfil(prev => ({ ...prev, documentos: { ...(perfil?.documentos || {}), [key]: uri } }));
@@ -385,51 +361,6 @@ export default function PerfilConductorScreen() {
           </>)}
         </TouchableOpacity>
       )}
-
-      {/* ═══ MI TAXI — Foto y servicios ═══ */}
-      <View style={styles.seccion}>
-        <Text style={styles.seccionTitulo}>🚕 Mi Taxi</Text>
-
-        {/* Foto del vehículo */}
-        <TouchableOpacity style={styles.vehiculoCard} onPress={cambiarFotoVehiculo}>
-          {perfil.fotoVehiculo ? (
-            <Image source={{ uri: perfil.fotoVehiculo }} style={styles.vehiculoImagen} />
-          ) : (
-            <View style={styles.vehiculoPlaceholder}>
-              <Text style={{ fontSize: 40 }}>🚕</Text>
-              <Text style={styles.vehiculoTexto}>Toca para agregar foto de tu taxi</Text>
-              <Text style={{ fontSize: 12, color: '#aaa', marginTop: 4 }}>Los clientes verán esta foto al solicitar</Text>
-            </View>
-          )}
-          {perfil.fotoVehiculo && (
-            <Text style={styles.vehiculoHint}>📷 Toca para cambiar foto del taxi</Text>
-          )}
-        </TouchableOpacity>
-
-        {/* Servicios que ofrezco */}
-        <Text style={{ fontSize: 15, fontWeight: 'bold', color: '#333', marginTop: 16, marginBottom: 4 }}>🚐 Servicios que ofrezco</Text>
-        <Text style={{ fontSize: 12, color: '#888', marginBottom: 12 }}>Marca los servicios que tu taxi puede ofrecer. Los clientes verán esto al solicitar.</Text>
-
-        {[
-          { key: 'maletas', icon: '🧳', label: 'Maletas extras' },
-          { key: 'discapacitado', icon: '♿', label: 'Pasajero discapacitado' },
-          { key: 'bicicleta', icon: '🚲', label: 'Soporte bicicleta' },
-          { key: 'aireAcondicionado', icon: '❄️', label: 'Aire acondicionado' },
-          { key: 'mascotas', icon: '🐾', label: 'Mascotas permitidas' },
-        ].map(({ key, icon, label }) => (
-          <TouchableOpacity
-            key={key}
-            style={[styles.servicioItem, serviciosOfrecidos.includes(key) && styles.servicioItemActivo]}
-            onPress={() => toggleServicio(key)}
-          >
-            <Text style={styles.servicioIcono}>{icon}</Text>
-            <Text style={styles.servicioLabel}>{label}</Text>
-            <View style={[styles.servicioCheck, serviciosOfrecidos.includes(key) && styles.servicioCheckActivo]}>
-              {serviciosOfrecidos.includes(key) && <Text style={{ color: '#fff', fontSize: 14, fontWeight: 'bold' }}>✓</Text>}
-            </View>
-          </TouchableOpacity>
-        ))}
-      </View>
 
       {/* ═══ MENSAJES DEL ADMINISTRADOR ═══ */}
       <MensajesAdmin uid={perfil?.uid} />
@@ -612,16 +543,4 @@ const styles = StyleSheet.create({
   radioItem: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: '#f9f9f9', borderRadius: 10, padding: 12, borderLeftWidth: 4, borderLeftColor: '#E53935' },
   radioCode: { fontSize: 16, fontWeight: 'bold', color: '#333', minWidth: 50 },
   radioDesc: { fontSize: 13, color: '#555', flex: 1 },
-  // Mi Taxi
-  vehiculoCard: { width: '100%', borderRadius: 14, overflow: 'hidden', marginBottom: 12 },
-  vehiculoImagen: { width: '100%', height: 180, borderRadius: 14, resizeMode: 'cover' },
-  vehiculoPlaceholder: { width: '100%', height: 140, borderRadius: 14, backgroundColor: '#F8FAFC', borderWidth: 2, borderColor: '#E2E8F0', borderStyle: 'dashed', alignItems: 'center', justifyContent: 'center' },
-  vehiculoTexto: { fontSize: 14, color: '#94A3B8', marginTop: 8 },
-  vehiculoHint: { fontSize: 12, color: '#64748B', textAlign: 'center', marginTop: 8 },
-  servicioItem: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#F8FAFC', borderRadius: 12, padding: 14, marginBottom: 8, borderWidth: 1.5, borderColor: '#E2E8F0' },
-  servicioItemActivo: { backgroundColor: '#F0FDF4', borderColor: '#16A34A' },
-  servicioIcono: { fontSize: 22, marginRight: 12 },
-  servicioLabel: { flex: 1, fontSize: 15, color: '#333' },
-  servicioCheck: { width: 28, height: 28, borderRadius: 8, borderWidth: 2, borderColor: '#CBD5E1', alignItems: 'center', justifyContent: 'center', backgroundColor: '#fff' },
-  servicioCheckActivo: { backgroundColor: '#16A34A', borderColor: '#16A34A' },
 });

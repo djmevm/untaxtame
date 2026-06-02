@@ -24,6 +24,7 @@ import PerfilClienteScreen from '../screens/cliente/PerfilClienteScreen';
 // Conductor screens
 import ServiciosPendientesScreen from '../screens/conductor/ServiciosPendientesScreen';
 import MisServiciosScreen from '../screens/conductor/MisServiciosScreen';
+import MiTaxiScreen from '../screens/conductor/MiTaxiScreen';
 import PerfilConductorScreen from '../screens/conductor/PerfilConductorScreen';
 
 const Stack = createNativeStackNavigator();
@@ -51,6 +52,7 @@ function ConductorTabs() {
     >
       <Tab.Screen name="Pendientes" component={ServiciosPendientesScreen} />
       <Tab.Screen name="MisServicios" component={MisServiciosScreen} />
+      <Tab.Screen name="MiTaxi" component={MiTaxiScreen} />
       <Tab.Screen name="PerfilConductor" component={PerfilConductorScreen} />
     </Tab.Navigator>
   );

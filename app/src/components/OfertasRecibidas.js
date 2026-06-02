@@ -83,30 +83,30 @@ export default function OfertasRecibidas({ servicioId, onAceptar }) {
             <Text style={styles.ofertaMonto}>${oferta.monto.toLocaleString('es-CO')}</Text>
           </View>
 
-          {/* Foto del vehículo */}
-          {oferta.fotoVehiculo && (
-            <Image source={{ uri: oferta.fotoVehiculo }} style={{ width: '100%', height: 100, borderRadius: 10, marginBottom: 8, resizeMode: 'cover' }} />
-          )}
-
-          {/* Servicios que ofrece */}
-          {oferta.serviciosOfrecidos && oferta.serviciosOfrecidos.length > 0 && (
-            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 8 }}>
-              {oferta.serviciosOfrecidos.map((s) => (
-                <View key={s} style={{ backgroundColor: '#F0FDF4', borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3, borderWidth: 1, borderColor: '#BBF7D0' }}>
-                  <Text style={{ fontSize: 11, color: '#16A34A' }}>
-                    {s === 'maletas' ? '🧳' : s === 'discapacitado' ? '♿' : s === 'bicicleta' ? '🚲' : s === 'aireAcondicionado' ? '❄️' : s === 'mascotas' ? '🐾' : '✓'} {s === 'aireAcondicionado' ? 'A/C' : s}
-                  </Text>
-                </View>
-              ))}
-            </View>
-          )}
-
           {/* Reputación del conductor */}
           {oferta.reputacion && (
             <View style={styles.reputacionRow}>
               <Text style={styles.reputacionItem}>⭐ {oferta.reputacion.promedio || '—'}/10</Text>
               <Text style={styles.reputacionItem}>📊 {oferta.reputacion.porcentaje || 0}%</Text>
               <Text style={styles.reputacionItem}>🚕 {oferta.viajesCompletados || 0} viajes</Text>
+            </View>
+          )}
+
+          {/* Foto del vehículo */}
+          {oferta.fotoVehiculo && (
+            <Image source={{ uri: oferta.fotoVehiculo }} style={{ width: '100%', height: 110, borderRadius: 10, marginBottom: 10, resizeMode: 'cover' }} />
+          )}
+
+          {/* Servicios que ofrece */}
+          {oferta.serviciosOfrecidos && oferta.serviciosOfrecidos.length > 0 && (
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 10 }}>
+              {oferta.serviciosOfrecidos.map((s) => (
+                <View key={s} style={{ backgroundColor: '#F0FDF4', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 4, borderWidth: 1, borderColor: '#BBF7D0' }}>
+                  <Text style={{ fontSize: 12, color: '#16A34A' }}>
+                    {s === 'maletas' ? '🧳 Maletas' : s === 'discapacitado' ? '♿ Discapacitado' : s === 'bicicleta' ? '🚲 Bicicleta' : s === 'aireAcondicionado' ? '❄️ A/C' : s === 'mascotas' ? '🐾 Mascotas' : s}
+                  </Text>
+                </View>
+              ))}
             </View>
           )}
 
