@@ -51,4 +51,24 @@ router.post('/crear', async (req, res) => {
   }
 });
 
+// Actualizar servicios ofrecidos de un conductor (admin)
+router.put('/conductor/:uid/servicios', async (req, res) => {
+  const { uid } = req.params;
+  const { serviciosOfrecidos } = req.body;
+
+  if (!Array.isArray(serviciosOfrecidos)) {
+    return res.status(400).json({ error: 'serviciosOfrecidos debe ser un array' });
+  }
+
+  try {
+    await db.collection('usuarios').doc(uid).update({
+      serviciosOfrecidos,
+      serviciosActualizadoEn: new Date().toISOString(),
+    });
+    res.json({ message: 'Servicios actualizados', serviciosOfrecidos });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 module.exports = router;

@@ -227,6 +227,9 @@ export default function Usuarios() {
 
           {esConductor && (
             <>
+              {/* Mi Taxi - Servicios y foto del vehículo */}
+              <MiTaxiAdmin uid={u.uid} perfil={u} onUpdate={cargar} />
+
               <h3 style={styles.subtitulo}>📄 Documentos adjuntos</h3>
               <div style={styles.docsGrid}>
                 {[
@@ -514,6 +517,96 @@ function ChatDirectoAdmin({ uid, nombre }) {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+// Componente Mi Taxi para admin
+function MiTaxiAdmin({ uid, perfil, onUpdate }) {
+  const [servicios, setServicios] = React.useState(perfil?.serviciosOfrecidos || []);
+  const [guardando, setGuardando] = React.useState(false);
+
+  const OPCIONES = [
+    { key: 'maletas', label: '🧳 Maletas extras' },
+    { key: 'discapacitado', label: '♿ Pasajero discapacitado' },
+    { key: 'bicicleta', label: '🚲 Soporte bicicleta' },
+    { key: 'aireAcondicionado', label: '❄️ Aire acondicionado' },
+    { key: 'mascotas', label: '🐾 Mascotas permitidas' },
+  ];
+
+  const toggle = (key) => {
+    const nuevos = servicios.includes(key)
+      ? servicios.filter(s => s !== key)
+      : [...servicios, key];
+    setServicios(nuevos);
+  };
+
+  const guardar = async () => {
+    setGuardando(true);
+    try {
+      await api.put(`/admin/conductor/${uid}/servicios`, { serviciosOfrecidos: servicios });
+      alert('✅ Servicios actualizados');
+      if (onUpdate) onUpdate();
+    } catch (err) {
+      alert('Error: ' + (err.response?.data?.error || err.message));
+    } finally {
+      setGuardando(false);
+    }
+  };
+
+  return (
+    <div style={{ marginTop: 20, marginBottom: 20 }}>
+      <h3 style={{ fontSize: 16, marginBottom: 12 }}>🚕 Mi Taxi — Servicios que ofrece</h3>
+      <p style={{ fontSize: 13, color: '#666', marginBottom: 16 }}>
+        Configura los servicios que este conductor ofrece. Los clientes verán esta información al recibir ofertas.
+      </p>
+
+      {/* Foto del vehículo */}
+      {perfil?.fotoVehiculo && (
+        <div style={{ marginBottom: 16 }}>
+          <p style={{ fontSize: 13, fontWeight: '600', marginBottom: 8 }}>Foto del vehículo:</p>
+          <img src={resolverUrl(perfil.fotoVehiculo)} alt="Vehículo" style={{ width: '100%', maxWidth: 400, height: 180, objectFit: 'cover', borderRadius: 12, border: '2px solid #FFC107' }} />
+        </div>
+      )}
+
+      {/* Servicios */}
+      <div style={{ display: 'grid', gap: 8 }}>
+        {OPCIONES.map(({ key, label }) => (
+          <div
+            key={key}
+            onClick={() => toggle(key)}
+            style={{
+              display: 'flex', alignItems: 'center', padding: '12px 16px',
+              borderRadius: 10, cursor: 'pointer',
+              backgroundColor: servicios.includes(key) ? '#F0FDF4' : '#F8FAFC',
+              border: `2px solid ${servicios.includes(key) ? '#16A34A' : '#E2E8F0'}`,
+              transition: 'all 0.2s',
+            }}
+          >
+            <span style={{ flex: 1, fontSize: 15 }}>{label}</span>
+            <div style={{
+              width: 26, height: 26, borderRadius: 7,
+              backgroundColor: servicios.includes(key) ? '#16A34A' : '#fff',
+              border: `2px solid ${servicios.includes(key) ? '#16A34A' : '#CBD5E1'}`,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+            }}>
+              {servicios.includes(key) && <span style={{ color: '#fff', fontWeight: 'bold', fontSize: 14 }}>✓</span>}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <button
+        onClick={guardar}
+        disabled={guardando}
+        style={{
+          marginTop: 16, padding: '12px 24px', backgroundColor: '#FFC107',
+          border: 'none', borderRadius: 10, fontWeight: 'bold', fontSize: 15,
+          cursor: 'pointer', width: '100%',
+        }}
+      >
+        {guardando ? 'Guardando...' : '💾 Guardar servicios'}
+      </button>
     </div>
   );
 }
