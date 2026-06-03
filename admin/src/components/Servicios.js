@@ -20,7 +20,11 @@ export default function Servicios() {
       .finally(() => setCargando(false));
   };
 
-  useEffect(() => { cargar(); }, []);
+  useEffect(() => {
+    cargar();
+    const intervalo = setInterval(cargar, 10000);
+    return () => clearInterval(intervalo);
+  }, []);
 
   const totales = {
     total: servicios.length,
