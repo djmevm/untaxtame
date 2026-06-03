@@ -20,7 +20,10 @@ export const AuthProvider = ({ children }) => {
           setUsuario({ uid });
           setPerfil(res.data);
           // Registrar push token en segundo plano
-          try { require('../services/push').registrarPushToken(uid); } catch (e) {}
+          try {
+            var pushResult = await require('../services/push').registrarPushToken(uid);
+            if (pushResult) console.log('PUSH TOKEN OK: ' + pushResult);
+          } catch (e) { console.log('PUSH ERROR: ' + e.message); }
         }
       } catch {
         await AsyncStorage.multiRemove(['authToken', 'refreshToken', 'userUid']);
