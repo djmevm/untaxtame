@@ -65,7 +65,12 @@
       "expo-audio",
       "expo-video",
       "expo-speech-recognition",
-      "expo-notifications"
+      [
+        "expo-notifications",
+        {
+          "sounds": ["./assets/sounds/alerta.wav"]
+        }
+      ]
     ],
     "extra": {
       "eas": {
