@@ -1,5 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import api from '../api';
+import { firestore } from '../firebase';
+import { doc, updateDoc } from 'firebase/firestore';
 
 const VERIFICACION_COLOR = {
   pendiente: '#FFC107',
@@ -405,12 +407,13 @@ export default function Usuarios() {
             <th>Rol</th>
             <th>Placa</th>
             <th>Verificación</th>
+            <th>Servicios</th>
             <th>Acciones</th>
           </tr>
         </thead>
         <tbody>
           {filtrados.length === 0 && (
-            <tr><td colSpan="8" style={{ textAlign: 'center', color: '#999' }}>Sin usuarios</td></tr>
+            <tr><td colSpan="9" style={{ textAlign: 'center', color: '#999' }}>Sin usuarios</td></tr>
           )}
           {filtrados.map(u => (
             <tr key={u.uid}>
@@ -441,6 +444,12 @@ export default function Usuarios() {
                       padding: '3px 10px', borderRadius: 10, fontSize: 12, fontWeight: 'bold'
                     }}>{u.estadoVerificacion?.toUpperCase() || 'PENDIENTE'}</span>
                   : '—'
+                }
+              </td>
+              <td>
+                {u.rol === 'conductor' && Array.isArray(u.serviciosOfrecidos) && u.serviciosOfrecidos.length > 0
+                  ? <span style={{ fontSize: 11, color: '#16A34A' }}>{u.serviciosOfrecidos.length} activos</span>
+                  : u.rol === 'conductor' ? <span style={{ fontSize: 11, color: '#999' }}>Sin config</span> : '—'
                 }
               </td>
               <td>
@@ -581,13 +590,11 @@ function MiTaxiAdmin({ uid, perfil, onUpdate }) {
     setGuardando(true);
     try {
       var datos = Array.isArray(servicios) ? servicios : [];
-      // Usar endpoint de disponibilidad que ya funciona en Railway
-      await api.put(`/users/conductor/${uid}/disponibilidad`, { disponible: true, serviciosOfrecidos: datos });
-      setServicios(datos);
+      await updateDoc(doc(firestore, 'usuarios', uid), { serviciosOfrecidos: datos });
       alert('Servicios guardados correctamente');
       if (onUpdate) onUpdate();
     } catch (err) {
-      alert('Error: ' + (err.response?.data?.error || err.message));
+      alert('Error: ' + (err.message || 'No se pudo guardar'));
     } finally {
       setGuardando(false);
     }

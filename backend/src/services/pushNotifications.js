@@ -26,8 +26,17 @@ async function enviarPushAConductores({ titulo, cuerpo, datos }) {
 
 // Enviar via Expo Push API
 async function enviarPush(tokens, { titulo, cuerpo, datos }) {
+  var esEmergencia = datos && (datos.tipo === 'emergencia' || datos.tipo === 'sos');
   var mensajes = tokens.filter(function(t) { return t && t.indexOf('ExponentPushToken') === 0; }).map(function(t) {
-    return { to: t, title: titulo, body: cuerpo, data: datos || {}, sound: 'default', priority: 'high' };
+    return {
+      to: t,
+      title: titulo,
+      body: cuerpo,
+      data: datos || {},
+      sound: 'default',
+      priority: 'high',
+      channelId: esEmergencia ? 'emergencias' : 'default',
+    };
   });
   if (mensajes.length === 0) return;
   try {
