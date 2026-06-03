@@ -51,6 +51,34 @@ router.post('/crear', async (req, res) => {
   }
 });
 
+// Test push notification (admin)
+router.post('/test-push/:uid', async (req, res) => {
+  const { uid } = req.params;
+  try {
+    const userDoc = await db.collection('usuarios').doc(uid).get();
+    if (!userDoc.exists) return res.status(404).json({ error: 'Usuario no encontrado' });
+    const pushToken = userDoc.data().pushToken;
+    if (!pushToken) return res.status(400).json({ error: 'Sin push token', uid });
+
+    const fetch = require('node-fetch');
+    const response = await fetch('https://exp.host/--/api/v2/push/send', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        to: pushToken,
+        title: 'TEST UntaXtame',
+        body: 'Esta es una prueba de notificacion push',
+        sound: 'default',
+        priority: 'high',
+      }),
+    });
+    const result = await response.json();
+    res.json({ message: 'Push enviado', token: pushToken, result });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Actualizar servicios ofrecidos de un conductor (admin)
 router.put('/conductor/:uid/servicios', async (req, res) => {
   const { uid } = req.params;
