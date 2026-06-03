@@ -177,6 +177,12 @@ export default function Usuarios() {
                   <span style={styles.perfilLabel}>Disponible</span>
                   <span style={styles.perfilValor}>{u.disponible ? '✅ Sí' : '🔴 No'}</span>
                 </div>
+                <div style={styles.perfilItem}>
+                  <span style={styles.perfilLabel}>Push Token (notificaciones)</span>
+                  <span style={{ ...styles.perfilValor, color: u.pushToken ? '#2E7D32' : '#E53935', fontSize: 12 }}>
+                    {u.pushToken ? '✅ Registrado' : '❌ Sin token — no recibe push'}
+                  </span>
+                </div>
               </>
             )}
           </div>
