@@ -33,6 +33,7 @@ const emergenciaRoutes = require('./routes/emergencia');
 const ofertasRoutes = require('./routes/ofertas');
 const billeteraRoutes = require('./routes/billetera');
 const radioRoutes = require('./routes/radio');
+const whatsappRoutes = require('./routes/whatsapp');
 
 const app = express();
 
@@ -81,6 +82,7 @@ app.use('/api/emergencia', emergenciaRoutes);
 app.use('/api/ofertas', ofertasRoutes);
 app.use('/api/billetera', billeteraRoutes);
 app.use('/api/radio', radioRoutes);
+app.use('/whatsapp', whatsappRoutes);
 
 // Ruta raíz (no exponer info sensible)
 app.get('/', (req, res) => {
