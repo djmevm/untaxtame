@@ -32,7 +32,7 @@ export default function AlertasConductores() {
     };
 
     cargar();
-    const intervalo = setInterval(cargar, 5000); // Cada 5 seg para sincronizar retiros
+    const intervalo = setInterval(cargar, 60000); // Cada 5 seg para sincronizar retiros
     return () => clearInterval(intervalo);
   }, []);
 

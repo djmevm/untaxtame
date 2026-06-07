@@ -29,7 +29,7 @@ export default function ChatServicio({ servicioId, visible, onCerrar }) {
     if (visible && servicioId) {
       setCargandoInicial(true);
       cargarMensajes();
-      intervaloRef.current = setInterval(cargarMensajes, 4000);
+      intervaloRef.current = setInterval(cargarMensajes, 60000);
     } else {
       if (intervaloRef.current) {
         clearInterval(intervaloRef.current);

@@ -12,7 +12,7 @@ export default function BarraConductor({ uid }) {
   useEffect(() => {
     if (!uid) return;
     cargarDatos();
-    const intervalo = setInterval(cargarDatos, 30000);
+    const intervalo = setInterval(cargarDatos, 60000);
     return () => clearInterval(intervalo);
   }, [uid]);
 
@@ -99,7 +99,7 @@ export function useSaldoConductor(uid) {
       }
     };
     cargar();
-    const intervalo = setInterval(cargar, 15000);
+    const intervalo = setInterval(cargar, 60000);
     return () => clearInterval(intervalo);
   }, [uid]);
 

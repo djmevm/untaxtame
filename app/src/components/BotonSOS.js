@@ -31,7 +31,7 @@ export default function BotonSOS({ servicioId }) {
       } catch {}
     };
     cargar();
-    const intervalo = setInterval(cargar, 15000);
+    const intervalo = setInterval(cargar, 60000);
     return () => clearInterval(intervalo);
   }, []);
 

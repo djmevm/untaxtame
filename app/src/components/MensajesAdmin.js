@@ -12,7 +12,7 @@ export default function MensajesAdmin({ uid }) {
   useEffect(() => {
     if (!uid || !mostrar) return;
     cargar();
-    const intervalo = setInterval(cargar, 5000);
+    const intervalo = setInterval(cargar, 60000);
     return () => clearInterval(intervalo);
   }, [uid, mostrar]);
 

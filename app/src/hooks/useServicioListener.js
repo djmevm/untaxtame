@@ -34,7 +34,7 @@ export function useClienteServicioListener(clienteUid) {
         }
         estadoAnterior.current = ultimo.estado;
       } catch {}
-    }, 10000);
+    }, 60000);
 
     return () => clearInterval(intervalo);
   }, [clienteUid]);
@@ -59,7 +59,7 @@ export function useConductorServiciosListener(conductorUid, onNuevoServicio) {
         }
         cantidadAnterior.current = cantidad;
       } catch {}
-    }, 15000);
+    }, 60000);
 
     return () => clearInterval(intervalo);
   }, [conductorUid]);
@@ -90,7 +90,7 @@ export function useConductorOfertaAceptada(conductorUid, onOfertaAceptada) {
     };
 
     verificar();
-    const intervalo = setInterval(verificar, 10000);
+    const intervalo = setInterval(verificar, 60000);
     return () => clearInterval(intervalo);
   }, [conductorUid]);
 }

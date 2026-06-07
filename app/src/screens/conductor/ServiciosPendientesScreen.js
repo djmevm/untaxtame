@@ -73,7 +73,7 @@ export default function ServiciosPendientesScreen() {
 
   useEffect(() => {
     cargar();
-    const intervalo = setInterval(cargar, 30000);
+    const intervalo = setInterval(cargar, 60000);
     return () => clearInterval(intervalo);
   }, []);
 

@@ -51,7 +51,7 @@ export default function MisServiciosScreen() {
 
   useEffect(() => {
     cargar();
-    const intervalo = setInterval(cargar, 30000);
+    const intervalo = setInterval(cargar, 60000);
 
     // Verificar notificaciones de calificación
     const verificarNotificaciones = async () => {
@@ -69,7 +69,7 @@ export default function MisServiciosScreen() {
     };
 
     verificarNotificaciones();
-    const intervaloNotif = setInterval(verificarNotificaciones, 15000);
+    const intervaloNotif = setInterval(verificarNotificaciones, 60000);
 
     return () => { clearInterval(intervalo); clearInterval(intervaloNotif); };
     return () => clearInterval(intervalo);

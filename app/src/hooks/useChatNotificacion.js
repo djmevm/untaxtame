@@ -42,7 +42,7 @@ export default function useChatNotificacion(servicioId, miUid, chatAbierto) {
     };
 
     verificar();
-    var intervalo = setInterval(verificar, 8000);
+    var intervalo = setInterval(verificar, 60000);
     return function() { clearInterval(intervalo); };
   }, [servicioId, miUid, chatAbierto]);
 }

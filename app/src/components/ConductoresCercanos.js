@@ -32,7 +32,7 @@ export default function ConductoresCercanos() {
     };
 
     cargar();
-    const intervalo = setInterval(cargar, 30000);
+    const intervalo = setInterval(cargar, 60000);
     return () => clearInterval(intervalo);
   }, []);
 

@@ -24,7 +24,7 @@ export default function OfertasRecibidas({ servicioId, onAceptar }) {
   // Polling cada 5 segundos para ver nuevas ofertas
   useEffect(() => {
     cargarOfertas();
-    const intervalo = setInterval(cargarOfertas, 15000);
+    const intervalo = setInterval(cargarOfertas, 60000);
     return () => clearInterval(intervalo);
   }, [servicioId]);
 

@@ -22,7 +22,7 @@ export default function Servicios() {
 
   useEffect(() => {
     cargar();
-    const intervalo = setInterval(cargar, 10000);
+    const intervalo = setInterval(cargar, 60000);
     return () => clearInterval(intervalo);
   }, []);
 

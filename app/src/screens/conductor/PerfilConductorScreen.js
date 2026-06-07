@@ -208,7 +208,7 @@ export default function PerfilConductorScreen() {
       } catch {}
     };
     enviarUbicacion();
-    ubicacionInterval.current = setInterval(enviarUbicacion, 10000);
+    ubicacionInterval.current = setInterval(enviarUbicacion, 60000);
     return () => { if (ubicacionInterval.current) clearInterval(ubicacionInterval.current); };
   }, [perfil?.uid]);
 

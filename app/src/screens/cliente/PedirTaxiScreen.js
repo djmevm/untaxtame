@@ -92,7 +92,7 @@ export default function PedirTaxiScreen() {
       } catch {}
     };
 
-    const intervalo = setInterval(verificar, 10000);
+    const intervalo = setInterval(verificar, 60000);
     return () => clearInterval(intervalo);
   }, [servicioActivo?.id, servicioActivo?.estado]);
 

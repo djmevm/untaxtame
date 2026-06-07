@@ -52,7 +52,7 @@ export default function MapaServicioActivo({ servicioActivo, destinoGPS }) {
     };
 
     cargar();
-    const intervalo = setInterval(cargar, 3000);
+    const intervalo = setInterval(cargar, 60000);
     return () => clearInterval(intervalo);
   }, [servicioActivo?.conductorUid, servicioActivo?.estado]);
 
