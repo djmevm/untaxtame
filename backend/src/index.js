@@ -37,6 +37,10 @@ const whatsappRoutes = require('./routes/whatsapp');
 
 const app = express();
 
+// ═══ WHATSAPP WEBHOOK — Antes de middlewares de seguridad ═══
+// Meta/Facebook necesita acceso directo sin CORS ni rate limiting
+app.use('/whatsapp', express.json(), whatsappRoutes);
+
 // ═══ SEGURIDAD — Capa 1: Headers HTTP ═══
 app.use(helmetMiddleware);
 
@@ -82,7 +86,6 @@ app.use('/api/emergencia', emergenciaRoutes);
 app.use('/api/ofertas', ofertasRoutes);
 app.use('/api/billetera', billeteraRoutes);
 app.use('/api/radio', radioRoutes);
-app.use('/whatsapp', whatsappRoutes);
 
 // Ruta raíz (no exponer info sensible)
 app.get('/', (req, res) => {
