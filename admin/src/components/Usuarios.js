@@ -183,6 +183,20 @@ export default function Usuarios() {
                     {u.pushToken ? '✅ Registrado' : '❌ Sin token — no recibe push'}
                   </span>
                 </div>
+                {u.pushToken && (
+                  <div style={styles.perfilItem}>
+                    <button onClick={async () => {
+                      try {
+                        const res = await api.post(`/admin/test-push/${u.uid}`);
+                        alert('Push enviado: ' + JSON.stringify(res.data.result));
+                      } catch (err) {
+                        alert('Error: ' + (err.response?.data?.error || err.message));
+                      }
+                    }} style={{ background: '#F97316', color: '#fff', border: 'none', borderRadius: 8, padding: '8px 16px', cursor: 'pointer', fontWeight: 'bold', fontSize: 12 }}>
+                      🔔 Enviar push de prueba
+                    </button>
+                  </div>
+                )}
               </>
             )}
           </div>
@@ -616,12 +630,7 @@ function MiTaxiAdmin({ uid, perfil, onUpdate }) {
       </p>
 
       {/* Foto del vehículo */}
-      {perfil && perfil.fotoVehiculo && (
-        <div style={{ marginBottom: 16 }}>
-          <p style={{ fontSize: 13, fontWeight: '600', marginBottom: 8 }}>Foto del vehículo:</p>
-          <img src={resolverUrl(perfil.fotoVehiculo)} alt="Vehículo" style={{ width: '100%', maxWidth: 400, height: 180, objectFit: 'cover', borderRadius: 12, border: '2px solid #FFC107' }} />
-        </div>
-      )}
+      <FotoVehiculoAdmin uid={uid} fotoActual={perfil?.fotoVehiculo} onUpdate={onUpdate} />
 
       {/* Servicios */}
       <div style={{ display: 'grid', gap: 8 }}>
@@ -661,6 +670,110 @@ function MiTaxiAdmin({ uid, perfil, onUpdate }) {
       >
         {guardando ? 'Guardando...' : '💾 Guardar servicios'}
       </button>
+    </div>
+  );
+}
+
+// Componente para subir/cambiar foto del vehículo desde el admin
+function FotoVehiculoAdmin({ uid, fotoActual, onUpdate }) {
+  const [subiendo, setSubiendo] = React.useState(false);
+  const fileRef = React.useRef(null);
+
+  const subirFoto = async (e) => {
+    const archivo = e.target.files[0];
+    if (!archivo) return;
+
+    if (!archivo.type.startsWith('image/')) {
+      alert('Solo se permiten imágenes');
+      return;
+    }
+
+    if (archivo.size > 5 * 1024 * 1024) {
+      alert('La imagen no puede superar 5 MB');
+      return;
+    }
+
+    setSubiendo(true);
+    try {
+      const formData = new FormData();
+      formData.append('foto', archivo);
+      formData.append('uid', uid);
+      formData.append('tipo', 'vehiculo');
+
+      const res = await api.post('/upload/foto-vehiculo', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+
+      if (res.data.url) {
+        await updateDoc(doc(firestore, 'usuarios', uid), { fotoVehiculo: res.data.url });
+        alert('✅ Foto del vehículo actualizada');
+        if (onUpdate) onUpdate();
+      }
+    } catch (err) {
+      alert('Error al subir: ' + (err.response?.data?.error || err.message));
+    } finally {
+      setSubiendo(false);
+      if (fileRef.current) fileRef.current.value = '';
+    }
+  };
+
+  const eliminarFoto = async () => {
+    if (!window.confirm('¿Eliminar la foto del vehículo?')) return;
+    try {
+      await updateDoc(doc(firestore, 'usuarios', uid), { fotoVehiculo: '' });
+      alert('Foto eliminada');
+      if (onUpdate) onUpdate();
+    } catch (err) {
+      alert('Error: ' + err.message);
+    }
+  };
+
+  return (
+    <div style={{ marginBottom: 16 }}>
+      <p style={{ fontSize: 13, fontWeight: '600', marginBottom: 8 }}>Foto del vehículo:</p>
+      {fotoActual ? (
+        <div>
+          <img
+            src={resolverUrl(fotoActual)}
+            alt="Vehículo"
+            style={{ width: '100%', maxWidth: 400, height: 180, objectFit: 'cover', borderRadius: 12, border: '2px solid #FFC107', marginBottom: 8 }}
+          />
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button
+              onClick={() => fileRef.current?.click()}
+              disabled={subiendo}
+              style={{ background: '#1565C0', color: '#fff', border: 'none', borderRadius: 8, padding: '8px 16px', cursor: 'pointer', fontWeight: 'bold', fontSize: 12 }}
+            >
+              {subiendo ? 'Subiendo...' : '📷 Cambiar foto'}
+            </button>
+            <button
+              onClick={eliminarFoto}
+              style={{ background: '#fff', color: '#E53935', border: '2px solid #E53935', borderRadius: 8, padding: '8px 16px', cursor: 'pointer', fontWeight: 'bold', fontSize: 12 }}
+            >
+              🗑️ Eliminar
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div style={{ width: '100%', maxWidth: 400, height: 180, background: '#f5f5f5', borderRadius: 12, border: '2px dashed #ccc', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+          <span style={{ fontSize: 36 }}>📷</span>
+          <p style={{ margin: 0, color: '#999', fontSize: 13 }}>Sin foto del vehículo</p>
+          <button
+            onClick={() => fileRef.current?.click()}
+            disabled={subiendo}
+            style={{ background: '#FFC107', color: '#000', border: 'none', borderRadius: 8, padding: '8px 16px', cursor: 'pointer', fontWeight: 'bold', fontSize: 13, marginTop: 4 }}
+          >
+            {subiendo ? 'Subiendo...' : '📷 Subir foto del taxi'}
+          </button>
+        </div>
+      )}
+      <input
+        ref={fileRef}
+        type="file"
+        accept="image/*"
+        style={{ display: 'none' }}
+        onChange={subirFoto}
+      />
     </div>
   );
 }

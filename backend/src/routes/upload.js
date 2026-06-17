@@ -122,7 +122,31 @@ router.post('/documentos', verifyToken, upload.fields(camposDocumentos), async (
   }
 });
 
-module.exports = router;
+// Subir foto del vehículo (desde admin)
+router.post('/foto-vehiculo', verifyToken, upload.single('foto'), async (req, res) => {
+  if (!req.file) return res.status(400).json({ error: 'No se envió imagen' });
+
+  const uid = req.body.uid;
+  if (!uid) return res.status(400).json({ error: 'UID del conductor requerido' });
+
+  try {
+    const ext = req.file.mimetype.split('/')[1] || 'jpg';
+    const nombreArchivo = `vehiculo_${uid}_${Date.now()}.${ext}`;
+    const carpeta = `vehiculos`;
+
+    const url = await subirAFirebase(req.file.buffer, req.file.mimetype, carpeta, nombreArchivo);
+
+    // Guardar URL en el perfil del conductor
+    await db.collection('usuarios').doc(uid).update({
+      fotoVehiculo: url,
+    });
+
+    res.json({ message: 'Foto del vehículo subida', url });
+  } catch (err) {
+    console.error('[UPLOAD VEHICULO] Error:', err.message);
+    res.status(500).json({ error: 'Error al subir foto del vehículo: ' + err.message });
+  }
+});
 
 
 // Proxy para descargar archivos de Firebase Storage (evita CORS)
@@ -143,3 +167,5 @@ router.get('/proxy', verifyToken, async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
+
+module.exports = router;
