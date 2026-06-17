@@ -24,7 +24,19 @@ router.get('/todos', verifyToken, verifyAdmin, async (req, res) => {
   try {
     const snapshot = await db.collection('usuarios').orderBy('creadoEn', 'desc').get();
     const usuarios = snapshot.docs.map(d => d.data());
-    res.json(usuarios);
+
+    // Agregar email desde Firebase Auth si no está en Firestore
+    const usuariosConEmail = await Promise.all(usuarios.map(async (u) => {
+      if (u.email) return u;
+      try {
+        const authUser = await auth.getUser(u.uid);
+        return { ...u, email: authUser.email || '' };
+      } catch {
+        return u;
+      }
+    }));
+
+    res.json(usuariosConEmail);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

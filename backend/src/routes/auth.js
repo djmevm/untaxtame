@@ -80,7 +80,7 @@ router.post('/register-full', async (req, res) => {
     const userRecord = await auth.createUser({ email, password, displayName: nombre });
     const uid = userRecord.uid;
 
-    const userData = { uid, nombre, telefono, rol, activo: true, creadoEn: new Date().toISOString() };
+    const userData = { uid, email, nombre, telefono, rol, activo: true, creadoEn: new Date().toISOString() };
 
     if (rol === 'cliente') {
       userData.cedula = cedula || '';

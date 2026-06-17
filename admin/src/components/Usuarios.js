@@ -143,6 +143,10 @@ export default function Usuarios() {
               <span style={styles.perfilValor}>{u.telefono || '—'}</span>
             </div>
             <div style={styles.perfilItem}>
+              <span style={styles.perfilLabel}>Correo electrónico</span>
+              <span style={styles.perfilValor}>{u.email || '—'}</span>
+            </div>
+            <div style={styles.perfilItem}>
               <span style={styles.perfilLabel}>Fecha de registro</span>
               <span style={styles.perfilValor}>{u.creadoEn ? new Date(u.creadoEn).toLocaleDateString('es-CO') : '—'}</span>
             </div>
