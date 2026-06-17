@@ -114,13 +114,13 @@ export default function Usuarios() {
         <div style={styles.perfilCard}>
           {/* Foto de perfil */}
           <div style={styles.fotoSection}>
-            {u.fotoPerfil && u.fotoPerfil.startsWith && u.fotoPerfil.startsWith('http') ? (
-              <img src={resolverUrl(u.fotoPerfil)} alt="Foto de perfil" style={styles.fotoPerfil} />
-            ) : (
-              <div style={styles.fotoPlaceholder}>
-                <span style={styles.fotoLetra}>{(u.nombre || '?').charAt(0).toUpperCase()}</span>
-              </div>
-            )}
+            <FotoPerfilAdmin uid={u.uid} fotoActual={u.fotoPerfil} nombre={u.nombre} onUpdate={() => {
+              api.get('/users/todos').then(res => {
+                setUsuarios(res.data);
+                var actualizado = res.data.find(x => x.uid === u.uid);
+                if (actualizado) setSeleccionado(actualizado);
+              }).catch(() => {});
+            }} />
             <div>
               <h3 style={{ margin: 0, fontSize: 22 }}>{u.nombre || 'Sin nombre'}</h3>
               <span className={`badge ${u.rol || 'cliente'}`} style={{ marginTop: 4, display: 'inline-block' }}>{(u.rol || 'usuario').toUpperCase()}</span>
@@ -670,6 +670,77 @@ function MiTaxiAdmin({ uid, perfil, onUpdate }) {
       >
         {guardando ? 'Guardando...' : '💾 Guardar servicios'}
       </button>
+    </div>
+  );
+}
+
+// Componente para subir/cambiar foto de perfil desde el admin
+function FotoPerfilAdmin({ uid, fotoActual, nombre, onUpdate }) {
+  const [subiendo, setSubiendo] = React.useState(false);
+  const fileRef = React.useRef(null);
+
+  const subirFoto = async (e) => {
+    const archivo = e.target.files[0];
+    if (!archivo) return;
+
+    if (!archivo.type.startsWith('image/')) {
+      alert('Solo se permiten imágenes');
+      return;
+    }
+
+    if (archivo.size > 5 * 1024 * 1024) {
+      alert('La imagen no puede superar 5 MB');
+      return;
+    }
+
+    setSubiendo(true);
+    try {
+      const formData = new FormData();
+      formData.append('foto', archivo);
+      formData.append('uid', uid);
+      formData.append('tipo', 'perfil');
+
+      const res = await api.post('/upload/foto-perfil-admin', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+
+      if (res.data.url) {
+        await updateDoc(doc(firestore, 'usuarios', uid), { fotoPerfil: res.data.url });
+        alert('✅ Foto de perfil actualizada');
+        if (onUpdate) onUpdate();
+      }
+    } catch (err) {
+      alert('Error al subir: ' + (err.response?.data?.error || err.message));
+    } finally {
+      setSubiendo(false);
+      if (fileRef.current) fileRef.current.value = '';
+    }
+  };
+
+  return (
+    <div style={{ position: 'relative', cursor: 'pointer' }} onClick={() => fileRef.current?.click()}>
+      {fotoActual && fotoActual.startsWith && fotoActual.startsWith('http') ? (
+        <img src={resolverUrl(fotoActual)} alt="Foto de perfil" style={styles.fotoPerfil} />
+      ) : (
+        <div style={styles.fotoPlaceholder}>
+          <span style={styles.fotoLetra}>{(nombre || '?').charAt(0).toUpperCase()}</span>
+        </div>
+      )}
+      <div style={{
+        position: 'absolute', bottom: 0, right: 0,
+        background: '#FFC107', borderRadius: '50%', width: 28, height: 28,
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        border: '2px solid #fff', fontSize: 14,
+      }}>
+        {subiendo ? '⏳' : '📷'}
+      </div>
+      <input
+        ref={fileRef}
+        type="file"
+        accept="image/*"
+        style={{ display: 'none' }}
+        onChange={subirFoto}
+      />
     </div>
   );
 }

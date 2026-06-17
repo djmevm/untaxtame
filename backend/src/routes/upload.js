@@ -122,6 +122,32 @@ router.post('/documentos', verifyToken, upload.fields(camposDocumentos), async (
   }
 });
 
+// Subir foto de perfil desde admin
+router.post('/foto-perfil-admin', verifyToken, upload.single('foto'), async (req, res) => {
+  if (!req.file) return res.status(400).json({ error: 'No se envió imagen' });
+
+  const uid = req.body.uid;
+  if (!uid) return res.status(400).json({ error: 'UID del usuario requerido' });
+
+  try {
+    const ext = req.file.mimetype.split('/')[1] || 'jpg';
+    const nombreArchivo = `perfil_${uid}_${Date.now()}.${ext}`;
+    const carpeta = `perfiles`;
+
+    const url = await subirAFirebase(req.file.buffer, req.file.mimetype, carpeta, nombreArchivo);
+
+    await db.collection('usuarios').doc(uid).update({
+      fotoPerfil: url,
+      fotoPerfilActualizada: new Date().toISOString(),
+    });
+
+    res.json({ message: 'Foto de perfil subida', url });
+  } catch (err) {
+    console.error('[UPLOAD PERFIL ADMIN] Error:', err.message);
+    res.status(500).json({ error: 'Error al subir foto de perfil: ' + err.message });
+  }
+});
+
 // Subir foto del vehículo (desde admin)
 router.post('/foto-vehiculo', verifyToken, upload.single('foto'), async (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'No se envió imagen' });
