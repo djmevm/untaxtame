@@ -1,0 +1,8 @@
+{
+  "rewrites": [
+    { "source": "/googlefbfaf2009e8aaa72.html", "destination": "/googlefbfaf2009e8aaa72.html" },
+    { "source": "/descargar.html", "destination": "/descargar.html" },
+    { "source": "/privacidad.html", "destination": "/privacidad.html" },
+    { "source": "/((?!static|.*\\..*|_next).*)", "destination": "/index.html" }
+  ]
+}
