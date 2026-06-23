@@ -637,4 +637,34 @@ router.put('/admin-cancelar/:servicioId', verifyToken, verifyAdmin, async (req, 
   }
 });
 
+// Completar servicio desde el panel admin
+router.put('/admin-completar/:servicioId', verifyToken, verifyAdmin, async (req, res) => {
+  try {
+    const ref = db.collection('servicios').doc(req.params.servicioId);
+    const doc = await ref.get();
+    if (!doc.exists) return res.status(404).json({ error: 'Servicio no encontrado' });
+
+    const data = doc.data();
+    if (['completado', 'cancelado'].includes(data.estado)) {
+      return res.status(400).json({ error: 'Este servicio ya está finalizado' });
+    }
+
+    await ref.update({
+      estado: 'completado',
+      completadoPor: 'admin',
+      completadoUid: req.user.uid,
+      actualizadoEn: new Date().toISOString(),
+    });
+
+    // Liberar conductor
+    if (data.conductorUid) {
+      await db.collection('usuarios').doc(data.conductorUid).update({ disponible: true });
+    }
+
+    res.json({ message: 'Servicio completado por administrador' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 module.exports = router;
