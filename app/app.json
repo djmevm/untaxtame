@@ -2,7 +2,7 @@
   "expo": {
     "name": "UntaXtame",
     "slug": "untaxtame",
-    "version": "2.3.0",
+    "version": "2.4.0",
     "orientation": "portrait",
     "icon": "./assets/icon_adaptive.jpg",
     "userInterfaceStyle": "light",
@@ -29,9 +29,9 @@
         "foregroundImage": "./assets/icon_adaptive.jpg",
         "backgroundColor": "#000000"
       },
-      "package": "com.untaxtame.app",
+      "package": "com.untaxtame.taxi",
       "googleServicesFile": "./google-services.json",
-      "versionCode": 13,
+      "versionCode": 15,
       "permissions": [
         "android.permission.ACCESS_FINE_LOCATION",
         "android.permission.ACCESS_COARSE_LOCATION",
@@ -50,6 +50,7 @@
       }
     },
     "plugins": [
+      "./plugins/downgrade-agp",
       [
         "expo-location",
         {
