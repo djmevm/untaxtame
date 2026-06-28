@@ -50,6 +50,32 @@ export default function Servicios() {
     }
   };
 
+  const alertarConductores = async (servicio) => {
+    const mensaje = `${servicio.clienteNombre} necesita taxi: ${servicio.origen} → ${servicio.destino}`;
+    if (!window.confirm(`📢 ¿Enviar alerta a todos los conductores disponibles?\n\n"${mensaje}"`)) return;
+    try {
+      const res = await api.post('/admin/alerta-conductores', {
+        titulo: '🚕 ¡Nuevo servicio disponible!',
+        mensaje,
+        servicioId: servicio.id,
+      });
+      alert(`✅ Alerta enviada a ${res.data.conductoresNotificados} conductores`);
+    } catch (err) {
+      alert('Error: ' + (err.response?.data?.error || err.message));
+    }
+  };
+
+  const completarServicio = async (servicio) => {
+    if (!window.confirm(`✅ ¿Marcar como COMPLETADO el servicio de ${servicio.clienteNombre}?\n\nOrigen: ${servicio.origen}\nDestino: ${servicio.destino}`)) return;
+    try {
+      await api.put(`/services/admin-completar/${servicio.id}`);
+      alert('✅ Servicio marcado como completado');
+      cargar();
+    } catch (err) {
+      alert('Error: ' + (err.response?.data?.error || err.message));
+    }
+  };
+
   const verDetalle = async (servicio) => {
     setDetalle(servicio);
     setCargandoDetalle(true);
@@ -393,9 +419,19 @@ export default function Servicios() {
                     👁️ Ver
                   </button>
                   {!['completado', 'cancelado'].includes(s.estado) && (
-                    <button onClick={() => cancelarServicio(s)} style={estilos.btnCancelar}>
-                      ❌
-                    </button>
+                    <>
+                      {s.estado === 'pendiente' && (
+                        <button onClick={() => alertarConductores(s)} style={estilos.btnAlerta} title="Alertar conductores">
+                          📢
+                        </button>
+                      )}
+                      <button onClick={() => completarServicio(s)} style={estilos.btnCompletar} title="Marcar como completado">
+                        ✅
+                      </button>
+                      <button onClick={() => cancelarServicio(s)} style={estilos.btnCancelar} title="Cancelar servicio">
+                        ❌
+                      </button>
+                    </>
                   )}
                 </div>
               </td>
@@ -464,6 +500,16 @@ const estilos = {
   },
   btnCancelar: {
     background: '#E53935', color: '#fff', border: 'none',
+    borderRadius: 6, padding: '6px 10px', cursor: 'pointer',
+    fontWeight: 'bold', fontSize: 12,
+  },
+  btnCompletar: {
+    background: '#2E7D32', color: '#fff', border: 'none',
+    borderRadius: 6, padding: '6px 10px', cursor: 'pointer',
+    fontWeight: 'bold', fontSize: 12,
+  },
+  btnAlerta: {
+    background: '#F97316', color: '#fff', border: 'none',
     borderRadius: 6, padding: '6px 10px', cursor: 'pointer',
     fontWeight: 'bold', fontSize: 12,
   },

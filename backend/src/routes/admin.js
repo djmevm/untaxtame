@@ -99,4 +99,31 @@ router.put('/conductor/:uid/servicios', async (req, res) => {
   }
 });
 
+// Enviar alerta push a todos los conductores disponibles (admin)
+router.post('/alerta-conductores', async (req, res) => {
+  const { titulo, mensaje, servicioId } = req.body;
+  if (!mensaje) return res.status(400).json({ error: 'Se requiere un mensaje' });
+
+  try {
+    const { enviarPushAConductores } = require('../services/pushNotifications');
+    await enviarPushAConductores({
+      titulo: titulo || '🚕 Nuevo servicio disponible',
+      cuerpo: mensaje,
+      datos: { tipo: 'alerta_admin', servicioId: servicioId || '' }
+    });
+
+    // Contar conductores disponibles con token
+    const snap = await db.collection('usuarios')
+      .where('rol', '==', 'conductor')
+      .where('disponible', '==', true)
+      .get();
+    let conToken = 0;
+    snap.forEach(doc => { if (doc.data().pushToken) conToken++; });
+
+    res.json({ message: 'Alerta enviada', conductoresNotificados: conToken });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 module.exports = router;

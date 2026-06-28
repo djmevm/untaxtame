@@ -424,6 +424,7 @@ export default function Usuarios() {
       <table>
         <thead>
           <tr>
+            <th>#</th>
             <th>Foto</th>
             <th>Nombre</th>
             <th>Cédula</th>
@@ -437,10 +438,11 @@ export default function Usuarios() {
         </thead>
         <tbody>
           {filtrados.length === 0 && (
-            <tr><td colSpan="9" style={{ textAlign: 'center', color: '#999' }}>Sin usuarios</td></tr>
+            <tr><td colSpan="10" style={{ textAlign: 'center', color: '#999' }}>Sin usuarios</td></tr>
           )}
-          {filtrados.map(u => (
+          {filtrados.map((u, index) => (
             <tr key={u.uid}>
+              <td style={{ fontWeight: 'bold', color: '#666', textAlign: 'center' }}>{index + 1}</td>
               <td>
                 {u.fotoPerfil ? (
                   <img src={resolverUrl(u.fotoPerfil)} alt="" style={{ width: 36, height: 36, borderRadius: 18, objectFit: 'cover' }} />

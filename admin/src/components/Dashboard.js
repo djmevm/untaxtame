@@ -21,19 +21,37 @@ const COLORES_PAGO = {
 };
 
 export default function Dashboard() {
-  const [servicios, setServicios] = useState([]);
-  const [usuarios, setUsuarios] = useState([]);
+  const [servicios, setServicios] = useState(() => {
+    try { return JSON.parse(sessionStorage.getItem('dash_servicios')) || []; } catch { return []; }
+  });
+  const [usuarios, setUsuarios] = useState(() => {
+    try { return JSON.parse(sessionStorage.getItem('dash_usuarios')) || []; } catch { return []; }
+  });
   const [emergencias, setEmergencias] = useState([]);
-  const [cargando, setCargando] = useState(true);
+  const [cargando, setCargando] = useState(() => {
+    return !sessionStorage.getItem('dash_servicios');
+  });
+  const [servidorDespertando, setServidorDespertando] = useState(false);
   const pendientesAnterior = useRef(0);
 
   const cargarDatos = () => {
-    Promise.all([
-      api.get('/services/todos'),
-      api.get('/users/todos'),
-      api.get('/emergencia/activas').catch(() => ({ data: [] })),
+    const timeout = new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 12000));
+    const tiempoInicio = Date.now();
+
+    // Si tarda más de 4s, mostrar mensaje de "servidor despertando"
+    const timerDespertar = setTimeout(() => setServidorDespertando(true), 4000);
+
+    Promise.race([
+      Promise.all([
+        api.get('/services/todos'),
+        api.get('/users/todos'),
+        api.get('/emergencia/activas').catch(() => ({ data: [] })),
+      ]),
+      timeout
     ])
       .then(([sRes, uRes, eRes]) => {
+        clearTimeout(timerDespertar);
+        setServidorDespertando(false);
         const nuevosPendientes = sRes.data.filter(s => s.estado === 'pendiente').length;
         if (nuevosPendientes > pendientesAnterior.current && pendientesAnterior.current > 0) {
           reproducirNuevoServicio();
@@ -42,19 +60,56 @@ export default function Dashboard() {
         setServicios(sRes.data);
         setUsuarios(uRes.data);
         setEmergencias(eRes.data);
+        // Cachear en sessionStorage
+        try {
+          sessionStorage.setItem('dash_servicios', JSON.stringify(sRes.data));
+          sessionStorage.setItem('dash_usuarios', JSON.stringify(uRes.data));
+        } catch {}
       })
-      .catch(() => {})
+      .catch((err) => {
+        clearTimeout(timerDespertar);
+        setServidorDespertando(false);
+        // Si hay timeout, reintentar una vez
+        if (err.message === 'timeout' && cargando) {
+          console.warn('Backend lento, reintentando...');
+          setTimeout(cargarDatos, 2000);
+          return;
+        }
+      })
       .finally(() => setCargando(false));
   };
 
   useEffect(() => {
     cargarDatos();
-    // Actualizar cada 10 segundos
+    // Actualizar cada 60 segundos
     const intervalo = setInterval(cargarDatos, 60000);
-    return () => clearInterval(intervalo);
+
+    // Keep-alive: ping al servidor cada 4 minutos para que no se duerma
+    const keepAlive = setInterval(() => {
+      fetch('https://untaxtame-production.up.railway.app/api').catch(() => {});
+    }, 240000);
+
+    return () => {
+      clearInterval(intervalo);
+      clearInterval(keepAlive);
+    };
   }, []);
 
-  if (cargando) return <p className="loading">Cargando dashboard...</p>;
+  if (cargando && servicios.length === 0) return (
+    <div style={{ textAlign: 'center', padding: 60 }}>
+      <div style={{ fontSize: 40, marginBottom: 16 }}>📊</div>
+      <p className="loading" style={{ fontSize: 16, color: '#666' }}>
+        {servidorDespertando
+          ? '⏳ El servidor está despertando... esto puede tomar unos segundos'
+          : 'Cargando dashboard...'}
+      </p>
+      {servidorDespertando && (
+        <p style={{ fontSize: 13, color: '#999', marginTop: 8 }}>
+          Primera conexión del día, Railway está iniciando el servidor.
+        </p>
+      )}
+    </div>
+  );
 
   // Alertas pendientes
   const emergenciasActivas = emergencias.filter(e => e.estado === 'activa');
