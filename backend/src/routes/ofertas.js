@@ -117,6 +117,20 @@ router.post('/:servicioId', verifyToken, async (req, res) => {
       actualizadoEn: new Date().toISOString(),
     });
 
+    // Push al cliente: llegó una oferta
+    try {
+      const { enviarPushAUsuario } = require('../services/pushNotifications');
+      const servicioData = servicioDoc.data();
+      if (servicioData.clienteUid) {
+        const totalOfertas = ofertasSnapshot.size;
+        enviarPushAUsuario(servicioData.clienteUid, {
+          titulo: '🚕 ¡Tienes una oferta de taxi!',
+          cuerpo: `${conductorNombre} te ofrece llevarte por $${parseInt(monto).toLocaleString('es-CO')}. ¡Toca aquí para aceptar!`,
+          datos: { tipo: 'nueva_oferta', servicioId, ofertaId: docRef.id, totalOfertas }
+        });
+      }
+    } catch (e) {}
+
     res.status(201).json({ message: 'Oferta enviada', ofertaId: docRef.id, oferta });
   } catch (err) {
     res.status(500).json({ error: err.message });
