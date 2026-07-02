@@ -214,5 +214,41 @@ router.get('/reporte/:uid', verifyToken, async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+// Editar saldo directamente (admin)
+router.put('/editar-saldo/:conductorUid', verifyToken, verifyAdmin, async (req, res) => {
+  const { conductorUid } = req.params;
+  const { saldo } = req.body;
+  if (saldo === undefined || isNaN(parseInt(saldo)) || parseInt(saldo) < 0) {
+    return res.status(400).json({ error: 'Saldo inválido' });
+  }
+  try {
+    const nuevoSaldo = parseInt(saldo);
+    const ref = db.collection('billeteras').doc(conductorUid);
+    const doc = await ref.get();
+    const saldoAnterior = doc.exists ? (doc.data().saldo || 0) : 0;
+
+    await ref.set({
+      uid: conductorUid,
+      saldo: nuevoSaldo,
+      actualizadoEn: new Date().toISOString(),
+    }, { merge: true });
+
+    // Registrar movimiento
+    await db.collection('billeteras').doc(conductorUid).collection('movimientos').add({
+      tipo: 'ajuste_admin',
+      monto: nuevoSaldo - saldoAnterior,
+      saldoAnterior,
+      saldoNuevo: nuevoSaldo,
+      metodo: 'ajuste manual',
+      referencia: 'Editado por administrador',
+      creadoEn: new Date().toISOString(),
+    });
+
+    res.json({ message: 'Saldo actualizado', saldoAnterior, saldoNuevo: nuevoSaldo });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 module.exports = router;
 module.exports.descontarComision = descontarComision;
