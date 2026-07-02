@@ -667,4 +667,26 @@ router.put('/admin-completar/:servicioId', verifyToken, verifyAdmin, async (req,
   }
 });
 
+// Eliminar servicio permanentemente (admin)
+router.delete('/:servicioId', verifyToken, verifyAdmin, async (req, res) => {
+  try {
+    const ref = db.collection('servicios').doc(req.params.servicioId);
+    const doc = await ref.get();
+    if (!doc.exists) return res.status(404).json({ error: 'Servicio no encontrado' });
+
+    // Eliminar subcolecciones (ofertas, chat)
+    const ofertasSnap = await ref.collection('ofertas').get();
+    const chatSnap = await ref.collection('chat').get();
+    const batch = db.batch();
+    ofertasSnap.forEach(d => batch.delete(d.ref));
+    chatSnap.forEach(d => batch.delete(d.ref));
+    batch.delete(ref);
+    await batch.commit();
+
+    res.json({ message: 'Servicio eliminado permanentemente' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 module.exports = router;
