@@ -126,4 +126,21 @@ router.post('/alerta-conductores', async (req, res) => {
   }
 });
 
+// Push directo al cliente de un servicio
+router.post('/push-cliente/:uid', async (req, res) => {
+  const { titulo, mensaje, servicioId } = req.body;
+  if (!mensaje) return res.status(400).json({ error: 'Se requiere mensaje' });
+  try {
+    const { enviarPushAUsuario } = require('../services/pushNotifications');
+    await enviarPushAUsuario(req.params.uid, {
+      titulo: titulo || '🚕 Tienes una oferta esperando',
+      cuerpo: mensaje,
+      datos: { tipo: 'recordatorio_oferta', servicioId: servicioId || '' }
+    });
+    res.json({ message: 'Push enviado al cliente' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 module.exports = router;
