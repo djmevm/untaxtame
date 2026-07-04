@@ -315,6 +315,7 @@ export default function PedirTaxiScreen() {
         {/* Mapa de fondo grande */}
         <MapView
           ref={mapRef}
+          provider={PROVIDER_GOOGLE}
           style={styles.mapaFull}
           initialRegion={region}
           showsUserLocation={true}
