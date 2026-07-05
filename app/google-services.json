@@ -9,6 +9,25 @@
       "client_info": {
         "mobilesdk_app_id": "1:234318004211:android:bc0500560e2f4bd5d9dc86",
         "android_client_info": {
+          "package_name": "com.untaxtame.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyApRrJBarURBeubiOvx-NbSK3-tYQ2ciH4"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:234318004211:android:28809f3e3738e688d9dc86",
+        "android_client_info": {
           "package_name": "com.untaxtame.taxi"
         }
       },
