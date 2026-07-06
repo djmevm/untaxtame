@@ -637,6 +637,18 @@ router.put('/admin-cancelar/:servicioId', verifyToken, verifyAdmin, async (req, 
   }
 });
 
+// Marcar pago de servicio (admin)
+router.put('/pago/:servicioId', verifyToken, verifyAdmin, async (req, res) => {
+  const { clientePago } = req.body;
+  try {
+    const ref = db.collection('servicios').doc(req.params.servicioId);
+    await ref.update({ clientePago: clientePago === true, actualizadoEn: new Date().toISOString() });
+    res.json({ message: 'Estado de pago actualizado' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Completar servicio desde el panel admin
 router.put('/admin-completar/:servicioId', verifyToken, verifyAdmin, async (req, res) => {
   try {
