@@ -38,6 +38,26 @@ export default function Servicios() {
     })(),
   };
 
+  const [calificarModal, setCalificarModal] = useState(null);
+  const [calificacionAdmin, setCalificacionAdmin] = useState(5);
+  const [comentarioAdmin, setComentarioAdmin] = useState('');
+
+  const calificarServicio = async () => {
+    try {
+      await api.put(`/services/calificar/${calificarModal.id}`, {
+        calificacion: calificacionAdmin,
+        comentario: comentarioAdmin,
+      });
+      alert('✅ Calificación guardada');
+      setCalificarModal(null);
+      setCalificacionAdmin(5);
+      setComentarioAdmin('');
+      cargar();
+    } catch (err) {
+      alert('Error: ' + (err.response?.data?.error || err.message));
+    }
+  };
+
   const cancelarServicio = async (servicio) => {
     const motivo = window.prompt(`Motivo para cancelar el servicio de ${servicio.clienteNombre}:`, 'Cancelado por administrador');
     if (motivo === null) return;
@@ -60,6 +80,17 @@ export default function Servicios() {
         servicioId: servicio.id,
       });
       alert(`✅ Alerta enviada a ${res.data.conductoresNotificados} conductores`);
+    } catch (err) {
+      alert('Error: ' + (err.response?.data?.error || err.message));
+    }
+  };
+
+  const eliminarServicio = async (servicio) => {
+    if (!window.confirm(`🗑️ ¿Eliminar permanentemente el servicio de ${servicio.clienteNombre}?\n\nEsta acción no se puede deshacer.`)) return;
+    try {
+      await api.delete(`/services/${servicio.id}`);
+      alert('✅ Servicio eliminado');
+      cargar();
     } catch (err) {
       alert('Error: ' + (err.response?.data?.error || err.message));
     }
@@ -241,7 +272,31 @@ export default function Servicios() {
 
         {/* Ofertas / Negociación */}
         <div style={estilos.seccionDetalle}>
-          <h3>💰 Negociación — Ofertas recibidas ({ofertas.length})</h3>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+            <h3 style={{ margin: 0 }}>💰 Negociación — Ofertas recibidas ({ofertas.length})</h3>
+            {ofertas.length > 0 && detalle.estado === 'pendiente' && (
+              <button onClick={async () => {
+                try {
+                  const res = await api.post('/admin/alerta-conductores', {
+                    titulo: '🚕 ¡Tienes ofertas esperando!',
+                    mensaje: `¡${detalle.clienteNombre}, tienes ${ofertas.length} oferta${ofertas.length > 1 ? 's' : ''} de conductor${ofertas.length > 1 ? 'es' : ''}! Abre la app para aceptar.`,
+                    servicioId: detalle.id,
+                  });
+                  // Push directo al cliente
+                  await api.post(`/admin/push-cliente/${detalle.clienteUid || detalle.id}`, {
+                    titulo: '🚕 ¡Tienes ofertas de taxi!',
+                    mensaje: `¡Hay ${ofertas.length} conductor${ofertas.length > 1 ? 'es' : ''} esperando! Abre UntaXtame y acepta la oferta.`,
+                    servicioId: detalle.id,
+                  }).catch(() => {});
+                  alert(`✅ Notificación enviada al cliente`);
+                } catch (err) {
+                  alert('Error: ' + (err.response?.data?.error || err.message));
+                }
+              }} style={{ background: '#F97316', color: '#fff', border: 'none', borderRadius: 8, padding: '8px 16px', cursor: 'pointer', fontWeight: 'bold', fontSize: 13 }}>
+                🔔 Notificar al cliente
+              </button>
+            )}
+          </div>
           {cargandoDetalle ? (
             <p style={{ color: '#999' }}>Cargando...</p>
           ) : ofertas.length === 0 ? (
@@ -392,12 +447,24 @@ export default function Servicios() {
                   ? `$${s.tarifaEstimada.tarifaEstimada.toLocaleString('es-CO')}`
                   : '—'}
               </td>
-              <td><span className={`badge ${s.estado}`}>{s.estado}</span></td>
+              <td>
+                <span className={`badge ${s.estado}`}>{s.estado}</span>
+                {s.canceladoPor === 'sistema' && (
+                  <span style={{ display: 'block', fontSize: 10, color: '#E53935', marginTop: 2 }}>⏰ Auto (10min)</span>
+                )}
+              </td>
               <td>
                 {s.estado === 'completado' ? (
                   s.clientePago === true ? <span style={{ color: '#16A34A', fontWeight: 'bold' }}>✅ Sí</span>
                   : s.clientePago === false ? <span style={{ color: '#DC2626', fontWeight: 'bold' }}>❌ No</span>
-                  : <span style={{ color: '#999' }}>—</span>
+                  : <button onClick={async () => {
+                      try {
+                        await api.put(`/services/pago/${s.id}`, { clientePago: true });
+                        cargar();
+                      } catch (err) { alert('Error: ' + (err.response?.data?.error || err.message)); }
+                    }} style={{ background: '#16A34A', color: '#fff', border: 'none', borderRadius: 6, padding: '4px 8px', cursor: 'pointer', fontSize: 11, fontWeight: 'bold' }}>
+                      💰 Pagó
+                    </button>
                 ) : <span style={{ color: '#999' }}>—</span>}
               </td>
               <td>
@@ -405,7 +472,12 @@ export default function Servicios() {
                   ? <span title={s.calificacion.comentario || ''} style={{ fontWeight: 'bold', color: '#F97316' }}>
                       ⭐ {s.calificacion.puntuacion || s.calificacion.estrellas}/10
                     </span>
-                  : '—'}
+                  : s.estado === 'completado'
+                    ? <button onClick={() => { setCalificarModal(s); setCalificacionAdmin(5); setComentarioAdmin(''); }}
+                        style={{ background: '#F97316', color: '#fff', border: 'none', borderRadius: 6, padding: '4px 10px', cursor: 'pointer', fontSize: 11, fontWeight: 'bold' }}>
+                        ⭐ Calificar
+                      </button>
+                    : '—'}
               </td>
               <td style={{ whiteSpace: 'nowrap' }}>
                 {new Date(s.creadoEn).toLocaleString('es-CO', {
@@ -433,17 +505,59 @@ export default function Servicios() {
                       </button>
                     </>
                   )}
+                  {['completado', 'cancelado'].includes(s.estado) && (
+                    <button onClick={() => eliminarServicio(s)} style={estilos.btnEliminar} title="Eliminar permanentemente">
+                      🗑️
+                    </button>
+                  )}
                 </div>
               </td>
             </tr>
           ))}
         </tbody>
       </table>
+      {/* Modal calificar servicio */}
+      {calificarModal && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
+          <div style={{ background: '#fff', borderRadius: 20, padding: 28, width: 400, maxWidth: '90vw' }}>
+            <h3 style={{ marginTop: 0 }}>⭐ Calificar servicio</h3>
+            <p style={{ color: '#666', fontSize: 14 }}>
+              Cliente: <strong>{calificarModal.clienteNombre}</strong><br />
+              Conductor: <strong>{calificarModal.conductorNombre || '—'}</strong>
+            </p>
+            <label style={{ fontSize: 12, color: '#888', fontWeight: '600', textTransform: 'uppercase' }}>Calificación (1-10)</label>
+            <div style={{ display: 'flex', gap: 6, margin: '10px 0', flexWrap: 'wrap' }}>
+              {[1,2,3,4,5,6,7,8,9,10].map(n => (
+                <button key={n} onClick={() => setCalificacionAdmin(n)}
+                  style={{ width: 38, height: 38, borderRadius: 8, border: '2px solid #FFC107', background: calificacionAdmin === n ? '#FFC107' : '#fff', fontWeight: 'bold', cursor: 'pointer', fontSize: 14 }}>
+                  {n}
+                </button>
+              ))}
+            </div>
+            <label style={{ fontSize: 12, color: '#888', fontWeight: '600', textTransform: 'uppercase' }}>Comentario (opcional)</label>
+            <textarea
+              value={comentarioAdmin}
+              onChange={e => setComentarioAdmin(e.target.value)}
+              placeholder="Escribe un comentario..."
+              style={{ width: '100%', border: '2px solid #ddd', borderRadius: 8, padding: '10px 14px', fontSize: 14, marginTop: 6, minHeight: 80, boxSizing: 'border-box', resize: 'vertical' }}
+            />
+            <div style={{ display: 'flex', gap: 10, marginTop: 16 }}>
+              <button onClick={calificarServicio}
+                style={{ background: '#F97316', color: '#fff', border: 'none', borderRadius: 8, padding: '12px 24px', cursor: 'pointer', fontWeight: 'bold', fontSize: 14 }}>
+                ⭐ Guardar calificación
+              </button>
+              <button onClick={() => setCalificarModal(null)}
+                style={{ background: '#eee', color: '#666', border: 'none', borderRadius: 8, padding: '12px 24px', cursor: 'pointer', fontWeight: 'bold', fontSize: 14 }}>
+                Cancelar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
 
-// Componente de chat para admin
 function ChatAdminInput({ servicioId, onMensajeEnviado }) {
   const [texto, setTexto] = useState('');
   const [enviando, setEnviando] = useState(false);
@@ -510,6 +624,11 @@ const estilos = {
   },
   btnAlerta: {
     background: '#F97316', color: '#fff', border: 'none',
+    borderRadius: 6, padding: '6px 10px', cursor: 'pointer',
+    fontWeight: 'bold', fontSize: 12,
+  },
+  btnEliminar: {
+    background: '#6B7280', color: '#fff', border: 'none',
     borderRadius: 6, padding: '6px 10px', cursor: 'pointer',
     fontWeight: 'bold', fontSize: 12,
   },

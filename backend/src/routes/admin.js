@@ -126,6 +126,17 @@ router.post('/alerta-conductores', async (req, res) => {
   }
 });
 
+// Forzar cancelación de servicios pendientes expirados (admin)
+router.post('/cancelar-expirados', async (req, res) => {
+  try {
+    const { cancelarServiciosPendientesExpirados } = require('../services/autoCancelacion');
+    await cancelarServiciosPendientesExpirados();
+    res.json({ message: 'Cancelación de servicios expirados ejecutada' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Push directo al cliente de un servicio
 router.post('/push-cliente/:uid', async (req, res) => {
   const { titulo, mensaje, servicioId } = req.body;
