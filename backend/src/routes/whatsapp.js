@@ -173,13 +173,17 @@ router.post('/enviar', verifyToken, async (req, res) => {
     return res.status(400).json({ error: 'Se requiere telefono y mensaje' });
   }
 
-  const numero = telefono.replace(/[^0-9]/g, '');
-  const result = await enviarMensaje(numero, mensaje);
+  try {
+    const numero = telefono.replace(/[^0-9]/g, '');
+    const result = await enviarMensaje(numero, mensaje);
 
-  if (result.error) {
-    return res.status(500).json({ error: result.error });
+    if (result.error) {
+      return res.status(500).json({ error: typeof result.error === 'string' ? result.error : JSON.stringify(result.error) });
+    }
+    res.json({ message: 'Mensaje enviado', result });
+  } catch (err) {
+    res.status(500).json({ error: err.message || 'Error interno' });
   }
-  res.json({ message: 'Mensaje enviado', result });
 });
 
 // Enviar plantilla a un número específico (admin)

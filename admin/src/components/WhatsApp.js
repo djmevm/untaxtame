@@ -243,7 +243,7 @@ export default function WhatsApp() {
         }}>
           {resultado.error ? (
             <p style={{ color: '#E53935', fontWeight: 'bold', margin: 0 }}>
-              ❌ Error: {resultado.error}
+              ❌ Error: {typeof resultado.error === 'string' ? resultado.error : JSON.stringify(resultado.error)}
             </p>
           ) : (
             <div>
