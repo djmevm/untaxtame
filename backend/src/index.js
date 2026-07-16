@@ -86,6 +86,7 @@ app.use('/api/emergencia', emergenciaRoutes);
 app.use('/api/ofertas', ofertasRoutes);
 app.use('/api/billetera', billeteraRoutes);
 app.use('/api/radio', radioRoutes);
+app.use('/api/whatsapp', whatsappRoutes);
 
 // Ruta raíz (no exponer info sensible)
 app.get('/', (req, res) => {

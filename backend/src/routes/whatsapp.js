@@ -1,13 +1,16 @@
 const express = require('express');
 const router = express.Router();
 const fetch = require('node-fetch');
+const { db } = require('../firebase');
+const verifyToken = require('../middleware/verifyToken');
 
 const VERIFY_TOKEN = 'untaxtame2026';
-const PHONE_NUMBER_ID = '113139477672806';
+const PHONE_NUMBER_ID = '124238633228702';
+const WABA_ID = '225661571844047';
 
 // Obtener token de variable de entorno
 function getToken() {
-  return process.env.WHATSAPP_TOKEN || '';
+  return process.env.WHATSAPP_TOKEN || 'EAAOdCkPftXYBR8BXHXc3xUuMe8dwJpHyh63RwZAuCo7c5xC74U9Mb3UhY7ZBmTAOtuZCgAVBvDlQM1thwE8h3xDTlAmjZBZB4MpIgPig24sd6sNq9LZA5WxMLXA3CrIAq6vwzZAET5nGQXzRACci19vmy29okmVY6pmTpfTgOFZAmSYDwfL3JoeYjORZAZCIcUtV1tUwZDZD';
 }
 
 // Webhook verification (GET)
@@ -99,7 +102,7 @@ async function procesarMensaje(telefono, texto) {
 // Enviar mensaje via WhatsApp Cloud API
 async function enviarMensaje(telefono, texto) {
   try {
-    await fetch(`https://graph.facebook.com/v25.0/${PHONE_NUMBER_ID}/messages`, {
+    const response = await fetch(`https://graph.facebook.com/v25.0/${PHONE_NUMBER_ID}/messages`, {
       method: 'POST',
       headers: {
         'Authorization': 'Bearer ' + getToken(),
@@ -112,9 +115,192 @@ async function enviarMensaje(telefono, texto) {
         text: { body: texto },
       }),
     });
+    const data = await response.json();
+    return data;
   } catch (e) {
     console.error('[WA] Error enviando:', e.message);
+    return { error: e.message };
   }
 }
+
+// Enviar plantilla via WhatsApp Cloud API
+async function enviarPlantilla(telefono, templateName, languageCode, parameters) {
+  try {
+    const components = [];
+    if (parameters && parameters.length > 0) {
+      components.push({
+        type: 'body',
+        parameters: parameters.map(p => ({ type: 'text', text: p })),
+      });
+    }
+
+    const body = {
+      messaging_product: 'whatsapp',
+      to: telefono,
+      type: 'template',
+      template: {
+        name: templateName,
+        language: { code: languageCode || 'es' },
+      },
+    };
+
+    if (components.length > 0) {
+      body.template.components = components;
+    }
+
+    const response = await fetch(`https://graph.facebook.com/v25.0/${PHONE_NUMBER_ID}/messages`, {
+      method: 'POST',
+      headers: {
+        'Authorization': 'Bearer ' + getToken(),
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(body),
+    });
+    const data = await response.json();
+    return data;
+  } catch (e) {
+    console.error('[WA] Error enviando plantilla:', e.message);
+    return { error: e.message };
+  }
+}
+
+// ═══ RUTAS DE ADMINISTRACIÓN (envío masivo) ═══
+
+// Enviar mensaje de texto a un número específico (admin)
+router.post('/enviar', verifyToken, async (req, res) => {
+  const { telefono, mensaje } = req.body;
+  if (!telefono || !mensaje) {
+    return res.status(400).json({ error: 'Se requiere telefono y mensaje' });
+  }
+
+  const numero = telefono.replace(/[^0-9]/g, '');
+  const result = await enviarMensaje(numero, mensaje);
+
+  if (result.error) {
+    return res.status(500).json({ error: result.error });
+  }
+  res.json({ message: 'Mensaje enviado', result });
+});
+
+// Enviar plantilla a un número específico (admin)
+router.post('/enviar-plantilla', verifyToken, async (req, res) => {
+  const { telefono, plantilla, idioma, parametros } = req.body;
+  if (!telefono || !plantilla) {
+    return res.status(400).json({ error: 'Se requiere telefono y plantilla' });
+  }
+
+  const numero = telefono.replace(/[^0-9]/g, '');
+  const result = await enviarPlantilla(numero, plantilla, idioma || 'es', parametros || []);
+
+  if (result.error) {
+    return res.status(500).json({ error: result.error });
+  }
+  res.json({ message: 'Plantilla enviada', result });
+});
+
+// Enviar plantilla masiva a todos los clientes (admin)
+router.post('/enviar-masivo', verifyToken, async (req, res) => {
+  const { plantilla, idioma, parametros } = req.body;
+  if (!plantilla) {
+    return res.status(400).json({ error: 'Se requiere nombre de plantilla' });
+  }
+
+  try {
+    // Obtener todos los clientes con número de teléfono
+    const snapshot = await db.collection('usuarios')
+      .where('rol', '==', 'cliente')
+      .get();
+
+    const clientes = [];
+    snapshot.forEach(doc => {
+      const data = doc.data();
+      if (data.telefono && !data.bloqueado) {
+        clientes.push({
+          uid: doc.id,
+          nombre: data.nombre || 'Cliente',
+          telefono: data.telefono.replace(/[^0-9]/g, ''),
+        });
+      }
+    });
+
+    if (clientes.length === 0) {
+      return res.json({ message: 'No hay clientes con número registrado', enviados: 0, errores: 0 });
+    }
+
+    let enviados = 0;
+    let errores = 0;
+    const detalles = [];
+
+    for (const cliente of clientes) {
+      // Agregar nombre como parámetro si la plantilla usa {{1}}
+      const params = parametros && parametros.length > 0
+        ? parametros
+        : [cliente.nombre];
+
+      const result = await enviarPlantilla(cliente.telefono, plantilla, idioma || 'es', params);
+
+      if (result.messages) {
+        enviados++;
+        detalles.push({ nombre: cliente.nombre, telefono: cliente.telefono, estado: 'enviado' });
+      } else {
+        errores++;
+        detalles.push({ nombre: cliente.nombre, telefono: cliente.telefono, estado: 'error', error: result.error?.message || JSON.stringify(result) });
+      }
+
+      // Esperar 100ms entre mensajes para no saturar la API
+      await new Promise(resolve => setTimeout(resolve, 100));
+    }
+
+    // Guardar registro del envío masivo
+    await db.collection('enviosMasivos').add({
+      plantilla,
+      idioma: idioma || 'es',
+      totalClientes: clientes.length,
+      enviados,
+      errores,
+      enviadoPor: req.user?.uid || 'admin',
+      creadoEn: new Date().toISOString(),
+    });
+
+    res.json({
+      message: `Envío masivo completado`,
+      totalClientes: clientes.length,
+      enviados,
+      errores,
+      detalles,
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Obtener historial de envíos masivos
+router.get('/historial-masivos', verifyToken, async (req, res) => {
+  try {
+    const snapshot = await db.collection('enviosMasivos')
+      .orderBy('creadoEn', 'desc')
+      .limit(20)
+      .get();
+
+    const historial = [];
+    snapshot.forEach(doc => historial.push({ id: doc.id, ...doc.data() }));
+    res.json(historial);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Obtener plantillas disponibles
+router.get('/plantillas', verifyToken, async (req, res) => {
+  try {
+    const response = await fetch(`https://graph.facebook.com/v25.0/${WABA_ID}/message_templates`, {
+      headers: { 'Authorization': 'Bearer ' + getToken() },
+    });
+    const data = await response.json();
+    res.json(data.data || []);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
 
 module.exports = router;

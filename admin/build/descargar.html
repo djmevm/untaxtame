@@ -15,6 +15,7 @@
     .btn-download { display: block; background: linear-gradient(135deg, #F97316, #EA580C); color: #fff; text-decoration: none; padding: 16px 28px; border-radius: 14px; font-size: 16px; font-weight: bold; margin-bottom: 12px; transition: transform 0.2s; }
     .btn-download:hover { transform: scale(1.03); }
     .btn-download:active { transform: scale(0.97); }
+    .btn-playstore { background: linear-gradient(135deg, #2E7D32, #1B5E20); }
     .btn-apkpure { background: linear-gradient(135deg, #00C853, #009624); }
     .btn-aptoide { background: linear-gradient(135deg, #F97316, #E65100); }
     .btn-directo { background: linear-gradient(135deg, #1565C0, #0D47A1); }
@@ -25,6 +26,7 @@
     .qr-item.apkpure img { border-color: #00C853; }
     .qr-item.aptoide img { border-color: #F97316; }
     .qr-item.directo img { border-color: #1565C0; }
+    .qr-item.playstore img { border-color: #2E7D32; }
     .features { text-align: left; margin: 24px 0; padding: 20px; background: #F8FAFC; border-radius: 12px; }
     .features h3 { font-size: 14px; color: #333; margin-bottom: 12px; }
     .feature { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; font-size: 13px; color: #555; }
@@ -42,22 +44,26 @@
     <img src="./icon_adaptive.jpg" alt="UntaXtame" class="logo" onerror="this.style.display='none'">
     <h1>UntaXtame</h1>
     <p class="subtitle">S.A.S ZOMAC — App de Taxis Segura</p>
-    <span class="version">v2.3.0 • Android</span>
+    <span class="version">v2.4.0 • Android</span>
 
     <div class="store-badges">
-      <span class="store-badge" style="background:#E8F5E9;color:#2E7D32;">APKPure</span>
-      <span class="store-badge" style="background:#FFF3E0;color:#E65100;">Aptoide</span>
+      <span class="store-badge" style="background:#E8F5E9;color:#2E7D32;">Google Play</span>
+      <span class="store-badge" style="background:#FFF3E0;color:#E65100;">APKPure</span>
+      <span class="store-badge" style="background:#FCE4EC;color:#C62828;">Aptoide</span>
       <span class="store-badge" style="background:#E3F2FD;color:#1565C0;">Descarga directa</span>
     </div>
 
     <!-- Botones de descarga -->
+    <a href="https://play.google.com/store/apps/details?id=com.untaxtame.taxi" target="_blank" class="btn-download btn-playstore">
+      ▶️ Descargar en Play Store
+    </a>
     <a href="https://apkpure.com/p/com.untaxtame.app" target="_blank" class="btn-download btn-apkpure">
       Descargar en APKPure
     </a>
     <a href="https://com-untaxtame-app.en.aptoide.com/app" target="_blank" class="btn-download btn-aptoide">
       Descargar en Aptoide
     </a>
-    <a href="./UntaXtame.apk" class="btn-download btn-directo" download>
+    <a href="./UntaXtame-v2.4.apk" class="btn-download btn-directo" download>
       Descarga directa APK
     </a>
 
@@ -65,40 +71,40 @@
 
     <!-- QR Codes -->
     <h3 style="font-size:14px; color:#333; margin-bottom:12px;">Escanea el QR para descargar</h3>
-    <div class="qr-grid">
-      <div class="qr-item apkpure">
-        <img src="https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=https://apkpure.com/p/com.untaxtame.app" alt="QR APKPure">
-        <p>APKPure</p>
+    <div class="qr-grid" style="grid-template-columns: 1fr 1fr 1fr;">
+      <div class="qr-item playstore">
+        <img src="https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=https://play.google.com/store/apps/details?id=com.untaxtame.taxi" alt="QR Play Store">
+        <p>Play Store</p>
       </div>
       <div class="qr-item aptoide">
-        <img src="https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=https://com-untaxtame-app.en.aptoide.com/app" alt="QR Aptoide">
+        <img src="https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=https://com-untaxtame-app.en.aptoide.com/app" alt="QR Aptoide">
         <p>Aptoide</p>
       </div>
-      <div class="qr-item directo">
-        <img src="https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=https://untaxtame.vercel.app/descargar.html" alt="QR Directo">
-        <p>Descarga directa</p>
+      <div class="qr-item apkpure">
+        <img src="https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=https://apkpure.com/p/com.untaxtame.app" alt="QR APKPure">
+        <p>APKPure</p>
       </div>
     </div>
 
     <div class="features">
-      <h3>✨ Funciones v2.3</h3>
+      <h3>✨ Funciones v2.4</h3>
       <div class="feature">🔔 Notificaciones push en segundo plano</div>
       <div class="feature">🚕 Pide taxi en segundos con GPS</div>
       <div class="feature">🚨 Alerta sonora en emergencias SOS</div>
       <div class="feature">💬 Chat en tiempo real</div>
       <div class="feature">📻 Reconocimiento de voz H1/H2</div>
-      <div class="feature">⭐ Califica y elige por reputacion</div>
+      <div class="feature">⭐ Califica y elige por reputación</div>
       <div class="feature">💳 Paga con Daviplata, Nequi o Efectivo</div>
+      <div class="feature">📍 Seguimiento en tiempo real del conductor</div>
     </div>
 
     <div class="instructions">
-      <h3>📱 Como instalar?</h3>
+      <h3>📱 ¿Cómo instalar?</h3>
       <ol>
-        <li>Elige una opcion de descarga</li>
-        <li>Abre el archivo descargado</li>
-        <li>Si dice "fuente desconocida", activa "Permitir esta fuente"</li>
-        <li>Toca "Instalar"</li>
-        <li>Abre UntaXtame y registrate</li>
+        <li><strong>Google Play (recomendado):</strong> Toca "Descargar en Google Play" e instala normalmente</li>
+        <li><strong>APK directo:</strong> Si descargas el APK, activa "Permitir esta fuente" cuando te lo pida</li>
+        <li>Abre UntaXtame y regístrate con tu número</li>
+        <li>¡Listo! Ya puedes pedir tu taxi</li>
       </ol>
     </div>
 
