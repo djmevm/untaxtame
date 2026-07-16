@@ -5,7 +5,7 @@ const { db } = require('../firebase');
 const verifyToken = require('../middleware/verifyToken');
 
 const VERIFY_TOKEN = 'untaxtame2026';
-const PHONE_NUMBER_ID = '124238633228702';
+const PHONE_NUMBER_ID = '1242386332287027';
 const WABA_ID = '225661571844047';
 
 // Token permanente de WhatsApp Business API (nunca expira)
