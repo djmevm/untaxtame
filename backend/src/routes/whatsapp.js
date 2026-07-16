@@ -10,7 +10,7 @@ const WABA_ID = '225661571844047';
 
 // Obtener token de variable de entorno
 function getToken() {
-  return process.env.WHATSAPP_TOKEN || 'EAAOdCkPftXYBR9AT7yeUpR6norUOvsJ6KeBeLIL7mHddKFklMo86J3bGkGGXCFZBWl8S7vZBHRwRm9R2Ws1FIQQk6J5YqFO6kO1whjcRjaUnjX06IX4dRLDje1n7ZAipkBEHKjLZBxUuyWkVtinbHdAbiBnbnFWEHyBjykf0rJoIJL24YaNqXp3nV80hZBZCzVDQZDZD';
+  return process.env.WHATSAPP_TOKEN || 'EAAOdCkPftXYBRw8iN80dCMueGEDmIdiUSiVcIZCLru2mxY0ZAZBvWNKWpD6xwPX6RWo0cNXeWHxMWeG2mDpJcIJKq78CNrRXjXfcItZB2mOQVBu4YnNkYKI9ndRTbfSKMC5NmR83Suk5rNcJ8qQbVU22uxhQ1ylQzmtAgVZBR73Svu9OmD6gu6ZAM4kvwm2h34yQZDZD';
 }
 
 // Webhook verification (GET)
