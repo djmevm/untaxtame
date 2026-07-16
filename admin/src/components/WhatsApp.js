@@ -27,9 +27,14 @@ export default function WhatsApp() {
         api.get('/whatsapp/plantillas').catch(() => ({ data: [] })),
         api.get('/whatsapp/historial-masivos').catch(() => ({ data: [] })),
       ]);
-      setPlantillas(plantillasRes.data || []);
-      setHistorial(historialRes.data || []);
-    } catch {} finally {
+      const plantillasData = Array.isArray(plantillasRes.data) ? plantillasRes.data : [];
+      const historialData = Array.isArray(historialRes.data) ? historialRes.data : [];
+      setPlantillas(plantillasData);
+      setHistorial(historialData);
+    } catch {
+      setPlantillas([]);
+      setHistorial([]);
+    } finally {
       setCargando(false);
     }
   };
