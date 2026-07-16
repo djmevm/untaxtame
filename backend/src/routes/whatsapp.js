@@ -8,9 +8,9 @@ const VERIFY_TOKEN = 'untaxtame2026';
 const PHONE_NUMBER_ID = '124238633228702';
 const WABA_ID = '225661571844047';
 
-// Obtener token de variable de entorno
+// Token permanente de WhatsApp Business API (nunca expira)
 function getToken() {
-  return process.env.WHATSAPP_TOKEN || 'EAAOdCkPftXYBRw8iN80dCMueGEDmIdiUSiVcIZCLru2mxY0ZAZBvWNKWpD6xwPX6RWo0cNXeWHxMWeG2mDpJcIJKq78CNrRXjXfcItZB2mOQVBu4YnNkYKI9ndRTbfSKMC5NmR83Suk5rNcJ8qQbVU22uxhQ1ylQzmtAgVZBR73Svu9OmD6gu6ZAM4kvwm2h34yQZDZD';
+  return 'EAAOdCkPftXYBRw8iN80dCMueGEDmIdiUSiVcIZCLru2mxY0ZAZBvWNKWpD6xwPX6RWo0cNXeWHxMWeG2mDpJcIJKq78CNrRXjXfcItZB2mOQVBu4YnNkYKI9ndRTbfSKMC5NmR83Suk5rNcJ8qQbVU22uxhQ1ylQzmtAgVZBR73Svu9OmD6gu6ZAM4kvwm2h34yQZDZD';
 }
 
 // Webhook verification (GET)
