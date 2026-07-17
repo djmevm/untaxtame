@@ -62,6 +62,23 @@ export default function WhatsApp() {
     }
   };
 
+  // Auto-refresh del chat cada 5 segundos
+  useEffect(() => {
+    if (!conversacionActiva) return;
+    const intervalo = setInterval(async () => {
+      try {
+        const res = await api.get(`/whatsapp/conversaciones/${conversacionActiva.telefono}/mensajes`);
+        setMensajesChat(Array.isArray(res.data) ? res.data : []);
+      } catch {}
+      // También refrescar lista de conversaciones
+      try {
+        const convRes = await api.get('/whatsapp/conversaciones');
+        if (Array.isArray(convRes.data)) setConversaciones(convRes.data);
+      } catch {}
+    }, 5000);
+    return () => clearInterval(intervalo);
+  }, [conversacionActiva]);
+
   const enviarRespuesta = async () => {
     if (!respuesta.trim() || !conversacionActiva) return;
     setEnviandoRespuesta(true);
@@ -73,6 +90,26 @@ export default function WhatsApp() {
       alert('Error: ' + (err.response?.data?.error || err.message));
     } finally {
       setEnviandoRespuesta(false);
+    }
+  };
+
+  const enviarArchivo = async (e) => {
+    const file = e.target.files[0];
+    if (!file || !conversacionActiva) return;
+    setEnviandoRespuesta(true);
+    try {
+      const formData = new FormData();
+      formData.append('archivo', file);
+      formData.append('telefono', conversacionActiva.telefono);
+      await api.post('/whatsapp/enviar-archivo', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+      abrirConversacion(conversacionActiva);
+    } catch (err) {
+      alert('Error enviando archivo: ' + (err.response?.data?.error || err.message));
+    } finally {
+      setEnviandoRespuesta(false);
+      e.target.value = '';
     }
   };
 
@@ -242,7 +279,11 @@ export default function WhatsApp() {
                 </div>
 
                 {/* Input responder */}
-                <div style={{ padding: 12, borderTop: '1px solid #eee', display: 'flex', gap: 8 }}>
+                <div style={{ padding: 12, borderTop: '1px solid #eee', display: 'flex', gap: 8, alignItems: 'center' }}>
+                  <label style={{ cursor: 'pointer', fontSize: 22 }} title="Enviar archivo/imagen">
+                    📎
+                    <input type="file" accept="image/*,video/*,application/pdf,.doc,.docx" onChange={enviarArchivo} style={{ display: 'none' }} />
+                  </label>
                   <input
                     type="text"
                     value={respuesta}

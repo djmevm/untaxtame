@@ -319,6 +319,93 @@ router.post('/conversaciones/:telefono/responder', verifyToken, async (req, res)
 
 // ═══ RUTAS DE ADMINISTRACIÓN (envío masivo) ═══
 
+// Enviar archivo/imagen a un número (admin)
+const multer = require('multer');
+const path = require('path');
+const fs = require('fs');
+const uploadWA = multer({ dest: path.join(__dirname, '../../uploads/whatsapp/') });
+
+router.post('/enviar-archivo', verifyToken, uploadWA.single('archivo'), async (req, res) => {
+  if (!req.file) return res.status(400).json({ error: 'No se envió archivo' });
+  const { telefono } = req.body;
+  if (!telefono) return res.status(400).json({ error: 'Se requiere telefono' });
+
+  try {
+    // Subir el archivo a Meta
+    const FormData = require('form-data') || null;
+    const formData = new (require('node-fetch').default ? Object : Object)();
+
+    // Determinar tipo de media
+    const mime = req.file.mimetype;
+    let mediaType = 'document';
+    if (mime.startsWith('image/')) mediaType = 'image';
+    else if (mime.startsWith('video/')) mediaType = 'video';
+    else if (mime.startsWith('audio/')) mediaType = 'audio';
+
+    // Subir media a WhatsApp
+    const fileStream = fs.createReadStream(req.file.path);
+    const uploadResponse = await fetch(`https://graph.facebook.com/v25.0/${PHONE_NUMBER_ID}/media`, {
+      method: 'POST',
+      headers: {
+        'Authorization': 'Bearer ' + getToken(),
+      },
+      body: (() => {
+        const form = new (require('stream').Readable)();
+        // Use node-fetch compatible multipart
+        return undefined; // Fallback below
+      })(),
+    });
+
+    // Método alternativo: enviar URL del archivo hosteado
+    const fileUrl = `https://untaxtame-production.up.railway.app/uploads/whatsapp/${req.file.filename}`;
+
+    // Enviar media por URL
+    const sendResponse = await fetch(`https://graph.facebook.com/v25.0/${PHONE_NUMBER_ID}/messages`, {
+      method: 'POST',
+      headers: {
+        'Authorization': 'Bearer ' + getToken(),
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        messaging_product: 'whatsapp',
+        to: telefono,
+        type: mediaType,
+        [mediaType]: {
+          link: fileUrl,
+          filename: req.file.originalname,
+        },
+      }),
+    });
+    const result = await sendResponse.json();
+
+    if (result.error) {
+      return res.status(500).json({ error: result.error.message || JSON.stringify(result.error) });
+    }
+
+    // Guardar en historial
+    await db.collection('whatsapp_mensajes').add({
+      telefono,
+      nombre: 'Admin',
+      texto: `📎 ${req.file.originalname}`,
+      tipo: 'enviado',
+      tipoMensaje: mediaType,
+      enviadoPor: 'admin',
+      archivoUrl: fileUrl,
+      creadoEn: new Date().toISOString(),
+    });
+
+    await db.collection('whatsapp_conversaciones').doc(telefono).set({
+      ultimoMensaje: `📎 ${req.file.originalname}`,
+      ultimoTipo: 'enviado',
+      actualizadoEn: new Date().toISOString(),
+    }, { merge: true });
+
+    res.json({ message: 'Archivo enviado', mediaType, result });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Enviar mensaje de texto a un número específico (admin)
 router.post('/enviar', verifyToken, async (req, res) => {
   const { telefono, mensaje } = req.body;
