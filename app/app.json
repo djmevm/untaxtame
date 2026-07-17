@@ -2,7 +2,7 @@
   "expo": {
     "name": "UntaXtame",
     "slug": "untaxtame",
-    "version": "2.4.2",
+    "version": "2.5.0",
     "orientation": "portrait",
     "icon": "./assets/icon_adaptive.jpg",
     "userInterfaceStyle": "light",
@@ -31,7 +31,7 @@
       },
       "package": "com.untaxtame.taxi",
       "googleServicesFile": "./google-services.json",
-      "versionCode": 15,
+      "versionCode": 16,
       "permissions": [
         "android.permission.ACCESS_FINE_LOCATION",
         "android.permission.ACCESS_COARSE_LOCATION",
