@@ -433,7 +433,12 @@ router.get('/pendientes', verifyToken, async (req, res) => {
       .orderBy('creadoEn', 'desc')
       .get();
 
-    const servicios = snapshot.docs.map(d => d.data());
+    // No exponer clienteCelular a conductores antes de aceptar oferta
+    const servicios = snapshot.docs.map(d => {
+      const data = d.data();
+      const { clienteCelular, ...sinCelular } = data;
+      return sinCelular;
+    });
     res.json(servicios);
   } catch (err) {
     res.status(500).json({ error: err.message });

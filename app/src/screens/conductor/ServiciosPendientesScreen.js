@@ -216,11 +216,6 @@ export default function ServiciosPendientesScreen() {
 
       {/* Action buttons row */}
       <View style={styles.cardActions}>
-        {item.clienteCelular && (
-          <TouchableOpacity style={styles.iconBtn} onPress={() => Linking.openURL(`tel:${item.clienteCelular}`)}>
-            <Feather name="phone" size={16} color="#64748B" />
-          </TouchableOpacity>
-        )}
         {item.ubicacionGPS && (
           <TouchableOpacity style={styles.iconBtn} onPress={() => Linking.openURL(`https://www.google.com/maps?q=${item.ubicacionGPS.lat},${item.ubicacionGPS.lng}`)}>
             <Feather name="map-pin" size={16} color="#64748B" />
