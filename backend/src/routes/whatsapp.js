@@ -256,7 +256,26 @@ router.get('/conversaciones/:telefono/mensajes', verifyToken, async (req, res) =
 
     res.json(mensajes);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    // Si falla por índice, intentar sin orderBy
+    try {
+      const snapshot = await db.collection('whatsapp_mensajes')
+        .where('telefono', '==', req.params.telefono)
+        .limit(100)
+        .get();
+
+      const mensajes = [];
+      snapshot.forEach(doc => mensajes.push({ id: doc.id, ...doc.data() }));
+      // Ordenar manualmente
+      mensajes.sort((a, b) => (a.creadoEn || '').localeCompare(b.creadoEn || ''));
+
+      await db.collection('whatsapp_conversaciones').doc(req.params.telefono).update({
+        noLeidos: 0,
+      }).catch(() => {});
+
+      res.json(mensajes);
+    } catch (err2) {
+      res.status(500).json({ error: err2.message });
+    }
   }
 });
 
