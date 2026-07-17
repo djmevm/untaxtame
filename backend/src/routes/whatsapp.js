@@ -124,6 +124,7 @@ async function procesarMensaje(telefono, texto) {
       '⚠️ Recargo nocturno despues de las 8:00 PM en dias festivos.';
   } else if (textoLower === '2' || textoLower.includes('descarga') || textoLower.includes('app') || textoLower.includes('instalar')) {
     respuesta = '📲 Descarga UntaXtame y pide tu taxi facil!\n\n' +
+      '🔗 Play Store: https://play.google.com/store/apps/details?id=com.untaxtame\n\n' +
       '🔗 Descarga directa: https://untaxtame.vercel.app/descargar.html\n\n' +
       'Tambien disponible en:\n' +
       '• APKPure: https://apkpure.com/p/com.untaxtame.app\n' +
