@@ -10,7 +10,7 @@ const WABA_ID = '225661571844047';
 
 // Token permanente de WhatsApp Business API (nunca expira)
 function getToken() {
-  return 'EAAOdCkPftXYBRw8iN80dCMueGEDmIdiUSiVcIZCLru2mxY0ZAZBvWNKWpD6xwPX6RWo0cNXeWHxMWeG2mDpJcIJKq78CNrRXjXfcItZB2mOQVBu4YnNkYKI9ndRTbfSKMC5NmR83Suk5rNcJ8qQbVU22uxhQ1ylQzmtAgVZBR73Svu9OmD6gu6ZAM4kvwm2h34yQZDZD';
+  return 'EAAOdCkPftXYBRwurCy3ZAX4vAtPuLK3X9zMmoWTga6zklGdmpELcXARG7vnaG9wnIBlIa6dIhgFXEaJZCujGYdes8axKUG8uPXDIyKOZBIhZAHuteXEj6FGKJ2xNusoJmsXvRbNBfo6bQ6mKXWpJZB0xw4voOkZCALUbzSg0tSgG159ZBELbZCNj7G3XAddKvkeIVgZDZD';
 }
 
 // Webhook verification (GET)
