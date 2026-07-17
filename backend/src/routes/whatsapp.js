@@ -39,9 +39,63 @@ router.post('/webhook', async (req, res) => {
         for (const change of changes) {
           if (change.field === 'messages') {
             const messages = change.value.messages || [];
+            const contacts = change.value.contacts || [];
             for (const msg of messages) {
+              const contacto = contacts.find(c => c.wa_id === msg.from) || {};
+              const nombre = contacto.profile?.name || msg.from;
+
+              // Guardar mensaje en Firestore
+              try {
+                await db.collection('whatsapp_mensajes').add({
+                  telefono: msg.from,
+                  nombre,
+                  texto: msg.type === 'text' ? msg.text.body : `[${msg.type}]`,
+                  tipo: 'recibido',
+                  tipoMensaje: msg.type,
+                  timestamp: msg.timestamp ? new Date(parseInt(msg.timestamp) * 1000).toISOString() : new Date().toISOString(),
+                  creadoEn: new Date().toISOString(),
+                });
+
+                // Actualizar o crear conversación
+                const convRef = db.collection('whatsapp_conversaciones').doc(msg.from);
+                await convRef.set({
+                  telefono: msg.from,
+                  nombre,
+                  ultimoMensaje: msg.type === 'text' ? msg.text.body : `[${msg.type}]`,
+                  ultimoTipo: 'recibido',
+                  actualizadoEn: new Date().toISOString(),
+                  noLeidos: (await convRef.get()).exists
+                    ? ((await convRef.get()).data().noLeidos || 0) + 1
+                    : 1,
+                }, { merge: true });
+              } catch (e) {
+                console.error('[WA] Error guardando mensaje:', e.message);
+              }
+
+              // Bot automático responde
               if (msg.type === 'text') {
-                await procesarMensaje(msg.from, msg.text.body);
+                const respuesta = await procesarMensaje(msg.from, msg.text.body);
+
+                // Guardar respuesta del bot
+                if (respuesta) {
+                  try {
+                    await db.collection('whatsapp_mensajes').add({
+                      telefono: msg.from,
+                      nombre: 'UntaXtame Bot',
+                      texto: respuesta,
+                      tipo: 'enviado',
+                      tipoMensaje: 'text',
+                      enviadoPor: 'bot',
+                      creadoEn: new Date().toISOString(),
+                    });
+
+                    await db.collection('whatsapp_conversaciones').doc(msg.from).set({
+                      ultimoMensaje: respuesta,
+                      ultimoTipo: 'enviado',
+                      actualizadoEn: new Date().toISOString(),
+                    }, { merge: true });
+                  } catch (e) {}
+                }
               }
             }
           }
@@ -97,6 +151,7 @@ async function procesarMensaje(telefono, texto) {
   }
 
   await enviarMensaje(telefono, respuesta);
+  return respuesta;
 }
 
 // Enviar mensaje via WhatsApp Cloud API
@@ -163,6 +218,84 @@ async function enviarPlantilla(telefono, templateName, languageCode, parameters)
     return { error: e.message };
   }
 }
+
+// ═══ RUTAS DE BANDEJA DE ENTRADA (inbox) ═══
+
+// Obtener todas las conversaciones
+router.get('/conversaciones', verifyToken, async (req, res) => {
+  try {
+    const snapshot = await db.collection('whatsapp_conversaciones')
+      .orderBy('actualizadoEn', 'desc')
+      .limit(50)
+      .get();
+
+    const conversaciones = [];
+    snapshot.forEach(doc => conversaciones.push({ id: doc.id, ...doc.data() }));
+    res.json(conversaciones);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Obtener mensajes de una conversación
+router.get('/conversaciones/:telefono/mensajes', verifyToken, async (req, res) => {
+  try {
+    const snapshot = await db.collection('whatsapp_mensajes')
+      .where('telefono', '==', req.params.telefono)
+      .orderBy('creadoEn', 'asc')
+      .limit(100)
+      .get();
+
+    const mensajes = [];
+    snapshot.forEach(doc => mensajes.push({ id: doc.id, ...doc.data() }));
+
+    // Marcar como leídos
+    await db.collection('whatsapp_conversaciones').doc(req.params.telefono).update({
+      noLeidos: 0,
+    }).catch(() => {});
+
+    res.json(mensajes);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Responder manualmente a una conversación (admin)
+router.post('/conversaciones/:telefono/responder', verifyToken, async (req, res) => {
+  const { mensaje } = req.body;
+  if (!mensaje) return res.status(400).json({ error: 'Se requiere mensaje' });
+
+  try {
+    const telefono = req.params.telefono;
+    const result = await enviarMensaje(telefono, mensaje);
+
+    if (result.error) {
+      return res.status(500).json({ error: typeof result.error === 'string' ? result.error : JSON.stringify(result.error) });
+    }
+
+    // Guardar mensaje enviado
+    await db.collection('whatsapp_mensajes').add({
+      telefono,
+      nombre: 'Admin',
+      texto: mensaje,
+      tipo: 'enviado',
+      tipoMensaje: 'text',
+      enviadoPor: 'admin',
+      creadoEn: new Date().toISOString(),
+    });
+
+    // Actualizar conversación
+    await db.collection('whatsapp_conversaciones').doc(telefono).set({
+      ultimoMensaje: mensaje,
+      ultimoTipo: 'enviado',
+      actualizadoEn: new Date().toISOString(),
+    }, { merge: true });
+
+    res.json({ message: 'Mensaje enviado', result });
+  } catch (err) {
+    res.status(500).json({ error: err.message || 'Error interno' });
+  }
+});
 
 // ═══ RUTAS DE ADMINISTRACIÓN (envío masivo) ═══
 

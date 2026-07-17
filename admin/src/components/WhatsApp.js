@@ -14,7 +14,14 @@ export default function WhatsApp() {
 
   // Envío masivo
   const [plantillaSeleccionada, setPlantillaSeleccionada] = useState('');
-  const [tab, setTab] = useState('masivo'); // masivo | individual | historial
+  const [tab, setTab] = useState('inbox'); // inbox | masivo | individual | historial
+
+  // Bandeja de entrada
+  const [conversaciones, setConversaciones] = useState([]);
+  const [conversacionActiva, setConversacionActiva] = useState(null);
+  const [mensajesChat, setMensajesChat] = useState([]);
+  const [respuesta, setRespuesta] = useState('');
+  const [enviandoRespuesta, setEnviandoRespuesta] = useState(false);
 
   useEffect(() => {
     cargarDatos();
@@ -23,19 +30,49 @@ export default function WhatsApp() {
   const cargarDatos = async () => {
     setCargando(true);
     try {
-      const [plantillasRes, historialRes] = await Promise.all([
+      const [plantillasRes, historialRes, conversacionesRes] = await Promise.all([
         api.get('/whatsapp/plantillas').catch(() => ({ data: [] })),
         api.get('/whatsapp/historial-masivos').catch(() => ({ data: [] })),
+        api.get('/whatsapp/conversaciones').catch(() => ({ data: [] })),
       ]);
       const plantillasData = Array.isArray(plantillasRes.data) ? plantillasRes.data : [];
       const historialData = Array.isArray(historialRes.data) ? historialRes.data : [];
+      const conversacionesData = Array.isArray(conversacionesRes.data) ? conversacionesRes.data : [];
       setPlantillas(plantillasData);
       setHistorial(historialData);
+      setConversaciones(conversacionesData);
     } catch {
       setPlantillas([]);
       setHistorial([]);
+      setConversaciones([]);
     } finally {
       setCargando(false);
+    }
+  };
+
+  const abrirConversacion = async (conv) => {
+    setConversacionActiva(conv);
+    try {
+      const res = await api.get(`/whatsapp/conversaciones/${conv.telefono}/mensajes`);
+      setMensajesChat(Array.isArray(res.data) ? res.data : []);
+      // Actualizar no leidos en la lista
+      setConversaciones(prev => prev.map(c => c.telefono === conv.telefono ? { ...c, noLeidos: 0 } : c));
+    } catch {
+      setMensajesChat([]);
+    }
+  };
+
+  const enviarRespuesta = async () => {
+    if (!respuesta.trim() || !conversacionActiva) return;
+    setEnviandoRespuesta(true);
+    try {
+      await api.post(`/whatsapp/conversaciones/${conversacionActiva.telefono}/responder`, { mensaje: respuesta.trim() });
+      setRespuesta('');
+      abrirConversacion(conversacionActiva);
+    } catch (err) {
+      alert('Error: ' + (err.response?.data?.error || err.message));
+    } finally {
+      setEnviandoRespuesta(false);
     }
   };
 
@@ -93,8 +130,9 @@ export default function WhatsApp() {
       </p>
 
       {/* Tabs */}
-      <div style={{ display: 'flex', gap: 8, marginBottom: 20 }}>
+      <div style={{ display: 'flex', gap: 8, marginBottom: 20, flexWrap: 'wrap' }}>
         {[
+          { key: 'inbox', label: '📥 Bandeja de Entrada' },
           { key: 'masivo', label: '📢 Envío Masivo' },
           { key: 'individual', label: '💬 Mensaje Individual' },
           { key: 'historial', label: '📋 Historial' },
@@ -104,11 +142,129 @@ export default function WhatsApp() {
             background: tab === t.key ? '#25D366' : '#fff',
             color: tab === t.key ? '#fff' : '#333',
             fontWeight: 'bold', cursor: 'pointer', fontSize: 14,
+            position: 'relative',
           }}>
             {t.label}
+            {t.key === 'inbox' && conversaciones.filter(c => c.noLeidos > 0).length > 0 && (
+              <span style={{ position: 'absolute', top: -5, right: -5, background: '#E53935', color: '#fff', borderRadius: '50%', width: 20, height: 20, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 'bold' }}>
+                {conversaciones.filter(c => c.noLeidos > 0).length}
+              </span>
+            )}
           </button>
         ))}
       </div>
+
+      {/* ═══ BANDEJA DE ENTRADA ═══ */}
+      {tab === 'inbox' && (
+        <div style={{ display: 'flex', gap: 16, minHeight: 500 }}>
+          {/* Lista de conversaciones */}
+          <div style={{ width: 320, background: '#fff', borderRadius: 16, boxShadow: '0 2px 12px rgba(0,0,0,0.06)', overflow: 'hidden' }}>
+            <div style={{ padding: '16px 16px 12px', borderBottom: '1px solid #eee' }}>
+              <h3 style={{ margin: 0, fontSize: 15 }}>💬 Conversaciones</h3>
+              <button onClick={cargarDatos} style={{ marginTop: 8, background: '#25D366', color: '#fff', border: 'none', borderRadius: 6, padding: '6px 12px', cursor: 'pointer', fontSize: 12, fontWeight: 'bold' }}>
+                🔄 Actualizar
+              </button>
+            </div>
+            <div style={{ maxHeight: 450, overflowY: 'auto' }}>
+              {conversaciones.length === 0 ? (
+                <p style={{ color: '#999', textAlign: 'center', padding: 20 }}>Sin conversaciones</p>
+              ) : (
+                conversaciones.map(conv => (
+                  <div key={conv.telefono} onClick={() => abrirConversacion(conv)} style={{
+                    padding: '12px 16px', cursor: 'pointer', borderBottom: '1px solid #f5f5f5',
+                    background: conversacionActiva?.telefono === conv.telefono ? '#E8F5E9' : '#fff',
+                  }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <strong style={{ fontSize: 14 }}>{conv.nombre || conv.telefono}</strong>
+                      {conv.noLeidos > 0 && (
+                        <span style={{ background: '#25D366', color: '#fff', borderRadius: '50%', width: 22, height: 22, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 'bold' }}>
+                          {conv.noLeidos}
+                        </span>
+                      )}
+                    </div>
+                    <p style={{ margin: '4px 0 0', fontSize: 12, color: '#888', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {conv.ultimoTipo === 'enviado' ? '✓ ' : ''}{conv.ultimoMensaje || '...'}
+                    </p>
+                    <span style={{ fontSize: 10, color: '#bbb' }}>
+                      +{conv.telefono} • {conv.actualizadoEn ? new Date(conv.actualizadoEn).toLocaleString('es-CO', { hour: '2-digit', minute: '2-digit', hour12: true }) : ''}
+                    </span>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+
+          {/* Chat activo */}
+          <div style={{ flex: 1, background: '#fff', borderRadius: 16, boxShadow: '0 2px 12px rgba(0,0,0,0.06)', display: 'flex', flexDirection: 'column' }}>
+            {!conversacionActiva ? (
+              <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#999' }}>
+                <p>Selecciona una conversación</p>
+              </div>
+            ) : (
+              <>
+                {/* Header del chat */}
+                <div style={{ padding: '14px 20px', borderBottom: '1px solid #eee', display: 'flex', alignItems: 'center', gap: 12 }}>
+                  <div style={{ width: 40, height: 40, borderRadius: 20, background: '#25D366', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 'bold', fontSize: 16 }}>
+                    {(conversacionActiva.nombre || '?').charAt(0).toUpperCase()}
+                  </div>
+                  <div>
+                    <strong>{conversacionActiva.nombre || conversacionActiva.telefono}</strong>
+                    <p style={{ margin: 0, fontSize: 12, color: '#888' }}>+{conversacionActiva.telefono}</p>
+                  </div>
+                </div>
+
+                {/* Mensajes */}
+                <div style={{ flex: 1, overflowY: 'auto', padding: 16, background: '#f0f2f5', display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {mensajesChat.length === 0 ? (
+                    <p style={{ color: '#999', textAlign: 'center' }}>Sin mensajes</p>
+                  ) : (
+                    mensajesChat.map((msg, i) => (
+                      <div key={msg.id || i} style={{
+                        maxWidth: '75%',
+                        alignSelf: msg.tipo === 'enviado' ? 'flex-end' : 'flex-start',
+                        background: msg.tipo === 'enviado' ? '#DCF8C6' : '#fff',
+                        borderRadius: 10,
+                        padding: '8px 12px',
+                        boxShadow: '0 1px 2px rgba(0,0,0,0.1)',
+                      }}>
+                        {msg.tipo === 'enviado' && (
+                          <span style={{ fontSize: 10, color: msg.enviadoPor === 'bot' ? '#F97316' : '#1565C0', fontWeight: 'bold' }}>
+                            {msg.enviadoPor === 'bot' ? '🤖 Bot' : '🛡️ Admin'}
+                          </span>
+                        )}
+                        <p style={{ margin: '2px 0', fontSize: 14, whiteSpace: 'pre-wrap' }}>{msg.texto}</p>
+                        <span style={{ fontSize: 10, color: '#999' }}>
+                          {msg.creadoEn ? new Date(msg.creadoEn).toLocaleString('es-CO', { hour: '2-digit', minute: '2-digit', hour12: true }) : ''}
+                        </span>
+                      </div>
+                    ))
+                  )}
+                </div>
+
+                {/* Input responder */}
+                <div style={{ padding: 12, borderTop: '1px solid #eee', display: 'flex', gap: 8 }}>
+                  <input
+                    type="text"
+                    value={respuesta}
+                    onChange={e => setRespuesta(e.target.value)}
+                    onKeyDown={e => { if (e.key === 'Enter') enviarRespuesta(); }}
+                    placeholder="Escribir respuesta..."
+                    style={{ flex: 1, padding: '12px 14px', borderRadius: 20, border: '1px solid #ddd', fontSize: 14 }}
+                    disabled={enviandoRespuesta}
+                  />
+                  <button onClick={enviarRespuesta} disabled={!respuesta.trim() || enviandoRespuesta} style={{
+                    background: respuesta.trim() ? '#25D366' : '#ddd', color: '#fff', border: 'none',
+                    borderRadius: 20, padding: '12px 20px', cursor: respuesta.trim() ? 'pointer' : 'default',
+                    fontWeight: 'bold', fontSize: 14,
+                  }}>
+                    {enviandoRespuesta ? '...' : '➤'}
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* ═══ ENVÍO MASIVO ═══ */}
       {tab === 'masivo' && (
