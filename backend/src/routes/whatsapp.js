@@ -1,6 +1,8 @@
 const express = require('express');
 const router = express.Router();
 const fetch = require('node-fetch');
+const path = require('path');
+const fs = require('fs');
 const { db } = require('../firebase');
 const verifyToken = require('../middleware/verifyToken');
 
@@ -55,15 +57,37 @@ router.post('/webhook', async (req, res) => {
                 const caption = msg[msg.type]?.caption || '';
                 texto = caption || `[${msg.type}]`;
 
-                // Obtener URL del media
+                // Obtener URL del media y descargarlo
                 if (mediaId) {
                   try {
+                    // Paso 1: Obtener URL temporal de Meta
                     const mediaResponse = await fetch(`https://graph.facebook.com/v25.0/${mediaId}`, {
                       headers: { 'Authorization': 'Bearer ' + getToken() },
                     });
                     const mediaData = await mediaResponse.json();
-                    mediaUrl = mediaData.url || null;
-                  } catch (e) {}
+
+                    if (mediaData.url) {
+                      // Paso 2: Descargar el archivo desde Meta
+                      const fileResponse = await fetch(mediaData.url, {
+                        headers: { 'Authorization': 'Bearer ' + getToken() },
+                      });
+                      const buffer = await fileResponse.buffer();
+
+                      // Paso 3: Guardar localmente
+                      const ext = (mediaData.mime_type || '').split('/')[1] || 'bin';
+                      const fileName = `wa_${Date.now()}_${mediaId.slice(-8)}.${ext}`;
+                      const filePath = path.join(__dirname, '../../uploads/whatsapp/', fileName);
+
+                      // Crear directorio si no existe
+                      const dir = path.join(__dirname, '../../uploads/whatsapp/');
+                      if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+
+                      fs.writeFileSync(filePath, buffer);
+                      mediaUrl = `https://untaxtame-production.up.railway.app/uploads/whatsapp/${fileName}`;
+                    }
+                  } catch (e) {
+                    console.error('[WA] Error descargando media:', e.message);
+                  }
                 }
               } else if (msg.type === 'location') {
                 texto = `📍 Ubicación: ${msg.location.latitude}, ${msg.location.longitude}`;
@@ -349,8 +373,6 @@ router.post('/conversaciones/:telefono/responder', verifyToken, async (req, res)
 
 // Enviar archivo/imagen a un número (admin)
 const multer = require('multer');
-const path = require('path');
-const fs = require('fs');
 const uploadWA = multer({ dest: path.join(__dirname, '../../uploads/whatsapp/') });
 
 router.post('/enviar-archivo', verifyToken, uploadWA.single('archivo'), async (req, res) => {
