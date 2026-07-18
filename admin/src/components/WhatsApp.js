@@ -1,5 +1,6 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import api from '../api';
+import { reproducirWhatsApp } from '../utils/sonido';
 
 export default function WhatsApp() {
   const [plantillas, setPlantillas] = useState([]);
@@ -63,17 +64,56 @@ export default function WhatsApp() {
   };
 
   // Auto-refresh del chat cada 5 segundos
+  const prevMensajesCount = useRef(0);
+  const prevNoLeidos = useRef(0);
+
   useEffect(() => {
     if (!conversacionActiva) return;
     const intervalo = setInterval(async () => {
       try {
         const res = await api.get(`/whatsapp/conversaciones/${conversacionActiva.telefono}/mensajes`);
-        setMensajesChat(Array.isArray(res.data) ? res.data : []);
+        const nuevos = Array.isArray(res.data) ? res.data : [];
+        // Sonar si hay mensajes nuevos recibidos
+        if (nuevos.length > prevMensajesCount.current && prevMensajesCount.current > 0) {
+          const ultimoNuevo = nuevos[nuevos.length - 1];
+          if (ultimoNuevo?.tipo === 'recibido') {
+            reproducirWhatsApp();
+          }
+        }
+        prevMensajesCount.current = nuevos.length;
+        setMensajesChat(nuevos);
       } catch {}
       // También refrescar lista de conversaciones
       try {
         const convRes = await api.get('/whatsapp/conversaciones');
-        if (Array.isArray(convRes.data)) setConversaciones(convRes.data);
+        if (Array.isArray(convRes.data)) {
+          // Detectar nuevos mensajes no leídos en cualquier conversación
+          const totalNoLeidos = convRes.data.reduce((sum, c) => sum + (c.noLeidos || 0), 0);
+          if (totalNoLeidos > prevNoLeidos.current && prevNoLeidos.current >= 0) {
+            reproducirWhatsApp();
+          }
+          prevNoLeidos.current = totalNoLeidos;
+          setConversaciones(convRes.data);
+        }
+      } catch {}
+    }, 5000);
+    return () => clearInterval(intervalo);
+  }, [conversacionActiva]);
+
+  // Auto-refresh de conversaciones cuando NO hay chat abierto (para sonido global)
+  useEffect(() => {
+    if (conversacionActiva) return;
+    const intervalo = setInterval(async () => {
+      try {
+        const convRes = await api.get('/whatsapp/conversaciones');
+        if (Array.isArray(convRes.data)) {
+          const totalNoLeidos = convRes.data.reduce((sum, c) => sum + (c.noLeidos || 0), 0);
+          if (totalNoLeidos > prevNoLeidos.current && prevNoLeidos.current >= 0) {
+            reproducirWhatsApp();
+          }
+          prevNoLeidos.current = totalNoLeidos;
+          setConversaciones(convRes.data);
+        }
       } catch {}
     }, 5000);
     return () => clearInterval(intervalo);

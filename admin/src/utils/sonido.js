@@ -42,3 +42,10 @@ export function reproducirAlarmaSOS() {
     setTimeout(() => beep(900, 250, 0.6), i * 500 + 250);
   }
 }
+
+// Sonido de WhatsApp: mensaje entrante
+export function reproducirWhatsApp() {
+  beep(523, 80, 0.3);
+  setTimeout(() => beep(659, 80, 0.3), 100);
+  setTimeout(() => beep(784, 120, 0.4), 200);
+}
