@@ -44,14 +44,42 @@ router.post('/webhook', async (req, res) => {
               const contacto = contacts.find(c => c.wa_id === msg.from) || {};
               const nombre = contacto.profile?.name || msg.from;
 
+              // Obtener contenido según tipo de mensaje
+              let texto = `[${msg.type}]`;
+              let mediaUrl = null;
+
+              if (msg.type === 'text') {
+                texto = msg.text.body;
+              } else if (['image', 'video', 'audio', 'document', 'sticker'].includes(msg.type)) {
+                const mediaId = msg[msg.type]?.id;
+                const caption = msg[msg.type]?.caption || '';
+                texto = caption || `[${msg.type}]`;
+
+                // Obtener URL del media
+                if (mediaId) {
+                  try {
+                    const mediaResponse = await fetch(`https://graph.facebook.com/v25.0/${mediaId}`, {
+                      headers: { 'Authorization': 'Bearer ' + getToken() },
+                    });
+                    const mediaData = await mediaResponse.json();
+                    mediaUrl = mediaData.url || null;
+                  } catch (e) {}
+                }
+              } else if (msg.type === 'location') {
+                texto = `📍 Ubicación: ${msg.location.latitude}, ${msg.location.longitude}`;
+              } else if (msg.type === 'contacts') {
+                texto = `👤 Contacto compartido`;
+              }
+
               // Guardar mensaje en Firestore
               try {
                 await db.collection('whatsapp_mensajes').add({
                   telefono: msg.from,
                   nombre,
-                  texto: msg.type === 'text' ? msg.text.body : `[${msg.type}]`,
+                  texto,
                   tipo: 'recibido',
                   tipoMensaje: msg.type,
+                  mediaUrl,
                   timestamp: msg.timestamp ? new Date(parseInt(msg.timestamp) * 1000).toISOString() : new Date().toISOString(),
                   creadoEn: new Date().toISOString(),
                 });

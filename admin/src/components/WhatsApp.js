@@ -269,6 +269,22 @@ export default function WhatsApp() {
                             {msg.enviadoPor === 'bot' ? '🤖 Bot' : '🛡️ Admin'}
                           </span>
                         )}
+                        {msg.mediaUrl && ['image', 'sticker'].includes(msg.tipoMensaje) && (
+                          <img src={msg.mediaUrl} alt="media" style={{ maxWidth: '100%', borderRadius: 8, marginBottom: 4, cursor: 'pointer' }} onClick={() => window.open(msg.mediaUrl, '_blank')} />
+                        )}
+                        {msg.mediaUrl && msg.tipoMensaje === 'video' && (
+                          <video controls style={{ maxWidth: '100%', borderRadius: 8, marginBottom: 4 }}>
+                            <source src={msg.mediaUrl} />
+                          </video>
+                        )}
+                        {msg.mediaUrl && msg.tipoMensaje === 'audio' && (
+                          <audio controls style={{ width: '100%', marginBottom: 4 }}>
+                            <source src={msg.mediaUrl} />
+                          </audio>
+                        )}
+                        {msg.mediaUrl && msg.tipoMensaje === 'document' && (
+                          <a href={msg.mediaUrl} target="_blank" rel="noopener noreferrer" style={{ color: '#1565C0', fontWeight: 'bold', fontSize: 13 }}>📄 Descargar documento</a>
+                        )}
                         <p style={{ margin: '2px 0', fontSize: 14, whiteSpace: 'pre-wrap' }}>{msg.texto}</p>
                         <span style={{ fontSize: 10, color: '#999' }}>
                           {msg.creadoEn ? new Date(msg.creadoEn).toLocaleString('es-CO', { hour: '2-digit', minute: '2-digit', hour12: true }) : ''}
