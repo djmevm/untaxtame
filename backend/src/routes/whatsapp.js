@@ -232,9 +232,19 @@ async function enviarMensaje(telefono, texto) {
 }
 
 // Enviar plantilla via WhatsApp Cloud API
-async function enviarPlantilla(telefono, templateName, languageCode, parameters) {
+async function enviarPlantilla(telefono, templateName, languageCode, parameters, headerImageUrl) {
   try {
     const components = [];
+
+    // Header con imagen (para plantillas de marketing con imagen)
+    if (headerImageUrl) {
+      components.push({
+        type: 'header',
+        parameters: [{ type: 'image', image: { link: headerImageUrl } }],
+      });
+    }
+
+    // Body con parámetros de texto
     if (parameters && parameters.length > 0) {
       components.push({
         type: 'body',
@@ -248,7 +258,7 @@ async function enviarPlantilla(telefono, templateName, languageCode, parameters)
       type: 'template',
       template: {
         name: templateName,
-        language: { code: languageCode || 'es' },
+        language: { code: languageCode || 'es_CO' },
       },
     };
 
@@ -256,6 +266,7 @@ async function enviarPlantilla(telefono, templateName, languageCode, parameters)
       body.template.components = components;
     }
 
+    console.log(`[WA] Enviando plantilla "${templateName}" (idioma: ${languageCode}) a ${telefono}`);
     const response = await fetch(`https://graph.facebook.com/v25.0/${PHONE_NUMBER_ID}/messages`, {
       method: 'POST',
       headers: {
@@ -265,6 +276,9 @@ async function enviarPlantilla(telefono, templateName, languageCode, parameters)
       body: JSON.stringify(body),
     });
     const data = await response.json();
+    if (data.error) {
+      console.error(`[WA] Error Meta API para ${telefono}:`, data.error.message, `(code: ${data.error.code})`);
+    }
     return data;
   } catch (e) {
     console.error('[WA] Error enviando plantilla:', e.message);
@@ -484,7 +498,7 @@ router.post('/enviar-plantilla', verifyToken, async (req, res) => {
   }
 
   const numero = telefono.replace(/[^0-9]/g, '');
-  const result = await enviarPlantilla(numero, plantilla, idioma || 'es', parametros || []);
+  const result = await enviarPlantilla(numero, plantilla, idioma || 'es_CO', parametros || []);
 
   if (result.error) {
     return res.status(500).json({ error: result.error });
@@ -526,12 +540,12 @@ router.post('/enviar-masivo', verifyToken, async (req, res) => {
     const detalles = [];
 
     for (const cliente of clientes) {
-      // Agregar nombre como parámetro si la plantilla usa {{1}}
+      // Solo enviar parámetros si la plantilla los requiere (si se pasan explícitamente)
       const params = parametros && parametros.length > 0
         ? parametros
-        : [cliente.nombre];
+        : [];
 
-      const result = await enviarPlantilla(cliente.telefono, plantilla, idioma || 'es', params);
+      const result = await enviarPlantilla(cliente.telefono, plantilla, idioma || 'es_CO', params);
 
       if (result.messages) {
         enviados++;
@@ -548,7 +562,7 @@ router.post('/enviar-masivo', verifyToken, async (req, res) => {
     // Guardar registro del envío masivo
     await db.collection('enviosMasivos').add({
       plantilla,
-      idioma: idioma || 'es',
+      idioma: idioma || 'es_CO',
       totalClientes: clientes.length,
       enviados,
       errores,
@@ -596,11 +610,11 @@ router.get('/plantillas', verifyToken, async (req, res) => {
       // Si la API falla, devolver plantillas conocidas como fallback
       console.log('[WA] Error obteniendo plantillas de API, usando fallback:', data.error?.message || 'sin datos');
       return res.json([
-        { id: '1', name: 'bienvenida_cliente', status: 'APPROVED', category: 'MARKETING', language: 'es' },
-        { id: '2', name: 'descarga_app', status: 'APPROVED', category: 'MARKETING', language: 'es' },
-        { id: '3', name: 'confirmacion_servicio', status: 'APPROVED', category: 'UTILITY', language: 'es' },
+        { id: '1', name: 'bienvenida_cliente', status: 'APPROVED', category: 'MARKETING', language: 'es_CO' },
+        { id: '2', name: 'descarga_app', status: 'APPROVED', category: 'MARKETING', language: 'es_CO' },
+        { id: '3', name: 'confirmacion_servicio', status: 'APPROVED', category: 'UTILITY', language: 'es_CO' },
         { id: '4', name: 'hello_world', status: 'APPROVED', category: 'UTILITY', language: 'en_US' },
-        { id: '5', name: 'polla_mundialista_final', status: 'APPROVED', category: 'MARKETING', language: 'es' },
+        { id: '5', name: 'polla_mundialista_final', status: 'APPROVED', category: 'MARKETING', language: 'es_CO' },
       ]);
     }
 
@@ -608,11 +622,11 @@ router.get('/plantillas', verifyToken, async (req, res) => {
   } catch (err) {
     // Fallback en caso de error
     res.json([
-      { id: '1', name: 'bienvenida_cliente', status: 'APPROVED', category: 'MARKETING', language: 'es' },
-      { id: '2', name: 'descarga_app', status: 'APPROVED', category: 'MARKETING', language: 'es' },
-      { id: '3', name: 'confirmacion_servicio', status: 'APPROVED', category: 'UTILITY', language: 'es' },
+      { id: '1', name: 'bienvenida_cliente', status: 'APPROVED', category: 'MARKETING', language: 'es_CO' },
+      { id: '2', name: 'descarga_app', status: 'APPROVED', category: 'MARKETING', language: 'es_CO' },
+      { id: '3', name: 'confirmacion_servicio', status: 'APPROVED', category: 'UTILITY', language: 'es_CO' },
       { id: '4', name: 'hello_world', status: 'APPROVED', category: 'UTILITY', language: 'en_US' },
-      { id: '5', name: 'polla_mundialista_final', status: 'APPROVED', category: 'MARKETING', language: 'es' },
+      { id: '5', name: 'polla_mundialista_final', status: 'APPROVED', category: 'MARKETING', language: 'es_CO' },
     ]);
   }
 });
