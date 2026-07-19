@@ -165,9 +165,12 @@ export default function WhatsApp() {
     setEnviando(true);
     setResultado(null);
     try {
+      // Obtener el idioma correcto de la plantilla seleccionada
+      const plantillaInfo = plantillas.find(p => p.name === plantillaSeleccionada);
+      const idioma = plantillaInfo?.language || 'es';
       const res = await api.post('/whatsapp/enviar-masivo', {
         plantilla: plantillaSeleccionada,
-        idioma: 'es',
+        idioma,
       });
       setResultado(res.data);
       cargarDatos();
@@ -378,7 +381,7 @@ export default function WhatsApp() {
             style={estilos.select}
           >
             <option value="">— Selecciona una plantilla —</option>
-            {plantillas.filter(p => p.status === 'APPROVED').map(p => (
+            {plantillas.filter(p => p.status === 'APPROVED' || p.status?.includes?.('APPROVED')).map(p => (
               <option key={p.id} value={p.name}>
                 {p.name} ({p.category}) — {p.language}
               </option>
@@ -388,7 +391,7 @@ export default function WhatsApp() {
           {plantillas.length > 0 && (
             <div style={{ marginTop: 12 }}>
               <p style={{ fontSize: 12, color: '#888', margin: 0 }}>
-                Plantillas disponibles: {plantillas.filter(p => p.status === 'APPROVED').length} aprobadas,{' '}
+                Plantillas disponibles: {plantillas.filter(p => p.status === 'APPROVED' || p.status?.includes?.('APPROVED')).length} aprobadas,{' '}
                 {plantillas.filter(p => p.status === 'PENDING').length} pendientes,{' '}
                 {plantillas.filter(p => p.status === 'REJECTED').length} rechazadas
               </p>

@@ -11,8 +11,23 @@ export default function Billetera() {
   const [montoRecarga, setMontoRecarga] = useState('');
   const [metodoRecarga, setMetodoRecarga] = useState('efectivo');
   const [refRecarga, setRefRecarga] = useState('');
+  const [editarSaldoModal, setEditarSaldoModal] = useState(null);
+  const [nuevoSaldo, setNuevoSaldo] = useState('');
   const [detalle, setDetalle] = useState(null);
   const [movimientos, setMovimientos] = useState([]);
+
+  const editarSaldo = async () => {
+    const monto = parseInt(nuevoSaldo);
+    if (isNaN(monto) || monto < 0) return alert('Ingresa un monto válido (0 o mayor)');
+    if (!window.confirm(`¿Cambiar el saldo de ${editarSaldoModal.nombre} a $${monto.toLocaleString('es-CO')}?`)) return;
+    try {
+      await api.put(`/billetera/editar-saldo/${editarSaldoModal.uid}`, { saldo: monto });
+      alert('✅ Saldo actualizado');
+      setEditarSaldoModal(null);
+      setNuevoSaldo('');
+      cargar();
+    } catch (e) { alert('Error: ' + (e.response?.data?.error || e.message)); }
+  };
 
   const cargar = async () => {
     try {
@@ -201,6 +216,7 @@ export default function Billetera() {
                 <td style={{ color: '#E53935' }}>${(b.totalComisiones || 0).toLocaleString('es-CO')}</td>
                 <td style={{ display: 'flex', gap: 6 }}>
                   <button onClick={() => setRecargaModal(b)} style={s.btnRecarga}>💰 Recargar</button>
+                  <button onClick={() => { setEditarSaldoModal(b); setNuevoSaldo(b.saldo.toString()); }} style={s.btnEditar}>✏️ Editar</button>
                   <button onClick={() => verDetalle(b.uid, b.nombre)} style={s.btnDetalle}>📋 Detalle</button>
                 </td>
               </tr>
@@ -236,6 +252,31 @@ export default function Billetera() {
             <div style={{ display: 'flex', gap: 10, marginTop: 16 }}>
               <button onClick={hacerRecarga} style={s.btnGuardar}>Confirmar recarga</button>
               <button onClick={() => setRecargaModal(null)} style={s.btnCancelar}>Cancelar</button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* Modal de editar saldo */}
+      {editarSaldoModal && (
+        <div style={s.modalOverlay}>
+          <div style={s.modal}>
+            <h3>✏️ Editar saldo</h3>
+            <p style={{ color: '#666' }}>Conductor: <strong>{editarSaldoModal.nombre}</strong></p>
+            <p style={{ color: '#666' }}>Saldo actual: <strong style={{ color: editarSaldoModal.saldo <= 0 ? '#E53935' : '#2E7D32' }}>${editarSaldoModal.saldo.toLocaleString('es-CO')}</strong></p>
+            <label style={s.configLabel}>Nuevo saldo</label>
+            <input type="number" value={nuevoSaldo} onChange={e => setNuevoSaldo(e.target.value)}
+              style={s.input} placeholder="Ej: 50000" min="0" step="1000" autoFocus />
+            <div style={{ display: 'flex', gap: 8, margin: '10px 0' }}>
+              {[0, 10000, 20000, 50000].map(m => (
+                <button key={m} onClick={() => setNuevoSaldo(m.toString())}
+                  style={{ ...s.btnMonto, background: nuevoSaldo === m.toString() ? '#FFC107' : '#f0f0f0' }}>
+                  ${m.toLocaleString('es-CO')}
+                </button>
+              ))}
+            </div>
+            <div style={{ display: 'flex', gap: 10, marginTop: 16 }}>
+              <button onClick={editarSaldo} style={s.btnGuardar}>Guardar cambio</button>
+              <button onClick={() => { setEditarSaldoModal(null); setNuevoSaldo(''); }} style={s.btnCancelar}>Cancelar</button>
             </div>
           </div>
         </div>

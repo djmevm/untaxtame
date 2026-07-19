@@ -510,11 +510,11 @@ export default function Dashboard() {
 
 // ═══ COMPONENTE QR DE DESCARGA ═══
 function DescargarApp() {
-  // Link de descarga de Aptoide (actualizar con tu link real)
-  const LINK_DESCARGA = 'https://com-untaxtame-app.en.aptoide.com/app';
+  // Link de descarga de Google Play (principal)
+  const LINK_DESCARGA = 'https://play.google.com/store/apps/details?id=com.untaxtame.taxi';
   const QR_API = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(LINK_DESCARGA)}&color=1a1a1a&bgcolor=ffffff`;
 
-  const MENSAJE_COMPARTIR = '🚕 ¡Descarga UntaXtame! La app de taxis más segura de Colombia. Pide tu taxi fácil y rápido: ';
+  const MENSAJE_COMPARTIR = '🚕 ¡Descarga UntaXtame! La app de taxis más segura de Tame. Pide tu taxi fácil y rápido desde Google Play: ';
 
   const copiarLink = () => {
     navigator.clipboard.writeText(LINK_DESCARGA);
