@@ -171,7 +171,7 @@ export default function WhatsApp() {
 
       // Plantillas que requieren header con imagen
       const plantillasConImagen = {
-        'polla_mundialista_final': 'https://untaxtame.vercel.app/icon_adaptive.jpg',
+        'polla_mundialista_final': 'https://untaxtame.vercel.app/polla_mundialista.jpg',
         'bienvenida_cliente': 'https://untaxtame.vercel.app/icon_adaptive.jpg',
         'descarga_app': 'https://untaxtame.vercel.app/icon_adaptive.jpg',
       };
