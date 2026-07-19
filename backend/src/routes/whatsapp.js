@@ -600,6 +600,7 @@ router.get('/plantillas', verifyToken, async (req, res) => {
         { id: '2', name: 'descarga_app', status: 'APPROVED', category: 'MARKETING', language: 'es' },
         { id: '3', name: 'confirmacion_servicio', status: 'APPROVED', category: 'UTILITY', language: 'es' },
         { id: '4', name: 'hello_world', status: 'APPROVED', category: 'UTILITY', language: 'en_US' },
+        { id: '5', name: 'polla_mundialista_final', status: 'APPROVED', category: 'MARKETING', language: 'es' },
       ]);
     }
 
@@ -611,6 +612,7 @@ router.get('/plantillas', verifyToken, async (req, res) => {
       { id: '2', name: 'descarga_app', status: 'APPROVED', category: 'MARKETING', language: 'es' },
       { id: '3', name: 'confirmacion_servicio', status: 'APPROVED', category: 'UTILITY', language: 'es' },
       { id: '4', name: 'hello_world', status: 'APPROVED', category: 'UTILITY', language: 'en_US' },
+      { id: '5', name: 'polla_mundialista_final', status: 'APPROVED', category: 'MARKETING', language: 'es' },
     ]);
   }
 });
