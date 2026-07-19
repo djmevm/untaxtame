@@ -508,7 +508,7 @@ router.post('/enviar-plantilla', verifyToken, async (req, res) => {
 
 // Enviar plantilla masiva a todos los clientes (admin)
 router.post('/enviar-masivo', verifyToken, async (req, res) => {
-  const { plantilla, idioma, parametros } = req.body;
+  const { plantilla, idioma, parametros, headerImageUrl } = req.body;
   if (!plantilla) {
     return res.status(400).json({ error: 'Se requiere nombre de plantilla' });
   }
@@ -545,7 +545,7 @@ router.post('/enviar-masivo', verifyToken, async (req, res) => {
         ? parametros
         : [];
 
-      const result = await enviarPlantilla(cliente.telefono, plantilla, idioma || 'es_CO', params);
+      const result = await enviarPlantilla(cliente.telefono, plantilla, idioma || 'es_CO', params, headerImageUrl || null);
 
       if (result.messages) {
         enviados++;

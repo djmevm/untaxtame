@@ -167,10 +167,20 @@ export default function WhatsApp() {
     try {
       // Obtener el idioma correcto de la plantilla seleccionada
       const plantillaInfo = plantillas.find(p => p.name === plantillaSeleccionada);
-      const idioma = plantillaInfo?.language || 'es';
+      const idioma = plantillaInfo?.language || 'es_CO';
+
+      // Plantillas que requieren header con imagen
+      const plantillasConImagen = {
+        'polla_mundialista_final': 'https://untaxtame.vercel.app/icon_adaptive.jpg',
+        'bienvenida_cliente': 'https://untaxtame.vercel.app/icon_adaptive.jpg',
+        'descarga_app': 'https://untaxtame.vercel.app/icon_adaptive.jpg',
+      };
+      const headerImageUrl = plantillasConImagen[plantillaSeleccionada] || null;
+
       const res = await api.post('/whatsapp/enviar-masivo', {
         plantilla: plantillaSeleccionada,
         idioma,
+        headerImageUrl,
       });
       setResultado(res.data);
       cargarDatos();
