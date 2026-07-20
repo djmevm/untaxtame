@@ -302,12 +302,36 @@ export default function WhatsApp() {
                   </div>
                 </div>
 
-                {/* Mensajes */}
-                <div style={{ flex: 1, overflowY: 'auto', padding: 16, background: '#f0f2f5', display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {/* Input responder */}
+                <div style={{ padding: 12, borderBottom: '1px solid #eee', display: 'flex', gap: 8, alignItems: 'center' }}>
+                  <label style={{ cursor: 'pointer', fontSize: 22 }} title="Enviar archivo/imagen">
+                    📎
+                    <input type="file" accept="image/*,video/*,application/pdf,.doc,.docx" onChange={enviarArchivo} style={{ display: 'none' }} />
+                  </label>
+                  <input
+                    type="text"
+                    value={respuesta}
+                    onChange={e => setRespuesta(e.target.value)}
+                    onKeyDown={e => { if (e.key === 'Enter') enviarRespuesta(); }}
+                    placeholder="Escribir respuesta..."
+                    style={{ flex: 1, padding: '12px 14px', borderRadius: 20, border: '1px solid #ddd', fontSize: 14 }}
+                    disabled={enviandoRespuesta}
+                  />
+                  <button onClick={enviarRespuesta} disabled={!respuesta.trim() || enviandoRespuesta} style={{
+                    background: respuesta.trim() ? '#25D366' : '#ddd', color: '#fff', border: 'none',
+                    borderRadius: 20, padding: '12px 20px', cursor: respuesta.trim() ? 'pointer' : 'default',
+                    fontWeight: 'bold', fontSize: 14,
+                  }}>
+                    {enviandoRespuesta ? '...' : '➤'}
+                  </button>
+                </div>
+
+                {/* Mensajes - más reciente arriba */}
+                <div style={{ flex: 1, overflowY: 'auto', padding: 16, background: '#f0f2f5', display: 'flex', flexDirection: 'column-reverse', gap: 8 }}>
                   {mensajesChat.length === 0 ? (
                     <p style={{ color: '#999', textAlign: 'center' }}>Sin mensajes</p>
                   ) : (
-                    mensajesChat.map((msg, i) => (
+                    [...mensajesChat].reverse().map((msg, i) => (
                       <div key={msg.id || i} style={{
                         maxWidth: '75%',
                         alignSelf: msg.tipo === 'enviado' ? 'flex-end' : 'flex-start',
@@ -344,30 +368,6 @@ export default function WhatsApp() {
                       </div>
                     ))
                   )}
-                </div>
-
-                {/* Input responder */}
-                <div style={{ padding: 12, borderTop: '1px solid #eee', display: 'flex', gap: 8, alignItems: 'center' }}>
-                  <label style={{ cursor: 'pointer', fontSize: 22 }} title="Enviar archivo/imagen">
-                    📎
-                    <input type="file" accept="image/*,video/*,application/pdf,.doc,.docx" onChange={enviarArchivo} style={{ display: 'none' }} />
-                  </label>
-                  <input
-                    type="text"
-                    value={respuesta}
-                    onChange={e => setRespuesta(e.target.value)}
-                    onKeyDown={e => { if (e.key === 'Enter') enviarRespuesta(); }}
-                    placeholder="Escribir respuesta..."
-                    style={{ flex: 1, padding: '12px 14px', borderRadius: 20, border: '1px solid #ddd', fontSize: 14 }}
-                    disabled={enviandoRespuesta}
-                  />
-                  <button onClick={enviarRespuesta} disabled={!respuesta.trim() || enviandoRespuesta} style={{
-                    background: respuesta.trim() ? '#25D366' : '#ddd', color: '#fff', border: 'none',
-                    borderRadius: 20, padding: '12px 20px', cursor: respuesta.trim() ? 'pointer' : 'default',
-                    fontWeight: 'bold', fontSize: 14,
-                  }}>
-                    {enviandoRespuesta ? '...' : '➤'}
-                  </button>
                 </div>
               </>
             )}
