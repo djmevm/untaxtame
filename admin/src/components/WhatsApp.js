@@ -327,7 +327,7 @@ export default function WhatsApp() {
                 </div>
 
                 {/* Mensajes - más reciente arriba */}
-                <div style={{ flex: 1, overflowY: 'auto', padding: 16, background: '#f0f2f5', display: 'flex', flexDirection: 'column-reverse', gap: 8 }}>
+                <div style={{ flex: 1, overflowY: 'auto', padding: 16, background: '#f0f2f5', display: 'flex', flexDirection: 'column', gap: 8 }}>
                   {mensajesChat.length === 0 ? (
                     <p style={{ color: '#999', textAlign: 'center' }}>Sin mensajes</p>
                   ) : (
