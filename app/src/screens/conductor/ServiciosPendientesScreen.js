@@ -178,7 +178,16 @@ export default function ServiciosPendientesScreen() {
           <View style={styles.routeDotRed} />
         </View>
         <View style={styles.routeTexts}>
-          <Text style={styles.routeText} numberOfLines={1}>{item.origen}</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+            <Text style={[styles.routeText, item.origenZona ? { color: '#F97316', fontWeight: '700' } : {}]} numberOfLines={1}>
+              {item.origen}
+            </Text>
+            {item.origenZona && (
+              <View style={{ backgroundColor: '#FFF3E0', borderRadius: 4, paddingHorizontal: 6, paddingVertical: 2 }}>
+                <Text style={{ fontSize: 9, color: '#E65100', fontWeight: '600' }}>🔒 Se revela al aceptar</Text>
+              </View>
+            )}
+          </View>
           <Text style={styles.routeText} numberOfLines={1}>{item.destino}</Text>
         </View>
       </View>
@@ -216,10 +225,15 @@ export default function ServiciosPendientesScreen() {
 
       {/* Action buttons row */}
       <View style={styles.cardActions}>
-        {item.ubicacionGPS && (
+        {item.ubicacionGPS && !item.origenZona && (
           <TouchableOpacity style={styles.iconBtn} onPress={() => Linking.openURL(`https://www.google.com/maps?q=${item.ubicacionGPS.lat},${item.ubicacionGPS.lng}`)}>
             <Feather name="map-pin" size={16} color="#64748B" />
           </TouchableOpacity>
+        )}
+        {item.origenZona && (
+          <View style={[styles.iconBtn, { opacity: 0.5 }]}>
+            <Feather name="lock" size={16} color="#F97316" />
+          </View>
         )}
         <TouchableOpacity
           style={[styles.ofertarBtn, (noVerificado || servicioActivo || penalizado || sinSaldo) && styles.ofertarBtnDisabled]}
