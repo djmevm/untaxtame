@@ -331,7 +331,14 @@ export default function WhatsApp() {
                   {mensajesChat.length === 0 ? (
                     <p style={{ color: '#999', textAlign: 'center' }}>Sin mensajes</p>
                   ) : (
-                    [...mensajesChat].reverse().map((msg, i) => (
+                    [...mensajesChat].reverse().map((msg, i) => {
+                      // Fix URLs de media: reescribir a la ruta correcta sin helmet
+                      let mediaUrl = msg.mediaUrl;
+                      if (mediaUrl) {
+                        mediaUrl = mediaUrl.replace('/api/whatsapp/media/', '/whatsapp/media/');
+                        mediaUrl = mediaUrl.replace('/uploads/whatsapp/', '/whatsapp/media/');
+                      }
+                      return (
                       <div key={msg.id || i} style={{
                         maxWidth: '75%',
                         alignSelf: msg.tipo === 'enviado' ? 'flex-end' : 'flex-start',
@@ -345,36 +352,36 @@ export default function WhatsApp() {
                             {msg.enviadoPor === 'bot' ? '🤖 Bot' : '🛡️ Admin'}
                           </span>
                         )}
-                        {msg.mediaUrl && ['image', 'sticker'].includes(msg.tipoMensaje) && (
-                          <img src={msg.mediaUrl} alt="media" style={{ maxWidth: '100%', borderRadius: 8, marginBottom: 4, cursor: 'pointer' }} onClick={() => window.open(msg.mediaUrl, '_blank')} />
+                        {mediaUrl && ['image', 'sticker'].includes(msg.tipoMensaje) && (
+                          <img src={mediaUrl} alt="media" style={{ maxWidth: '100%', borderRadius: 8, marginBottom: 4, cursor: 'pointer' }} onClick={() => window.open(mediaUrl, '_blank')} />
                         )}
-                        {msg.mediaUrl && msg.tipoMensaje === 'video' && (
+                        {mediaUrl && msg.tipoMensaje === 'video' && (
                           <video controls style={{ maxWidth: '100%', borderRadius: 8, marginBottom: 4 }}>
-                            <source src={msg.mediaUrl} />
+                            <source src={mediaUrl} />
                           </video>
                         )}
-                        {msg.mediaUrl && msg.tipoMensaje === 'audio' && (
+                        {mediaUrl && msg.tipoMensaje === 'audio' && (
                           <audio controls style={{ width: '100%', marginBottom: 4 }}>
-                            <source src={msg.mediaUrl} type="audio/ogg" />
-                            <source src={msg.mediaUrl} type="audio/mpeg" />
-                            <source src={msg.mediaUrl} />
+                            <source src={mediaUrl} type="audio/ogg" />
+                            <source src={mediaUrl} type="audio/mpeg" />
+                            <source src={mediaUrl} />
                           </audio>
                         )}
-                        {!msg.mediaUrl && msg.tipoMensaje === 'audio' && (
+                        {!mediaUrl && msg.tipoMensaje === 'audio' && (
                           <div style={{ background: '#f0f0f0', borderRadius: 8, padding: '8px 12px', marginBottom: 4, display: 'flex', alignItems: 'center', gap: 8 }}>
                             <span style={{ fontSize: 18 }}>🎵</span>
                             <span style={{ fontSize: 12, color: '#666' }}>Audio (no disponible para reproducir)</span>
                           </div>
                         )}
-                        {msg.mediaUrl && msg.tipoMensaje === 'document' && (
-                          <a href={msg.mediaUrl} target="_blank" rel="noopener noreferrer" style={{ color: '#1565C0', fontWeight: 'bold', fontSize: 13 }}>📄 Descargar documento</a>
+                        {mediaUrl && msg.tipoMensaje === 'document' && (
+                          <a href={mediaUrl} target="_blank" rel="noopener noreferrer" style={{ color: '#1565C0', fontWeight: 'bold', fontSize: 13 }}>📄 Descargar documento</a>
                         )}
                         <p style={{ margin: '2px 0', fontSize: 14, whiteSpace: 'pre-wrap' }}>{msg.texto}</p>
                         <span style={{ fontSize: 10, color: '#999' }}>
                           {msg.creadoEn ? new Date(msg.creadoEn).toLocaleString('es-CO', { hour: '2-digit', minute: '2-digit', hour12: true }) : ''}
                         </span>
                       </div>
-                    ))
+                    );})
                   )}
                 </div>
               </>
