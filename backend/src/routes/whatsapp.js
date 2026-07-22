@@ -19,6 +19,13 @@ function getToken() {
 // Meta solo mantiene las URLs temporales ~14 días, este endpoint re-descarga on-demand
 router.get('/media/:mediaId', async (req, res) => {
   const { mediaId } = req.params;
+
+  // CORS headers para permitir acceso desde el panel admin
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET');
+  res.setHeader('Access-Control-Allow-Headers', '*');
+  res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+
   try {
     // Paso 1: Obtener URL temporal de Meta
     const mediaResponse = await fetch(`https://graph.facebook.com/v25.0/${mediaId}`, {
@@ -43,7 +50,6 @@ router.get('/media/:mediaId', async (req, res) => {
     const contentType = mediaData.mime_type || 'application/octet-stream';
     res.setHeader('Content-Type', contentType);
     res.setHeader('Cache-Control', 'public, max-age=86400'); // Cache 24h
-    res.setHeader('Access-Control-Allow-Origin', '*');
 
     const buffer = await fileResponse.buffer();
     res.send(buffer);
@@ -105,9 +111,8 @@ router.post('/webhook', async (req, res) => {
                     const mediaData = await mediaResponse.json();
 
                     if (mediaData.url) {
-                      // Descargar y guardar en Firebase Storage o servir como proxy
-                      // Por ahora guardar el mediaId para poder re-descargar desde un endpoint proxy
-                      mediaUrl = `https://untaxtame-production.up.railway.app/api/whatsapp/media/${mediaId}`;
+                      // Guardar URL proxy sin /api para evitar CORS/Helmet
+                      mediaUrl = `https://untaxtame-production.up.railway.app/whatsapp/media/${mediaId}`;
                     }
                   } catch (e) {
                     console.error('[WA] Error obteniendo media URL:', e.message);
