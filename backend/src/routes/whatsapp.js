@@ -74,7 +74,10 @@ router.post('/webhook', async (req, res) => {
                       const buffer = await fileResponse.buffer();
 
                       // Paso 3: Guardar localmente
-                      const ext = (mediaData.mime_type || '').split('/')[1] || 'bin';
+                      let ext = (mediaData.mime_type || '').split('/')[1] || 'bin';
+                      // Limpiar extensión (ej: "ogg; codecs=opus" → "ogg")
+                      ext = ext.split(';')[0].trim();
+                      if (ext === 'mpeg') ext = 'mp3';
                       const fileName = `wa_${Date.now()}_${mediaId.slice(-8)}.${ext}`;
                       const filePath = path.join(__dirname, '../../uploads/whatsapp/', fileName);
 

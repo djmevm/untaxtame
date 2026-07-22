@@ -355,8 +355,16 @@ export default function WhatsApp() {
                         )}
                         {msg.mediaUrl && msg.tipoMensaje === 'audio' && (
                           <audio controls style={{ width: '100%', marginBottom: 4 }}>
+                            <source src={msg.mediaUrl} type="audio/ogg" />
+                            <source src={msg.mediaUrl} type="audio/mpeg" />
                             <source src={msg.mediaUrl} />
                           </audio>
+                        )}
+                        {!msg.mediaUrl && msg.tipoMensaje === 'audio' && (
+                          <div style={{ background: '#f0f0f0', borderRadius: 8, padding: '8px 12px', marginBottom: 4, display: 'flex', alignItems: 'center', gap: 8 }}>
+                            <span style={{ fontSize: 18 }}>🎵</span>
+                            <span style={{ fontSize: 12, color: '#666' }}>Audio (no disponible para reproducir)</span>
+                          </div>
                         )}
                         {msg.mediaUrl && msg.tipoMensaje === 'document' && (
                           <a href={msg.mediaUrl} target="_blank" rel="noopener noreferrer" style={{ color: '#1565C0', fontWeight: 'bold', fontSize: 13 }}>📄 Descargar documento</a>
