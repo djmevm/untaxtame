@@ -15,6 +15,44 @@ function getToken() {
   return 'EAAOdCkPftXYBRwurCy3ZAX4vAtPuLK3X9zMmoWTga6zklGdmpELcXARG7vnaG9wnIBlIa6dIhgFXEaJZCujGYdes8axKUG8uPXDIyKOZBIhZAHuteXEj6FGKJ2xNusoJmsXvRbNBfo6bQ6mKXWpJZB0xw4voOkZCALUbzSg0tSgG159ZBELbZCNj7G3XAddKvkeIVgZDZD';
 }
 
+// Proxy para servir media de WhatsApp (audio, imagen, video, documentos)
+// Meta solo mantiene las URLs temporales ~14 días, este endpoint re-descarga on-demand
+router.get('/media/:mediaId', async (req, res) => {
+  const { mediaId } = req.params;
+  try {
+    // Paso 1: Obtener URL temporal de Meta
+    const mediaResponse = await fetch(`https://graph.facebook.com/v25.0/${mediaId}`, {
+      headers: { 'Authorization': 'Bearer ' + getToken() },
+    });
+    const mediaData = await mediaResponse.json();
+
+    if (mediaData.error || !mediaData.url) {
+      return res.status(404).json({ error: 'Media no disponible o expirado' });
+    }
+
+    // Paso 2: Descargar de Meta
+    const fileResponse = await fetch(mediaData.url, {
+      headers: { 'Authorization': 'Bearer ' + getToken() },
+    });
+
+    if (!fileResponse.ok) {
+      return res.status(502).json({ error: 'Error descargando media de Meta' });
+    }
+
+    // Paso 3: Servir al cliente con el content-type correcto
+    const contentType = mediaData.mime_type || 'application/octet-stream';
+    res.setHeader('Content-Type', contentType);
+    res.setHeader('Cache-Control', 'public, max-age=86400'); // Cache 24h
+    res.setHeader('Access-Control-Allow-Origin', '*');
+
+    const buffer = await fileResponse.buffer();
+    res.send(buffer);
+  } catch (e) {
+    console.error('[WA] Error proxy media:', e.message);
+    res.status(500).json({ error: 'Error obteniendo media' });
+  }
+});
+
 // Webhook verification (GET)
 router.get('/webhook', (req, res) => {
   const mode = req.query['hub.mode'];
@@ -60,36 +98,19 @@ router.post('/webhook', async (req, res) => {
                 // Obtener URL del media y descargarlo
                 if (mediaId) {
                   try {
-                    // Paso 1: Obtener URL temporal de Meta
+                    // Obtener URL temporal de Meta y guardar el mediaId para re-descarga futura
                     const mediaResponse = await fetch(`https://graph.facebook.com/v25.0/${mediaId}`, {
                       headers: { 'Authorization': 'Bearer ' + getToken() },
                     });
                     const mediaData = await mediaResponse.json();
 
                     if (mediaData.url) {
-                      // Paso 2: Descargar el archivo desde Meta
-                      const fileResponse = await fetch(mediaData.url, {
-                        headers: { 'Authorization': 'Bearer ' + getToken() },
-                      });
-                      const buffer = await fileResponse.buffer();
-
-                      // Paso 3: Guardar localmente
-                      let ext = (mediaData.mime_type || '').split('/')[1] || 'bin';
-                      // Limpiar extensión (ej: "ogg; codecs=opus" → "ogg")
-                      ext = ext.split(';')[0].trim();
-                      if (ext === 'mpeg') ext = 'mp3';
-                      const fileName = `wa_${Date.now()}_${mediaId.slice(-8)}.${ext}`;
-                      const filePath = path.join(__dirname, '../../uploads/whatsapp/', fileName);
-
-                      // Crear directorio si no existe
-                      const dir = path.join(__dirname, '../../uploads/whatsapp/');
-                      if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-
-                      fs.writeFileSync(filePath, buffer);
-                      mediaUrl = `https://untaxtame-production.up.railway.app/uploads/whatsapp/${fileName}`;
+                      // Descargar y guardar en Firebase Storage o servir como proxy
+                      // Por ahora guardar el mediaId para poder re-descargar desde un endpoint proxy
+                      mediaUrl = `https://untaxtame-production.up.railway.app/api/whatsapp/media/${mediaId}`;
                     }
                   } catch (e) {
-                    console.error('[WA] Error descargando media:', e.message);
+                    console.error('[WA] Error obteniendo media URL:', e.message);
                   }
                 }
               } else if (msg.type === 'location') {
