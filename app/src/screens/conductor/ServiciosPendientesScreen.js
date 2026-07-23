@@ -4,6 +4,7 @@ import {
   Alert, ActivityIndicator, RefreshControl, Linking, TextInput, Modal
 } from 'react-native';
 import { Feather } from '@expo/vector-icons';
+import MapView, { Marker, PROVIDER_GOOGLE } from 'react-native-maps';
 import { useAuth } from '../../context/AuthContext';
 import api from '../../config/api';
 import { useConductorServiciosListener, useConductorOfertaAceptada } from '../../hooks/useServicioListener';
@@ -178,19 +179,32 @@ export default function ServiciosPendientesScreen() {
           <View style={styles.routeDotRed} />
         </View>
         <View style={styles.routeTexts}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-            <Text style={[styles.routeText, item.origenZona ? { color: '#F97316', fontWeight: '700' } : {}]} numberOfLines={1}>
-              {item.origen}
-            </Text>
-            {item.origenZona && (
-              <View style={{ backgroundColor: '#FFF3E0', borderRadius: 4, paddingHorizontal: 6, paddingVertical: 2 }}>
-                <Text style={{ fontSize: 9, color: '#E65100', fontWeight: '600' }}>🔒 Se revela al aceptar</Text>
-              </View>
-            )}
-          </View>
+          <Text style={styles.routeText} numberOfLines={1}>{item.origen}</Text>
           <Text style={styles.routeText} numberOfLines={1}>{item.destino}</Text>
         </View>
       </View>
+
+      {/* Mini mapa con ruta origen → destino */}
+      {item.ubicacionGPS && item.destinoLat && item.destinoLng && (
+        <MapView
+          style={{ height: 120, borderRadius: 10, marginVertical: 8 }}
+          provider={PROVIDER_GOOGLE}
+          initialRegion={{
+            latitude: (item.ubicacionGPS.lat + item.destinoLat) / 2,
+            longitude: (item.ubicacionGPS.lng + item.destinoLng) / 2,
+            latitudeDelta: Math.abs(item.ubicacionGPS.lat - item.destinoLat) * 1.8 + 0.005,
+            longitudeDelta: Math.abs(item.ubicacionGPS.lng - item.destinoLng) * 1.8 + 0.005,
+          }}
+          scrollEnabled={false}
+          zoomEnabled={false}
+          rotateEnabled={false}
+          pitchEnabled={false}
+          liteMode={true}
+        >
+          <Marker coordinate={{ latitude: item.ubicacionGPS.lat, longitude: item.ubicacionGPS.lng }} pinColor="#2E7D32" title="Recogida" />
+          <Marker coordinate={{ latitude: item.destinoLat, longitude: item.destinoLng }} pinColor="#E53935" title="Destino" />
+        </MapView>
+      )}
 
       {/* Info row: payment + fare */}
       <View style={styles.cardInfoRow}>
@@ -225,15 +239,10 @@ export default function ServiciosPendientesScreen() {
 
       {/* Action buttons row */}
       <View style={styles.cardActions}>
-        {item.ubicacionGPS && !item.origenZona && (
+        {item.ubicacionGPS && (
           <TouchableOpacity style={styles.iconBtn} onPress={() => Linking.openURL(`https://www.google.com/maps?q=${item.ubicacionGPS.lat},${item.ubicacionGPS.lng}`)}>
             <Feather name="map-pin" size={16} color="#64748B" />
           </TouchableOpacity>
-        )}
-        {item.origenZona && (
-          <View style={[styles.iconBtn, { opacity: 0.5 }]}>
-            <Feather name="lock" size={16} color="#F97316" />
-          </View>
         )}
         <TouchableOpacity
           style={[styles.ofertarBtn, (noVerificado || servicioActivo || penalizado || sinSaldo) && styles.ofertarBtnDisabled]}

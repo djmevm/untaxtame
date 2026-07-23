@@ -433,29 +433,11 @@ router.get('/pendientes', verifyToken, async (req, res) => {
       .orderBy('creadoEn', 'desc')
       .get();
 
-    const { detectarZona } = require('../utils/zonas');
-
-    // Ocultar datos sensibles del origen antes de que el conductor acepte
+    // No exponer clienteCelular a conductores antes de aceptar oferta
     const servicios = snapshot.docs.map(d => {
       const data = d.data();
-      const { clienteCelular, ubicacionGPS, origen, ...sinSensibles } = data;
-
-      // Detectar zona basándose en la dirección de origen
-      const zona = detectarZona(origen) || 'Zona desconocida';
-
-      return {
-        ...sinSensibles,
-        // Mostrar zona en vez de dirección exacta de origen
-        origen: `📍 ${zona}`,
-        origenZona: zona,
-        // No enviar GPS exacto del origen (solo lat/lng aproximado para el mapa)
-        ubicacionGPS: ubicacionGPS ? {
-          lat: ubicacionGPS.lat ? Math.round(ubicacionGPS.lat * 100) / 100 : null,
-          lng: ubicacionGPS.lng ? Math.round(ubicacionGPS.lng * 100) / 100 : null,
-          texto: zona,
-        } : null,
-        // El destino sí se muestra completo para que el conductor decida
-      };
+      const { clienteCelular, ...sinCelular } = data;
+      return sinCelular;
     });
     res.json(servicios);
   } catch (err) {
