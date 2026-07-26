@@ -222,10 +222,16 @@ export default function MisServiciosScreen() {
             )}
           </View>
 
-          {servicioActivo.ubicacionGPS && (
-            <TouchableOpacity style={styles.btnMapa}
-              onPress={() => Linking.openURL(`https://www.google.com/maps?q=${servicioActivo.ubicacionGPS.lat},${servicioActivo.ubicacionGPS.lng}`)}>
-              <Text style={styles.btnMapaTexto}>📌 Ver ubicación del cliente</Text>
+          {/* Botón de navegación GPS al cliente */}
+          {servicioActivo.ubicacionGPS ? (
+            <TouchableOpacity style={[styles.btnMapa, { backgroundColor: '#1565C0' }]}
+              onPress={() => Linking.openURL(`google.navigation:q=${servicioActivo.ubicacionGPS.lat},${servicioActivo.ubicacionGPS.lng}`)}>
+              <Text style={[styles.btnMapaTexto, { color: '#fff' }]}>🗺️ Navegar GPS hacia el cliente</Text>
+            </TouchableOpacity>
+          ) : (
+            <TouchableOpacity style={[styles.btnMapa, { backgroundColor: '#1565C0' }]}
+              onPress={() => Linking.openURL(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(servicioActivo.origen)}`)}>
+              <Text style={[styles.btnMapaTexto, { color: '#fff' }]}>🗺️ Buscar dirección en el mapa</Text>
             </TouchableOpacity>
           )}
 
