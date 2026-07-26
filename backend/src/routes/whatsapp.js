@@ -640,7 +640,7 @@ async function notificarClienteWhatsApp(telefono, conductorNombre, conductorPlac
   const mensaje = `🚕 *¡Conductor asignado!*\n\n` +
     `👤 Conductor: *${conductorNombre}*\n` +
     `🚗 Placa: *${conductorPlaca || 'N/A'}*\n` +
-    `📱 WhatsApp: https://wa.me/${conductorCelular || ''}\n\n` +
+    `📱 WhatsApp: https://wa.me/${conductorCelular ? (conductorCelular.startsWith('57') ? conductorCelular : '57' + conductorCelular) : ''}\n\n` +
     `Tu conductor va en camino. ¡Buen viaje! 🙌`;
   
   await enviarMensaje(telefono, mensaje);
@@ -743,7 +743,7 @@ async function aceptarOfertaDesdeWhatsApp(telefono, ofertaData) {
       `👤 Conductor: *${oferta.conductorNombre}*\n` +
       `🚗 Placa: *${oferta.conductorPlaca || 'N/A'}*\n` +
       `💰 Tarifa: *$${oferta.monto.toLocaleString('es-CO')} COP*\n` +
-      `📱 WhatsApp: https://wa.me/${oferta.conductorCelular || ''}\n\n` +
+      `📱 WhatsApp: https://wa.me/${oferta.conductorCelular ? (oferta.conductorCelular.startsWith('57') ? oferta.conductorCelular : '57' + oferta.conductorCelular) : ''}\n\n` +
       `🚕 Tu conductor va en camino. ¡Buen viaje! 🙌`;
 
     await enviarMensaje(telefono, msg);
