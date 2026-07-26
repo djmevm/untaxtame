@@ -366,8 +366,9 @@ async function procesarMensaje(telefono, texto) {
       limpiarEstado(telefono);
       respuesta = '❌ Solicitud cancelada.\n\nEscribe *1* si deseas pedir un taxi nuevamente.';
     } else if (texto.trim().length >= 5) {
-      // Guardar origen y pedir destino
-      setEstado(telefono, 'esperando_destino', { origen: texto.trim(), lat: null, lng: null });
+      // Guardar origen y pedir destino (preservar datos del flujo)
+      const datos = estadoConv.datos;
+      setEstado(telefono, 'esperando_destino', { origen: texto.trim(), lat: null, lng: null, metodoPago: datos.metodoPago, nombre: datos.nombre || telefono });
       respuesta = '✅ Recogida: *' + texto.trim() + '*\n\n' +
         '🏁 ¿Hacia dónde vas?\n\n' +
         'Escribe la dirección de destino:\n' +
@@ -530,7 +531,7 @@ async function procesarUbicacion(telefono, lat, lng, nombre) {
   } catch (e) {}
 
   // Guardar origen GPS y pedir destino
-  setEstado(telefono, 'esperando_destino', { origen: direccion, lat, lng });
+  setEstado(telefono, 'esperando_destino', { origen: direccion, lat, lng, metodoPago: datos.metodoPago, nombre: nombre || telefono });
 
   const respuesta = '✅ Recogida: *' + direccion + '*\n' +
     `📍 Ver mapa: https://www.google.com/maps?q=${lat},${lng}\n\n` +
