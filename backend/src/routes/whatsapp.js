@@ -315,9 +315,7 @@ async function procesarMensaje(telefono, texto) {
         setEstado(telefono, 'esperando_ubicacion', { metodoPago: 'efectivo' });
         respuesta = '✅ Método de pago: *Efectivo*\n\n' +
           '📍 ¿Dónde te recogemos?\n\n' +
-          '*Opción 1:* Envía tu ubicación GPS\n' +
-          '👉 Toca *📎* → *Ubicación* → *Enviar ubicación actual*\n\n' +
-          '*Opción 2:* Escribe tu dirección\n' +
+          'Escribe tu dirección de recogida:\n' +
           '👉 Ej: _Calle 20 con Carrera 15, barrio Centro_\n\n' +
           '0️⃣ Cancelar';
       }
@@ -341,9 +339,7 @@ async function procesarMensaje(telefono, texto) {
         setEstado(telefono, 'esperando_ubicacion', { metodoPago: 'daviplata' });
         respuesta = '✅ Método de pago: *Electrónico (Nequi/Daviplata)*\n\n' +
           '📍 ¿Dónde te recogemos?\n\n' +
-          '*Opción 1:* Envía tu ubicación GPS\n' +
-          '👉 Toca *📎* → *Ubicación* → *Enviar ubicación actual*\n\n' +
-          '*Opción 2:* Escribe tu dirección\n' +
+          'Escribe tu dirección de recogida:\n' +
           '👉 Ej: _Calle 20 con Carrera 15, barrio Centro_\n\n' +
           '0️⃣ Cancelar';
       }
@@ -376,8 +372,8 @@ async function procesarMensaje(telefono, texto) {
         '0️⃣ Cancelar';
     } else {
       respuesta = '📍 ¿Dónde te recogemos?\n\n' +
-        '*Opción 1:* Envía tu ubicación GPS 📎 → Ubicación\n' +
-        '*Opción 2:* Escribe tu dirección completa\n\n' +
+        'Escribe tu dirección de recogida:\n' +
+        '👉 Ej: _Calle 20 con Carrera 15, barrio Centro_\n\n' +
         '0️⃣ Cancelar';
     }
     await enviarMensaje(telefono, respuesta);
