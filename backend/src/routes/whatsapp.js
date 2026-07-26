@@ -6,6 +6,37 @@ const fs = require('fs');
 const { db } = require('../firebase');
 const verifyToken = require('../middleware/verifyToken');
 
+// ═══ ESTADOS DE CONVERSACIÓN PARA SOLICITUD DE TAXI VÍA WHATSAPP ═══
+// Estados: idle | esperando_pago | esperando_ubicacion | servicio_activo
+const estadosConversacion = new Map(); // telefono → { estado, datos, timestamp }
+
+// Limpiar estados viejos cada 30 minutos
+setInterval(() => {
+  const ahora = Date.now();
+  estadosConversacion.forEach((val, key) => {
+    if (ahora - val.timestamp > 30 * 60 * 1000) {
+      estadosConversacion.delete(key);
+    }
+  });
+}, 30 * 60 * 1000);
+
+function getEstado(telefono) {
+  return estadosConversacion.get(telefono) || { estado: 'idle', datos: {}, timestamp: Date.now() };
+}
+
+function setEstado(telefono, estado, datos = {}) {
+  const actual = estadosConversacion.get(telefono) || { datos: {} };
+  estadosConversacion.set(telefono, {
+    estado,
+    datos: { ...actual.datos, ...datos },
+    timestamp: Date.now(),
+  });
+}
+
+function limpiarEstado(telefono) {
+  estadosConversacion.delete(telefono);
+}
+
 const VERIFY_TOKEN = 'untaxtame2026';
 const PHONE_NUMBER_ID = '1242386332287027';
 const WABA_ID = '225661571844047';
@@ -120,6 +151,37 @@ router.post('/webhook', async (req, res) => {
                 }
               } else if (msg.type === 'location') {
                 texto = `📍 Ubicación: ${msg.location.latitude}, ${msg.location.longitude}`;
+                
+                // Procesar ubicación para solicitud de taxi
+                const estadoConv = getEstado(msg.from);
+                if (estadoConv.estado === 'esperando_ubicacion') {
+                  const respuestaUbi = await procesarUbicacion(msg.from, msg.location.latitude, msg.location.longitude, nombre);
+                  if (respuestaUbi) {
+                    try {
+                      await db.collection('whatsapp_mensajes').add({
+                        telefono: msg.from, nombre: 'UntaXtame Bot', texto: respuestaUbi,
+                        tipo: 'enviado', tipoMensaje: 'text', enviadoPor: 'bot', creadoEn: new Date().toISOString(),
+                      });
+                      await db.collection('whatsapp_conversaciones').doc(msg.from).set({
+                        ultimoMensaje: respuestaUbi, ultimoTipo: 'enviado', actualizadoEn: new Date().toISOString(),
+                      }, { merge: true });
+                    } catch (e) {}
+                  }
+                } else {
+                  // Ubicación recibida sin contexto, ofrecer servicio
+                  const resp = await procesarUbicacionDirecta(msg.from, msg.location.latitude, msg.location.longitude, nombre);
+                  if (resp) {
+                    try {
+                      await db.collection('whatsapp_mensajes').add({
+                        telefono: msg.from, nombre: 'UntaXtame Bot', texto: resp,
+                        tipo: 'enviado', tipoMensaje: 'text', enviadoPor: 'bot', creadoEn: new Date().toISOString(),
+                      });
+                      await db.collection('whatsapp_conversaciones').doc(msg.from).set({
+                        ultimoMensaje: resp, ultimoTipo: 'enviado', actualizadoEn: new Date().toISOString(),
+                      }, { merge: true });
+                    } catch (e) {}
+                  }
+                }
               } else if (msg.type === 'contacts') {
                 texto = `👤 Contacto compartido`;
               }
@@ -189,51 +251,276 @@ router.post('/webhook', async (req, res) => {
   res.sendStatus(200);
 });
 
-// Procesar mensaje y responder
+// Procesar mensaje de texto con flujo conversacional
 async function procesarMensaje(telefono, texto) {
   const textoLower = texto.trim().toLowerCase();
+  const estadoConv = getEstado(telefono);
   let respuesta = '';
 
-  if (textoLower === '1' || textoLower.includes('taxi') || textoLower.includes('servicio')) {
-    respuesta = 'Con mucho gusto! Para solicitar su servicio de taxi necesitamos:\n\n' +
-      '📍 Direccion de recogida:\n' +
-      '📞 Numero de celular:\n' +
-      '👤 Nombre completo:\n\n' +
-      'Tambien puede pedir su taxi desde nuestra app:\n' +
-      '📲 https://untaxtame.vercel.app/descargar.html\n\n' +
-      'Servicio disponible 24/7\n' +
-      '⚠️ Recargo nocturno despues de las 8:00 PM en dias festivos.';
+  // ═══ ESTADO: ESPERANDO MÉTODO DE PAGO ═══
+  if (estadoConv.estado === 'esperando_pago') {
+    if (textoLower === '1' || textoLower.includes('efectivo')) {
+      // Si ya tiene ubicación guardada (envió ubicación primero), crear servicio directo
+      if (estadoConv.datos.ubicacionDirecta) {
+        const ubi = estadoConv.datos.ubicacionDirecta;
+        const nombre = estadoConv.datos.nombre || telefono;
+        // Reverse geocode
+        let direccion = `${ubi.lat.toFixed(5)}, ${ubi.lng.toFixed(5)}`;
+        try {
+          const geoRes = await fetch(`https://maps.googleapis.com/maps/api/geocode/json?latlng=${ubi.lat},${ubi.lng}&key=AIzaSyCz_s1BIBL0E9rJfQRXQ4lgnPb6GR9IiJE`);
+          const geoData = await geoRes.json();
+          if (geoData.results && geoData.results[0]) direccion = geoData.results[0].formatted_address;
+        } catch (e) {}
+        respuesta = await crearServicioWhatsApp(telefono, { nombre, metodoPago: 'efectivo', direccion, lat: ubi.lat, lng: ubi.lng });
+      } else {
+        setEstado(telefono, 'esperando_ubicacion', { metodoPago: 'efectivo' });
+        respuesta = '✅ Método de pago: *Efectivo*\n\n' +
+          '📍 Ahora envíanos tu ubicación GPS:\n\n' +
+          '👉 Toca el botón *📎* (adjuntar)\n' +
+          '👉 Selecciona *Ubicación*\n' +
+          '👉 Toca *Enviar tu ubicación actual*\n\n' +
+          '⏳ Esperando tu ubicación...';
+      }
+    } else if (textoLower === '2' || textoLower.includes('electr') || textoLower.includes('nequi') || textoLower.includes('daviplata')) {
+      if (estadoConv.datos.ubicacionDirecta) {
+        const ubi = estadoConv.datos.ubicacionDirecta;
+        const nombre = estadoConv.datos.nombre || telefono;
+        let direccion = `${ubi.lat.toFixed(5)}, ${ubi.lng.toFixed(5)}`;
+        try {
+          const geoRes = await fetch(`https://maps.googleapis.com/maps/api/geocode/json?latlng=${ubi.lat},${ubi.lng}&key=AIzaSyCz_s1BIBL0E9rJfQRXQ4lgnPb6GR9IiJE`);
+          const geoData = await geoRes.json();
+          if (geoData.results && geoData.results[0]) direccion = geoData.results[0].formatted_address;
+        } catch (e) {}
+        respuesta = await crearServicioWhatsApp(telefono, { nombre, metodoPago: 'daviplata', direccion, lat: ubi.lat, lng: ubi.lng });
+      } else {
+        setEstado(telefono, 'esperando_ubicacion', { metodoPago: 'daviplata' });
+        respuesta = '✅ Método de pago: *Electrónico (Nequi/Daviplata)*\n\n' +
+          '📍 Ahora envíanos tu ubicación GPS:\n\n' +
+          '👉 Toca el botón *📎* (adjuntar)\n' +
+          '👉 Selecciona *Ubicación*\n' +
+          '👉 Toca *Enviar tu ubicación actual*\n\n' +
+          '⏳ Esperando tu ubicación...';
+      }
+    } else if (textoLower === '0' || textoLower.includes('cancelar')) {
+      limpiarEstado(telefono);
+      respuesta = '❌ Solicitud cancelada.\n\nEscribe *1* si deseas pedir un taxi nuevamente.';
+    } else {
+      respuesta = '⚠️ Por favor selecciona tu método de pago:\n\n' +
+        '1️⃣ Efectivo 💵\n' +
+        '2️⃣ Electrónico (Nequi/Daviplata) 💳\n\n' +
+        '0️⃣ Cancelar';
+    }
+    await enviarMensaje(telefono, respuesta);
+    return respuesta;
+  }
+
+  // ═══ ESTADO: ESPERANDO UBICACIÓN (si envían texto en vez de ubicación) ═══
+  if (estadoConv.estado === 'esperando_ubicacion') {
+    if (textoLower === '0' || textoLower.includes('cancelar')) {
+      limpiarEstado(telefono);
+      respuesta = '❌ Solicitud cancelada.\n\nEscribe *1* si deseas pedir un taxi nuevamente.';
+    } else {
+      respuesta = '📍 Necesito tu *ubicación GPS* para enviarte un taxi.\n\n' +
+        '👉 Toca *📎* → *Ubicación* → *Enviar tu ubicación actual*\n\n' +
+        '💡 Si no puedes enviar la ubicación, escribe tu dirección completa y te ayudaremos.\n\n' +
+        '0️⃣ Cancelar solicitud';
+      
+      // Si parece una dirección de texto, crear servicio con dirección manual
+      if (texto.length > 10 && (texto.includes('calle') || texto.includes('carrera') || texto.includes('barrio') || texto.includes('cra') || texto.includes('cl'))) {
+        const datos = estadoConv.datos;
+        respuesta = await crearServicioWhatsApp(telefono, {
+          nombre: datos.nombre || telefono,
+          metodoPago: datos.metodoPago || 'efectivo',
+          direccion: texto,
+          lat: null,
+          lng: null,
+        });
+      }
+    }
+    await enviarMensaje(telefono, respuesta);
+    return respuesta;
+  }
+
+  // ═══ ESTADO: SERVICIO ACTIVO (cliente tiene un servicio en curso) ═══
+  if (estadoConv.estado === 'servicio_activo') {
+    if (textoLower === '0' || textoLower.includes('cancelar')) {
+      // Cancelar servicio activo
+      const servicioId = estadoConv.datos.servicioId;
+      if (servicioId) {
+        try {
+          const ref = db.collection('servicios').doc(servicioId);
+          const doc = await ref.get();
+          if (doc.exists && ['pendiente'].includes(doc.data().estado)) {
+            await ref.update({ estado: 'cancelado', canceladoPor: 'cliente_whatsapp', motivoCancelacion: 'Cancelado por WhatsApp', actualizadoEn: new Date().toISOString() });
+            limpiarEstado(telefono);
+            respuesta = '❌ Tu servicio ha sido cancelado.\n\nEscribe *1* para pedir un nuevo taxi.';
+          } else {
+            respuesta = '⚠️ No se puede cancelar. Tu conductor ya está en camino.\n\nSi necesitas ayuda escribe *3* para soporte.';
+          }
+        } catch (e) {
+          respuesta = '⚠️ Error al cancelar. Intenta de nuevo o escribe *3* para soporte.';
+        }
+      }
+    } else {
+      respuesta = '🚕 Ya tienes un servicio activo.\n\n' +
+        '⏳ Estamos buscando conductor para ti...\n\n' +
+        '0️⃣ Cancelar servicio';
+    }
+    await enviarMensaje(telefono, respuesta);
+    return respuesta;
+  }
+
+  // ═══ ESTADO IDLE: MENÚ PRINCIPAL ═══
+  if (textoLower === '1' || textoLower.includes('taxi') || textoLower.includes('servicio') || textoLower.includes('necesito')) {
+    setEstado(telefono, 'esperando_pago', { nombre: '' });
+    respuesta = '🚕 *¡Solicitar Taxi UntaXtame!*\n\n' +
+      'Selecciona tu método de pago:\n\n' +
+      '1️⃣ Efectivo 💵\n' +
+      '2️⃣ Electrónico (Nequi/Daviplata) 💳\n\n' +
+      '0️⃣ Cancelar';
   } else if (textoLower === '2' || textoLower.includes('descarga') || textoLower.includes('app') || textoLower.includes('instalar')) {
     respuesta = '📲 Descarga UntaXtame y pide tu taxi facil!\n\n' +
       '🔗 Play Store: https://play.google.com/store/apps/details?id=com.untaxtame\n\n' +
       '🔗 Descarga directa: https://untaxtame.vercel.app/descargar.html\n\n' +
-      'Tambien disponible en:\n' +
-      '• APKPure: https://apkpure.com/p/com.untaxtame.app\n' +
-      '• Aptoide: https://com-untaxtame-app.en.aptoide.com/app\n\n' +
       '✅ GPS en tiempo real\n' +
       '✅ Chat con tu conductor\n' +
       '✅ Paga con Daviplata, Nequi o Efectivo\n' +
       '✅ Servicio 24/7';
   } else if (textoLower === '3' || textoLower.includes('soporte') || textoLower.includes('queja') || textoLower.includes('reclamo')) {
     respuesta = '📋 Soporte y quejas UntaXtame\n\n' +
-      'Cuentanos tu situacion y te ayudaremos.\n\n' +
-      'Tambien puedes enviarnos un correo a:\n' +
-      '📧 untaxtameapp@gmail.com\n\n' +
-      'O escribenos desde el chat de la app (Mi Perfil → Mensajes Admin).\n\n' +
-      'Servicio de atencion 24/7.';
+      'Cuéntanos tu situación y te ayudaremos.\n\n' +
+      '📧 untaxtameapp@gmail.com\n' +
+      '📱 WhatsApp: +57 322 3221058\n\n' +
+      'Servicio de atención 24/7.';
   } else {
-    respuesta = 'Hola! Bienvenido a UntaXtame S.A.S ZOMAC 🚕\n\n' +
+    respuesta = '¡Hola! Bienvenido a *UntaXtame S.A.S* 🚕\n\n' +
       'Somos tu servicio de taxi seguro en Tame, Arauca. Servicio 24/7.\n\n' +
-      'En que podemos ayudarte?\n\n' +
-      '1️⃣ Necesito un taxi\n' +
-      '2️⃣ Descargar la app\n' +
-      '3️⃣ Soporte / Quejas\n\n' +
-      'Escribe el numero de tu opcion o cuentanos directamente.\n\n' +
-      '⚠️ Recargo nocturno despues de las 8:00 PM en dias festivos.';
+      '¿En qué podemos ayudarte?\n\n' +
+      '1️⃣ *Necesito un taxi* 🚕\n' +
+      '2️⃣ Descargar la app 📲\n' +
+      '3️⃣ Soporte / Quejas 📋\n\n' +
+      '_Escribe el número de tu opción o envía tu ubicación directamente para pedir un taxi._';
   }
 
   await enviarMensaje(telefono, respuesta);
   return respuesta;
+}
+
+// Procesar ubicación cuando el usuario está en flujo de solicitud
+async function procesarUbicacion(telefono, lat, lng, nombre) {
+  const estadoConv = getEstado(telefono);
+  const datos = estadoConv.datos;
+
+  // Reverse geocode para obtener dirección
+  let direccion = `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
+  try {
+    const geoRes = await fetch(`https://maps.googleapis.com/maps/api/geocode/json?latlng=${lat},${lng}&key=AIzaSyCz_s1BIBL0E9rJfQRXQ4lgnPb6GR9IiJE`);
+    const geoData = await geoRes.json();
+    if (geoData.results && geoData.results[0]) {
+      direccion = geoData.results[0].formatted_address;
+    }
+  } catch (e) {}
+
+  return await crearServicioWhatsApp(telefono, {
+    nombre: nombre || telefono,
+    metodoPago: datos.metodoPago || 'efectivo',
+    direccion,
+    lat,
+    lng,
+  });
+}
+
+// Procesar ubicación directa (sin flujo previo - pide taxi directo)
+async function procesarUbicacionDirecta(telefono, lat, lng, nombre) {
+  // Si envía ubicación sin flujo, asumir efectivo y crear servicio
+  setEstado(telefono, 'esperando_pago', { nombre, ubicacionDirecta: { lat, lng } });
+  
+  const respuesta = '📍 ¡Ubicación recibida!\n\n' +
+    '¿Cómo deseas pagar tu servicio?\n\n' +
+    '1️⃣ Efectivo 💵\n' +
+    '2️⃣ Electrónico (Nequi/Daviplata) 💳\n\n' +
+    '0️⃣ Cancelar';
+  
+  await enviarMensaje(telefono, respuesta);
+  return respuesta;
+}
+
+// Crear servicio de taxi desde WhatsApp
+async function crearServicioWhatsApp(telefono, datos) {
+  const { nombre, metodoPago, direccion, lat, lng } = datos;
+  const { v4: uuidv4 } = require('uuid');
+
+  try {
+    const servicioId = uuidv4();
+    const servicio = {
+      id: servicioId,
+      clienteUid: `whatsapp_${telefono}`,
+      clienteNombre: nombre,
+      clienteCelular: telefono,
+      clienteDireccion: direccion,
+      ubicacionGPS: lat && lng ? { lat, lng, texto: direccion } : null,
+      destinoLat: null,
+      destinoLng: null,
+      origen: direccion,
+      destino: 'Por definir con el conductor',
+      metodoPago: metodoPago,
+      estado: 'pendiente',
+      conductorUid: null,
+      conductorNombre: null,
+      conductorPlaca: null,
+      conductorCelular: null,
+      calificacion: null,
+      tarifaMinima: 8000,
+      tarifaAcordada: null,
+      totalOfertas: 0,
+      requisitos: [],
+      fuenteSolicitud: 'whatsapp',
+      creadoEn: new Date().toISOString(),
+      actualizadoEn: new Date().toISOString(),
+    };
+
+    await db.collection('servicios').doc(servicioId).set(servicio);
+
+    // Marcar estado como servicio activo
+    setEstado(telefono, 'servicio_activo', { servicioId, nombre });
+
+    // Notificar a conductores via push
+    try {
+      const { enviarPushAConductores } = require('../services/pushNotifications');
+      enviarPushAConductores({
+        titulo: '🚕 Nuevo servicio (WhatsApp)',
+        cuerpo: `${nombre}: ${direccion} | Pago: ${metodoPago}`,
+        datos: { tipo: 'nuevo_servicio', servicioId },
+      });
+    } catch (e) {}
+
+    const mapa = lat && lng ? `\n📍 Ver mapa: https://www.google.com/maps?q=${lat},${lng}` : '';
+    
+    const respuesta = '✅ *¡Servicio solicitado exitosamente!*\n\n' +
+      `📍 Recogida: ${direccion}${mapa}\n` +
+      `💰 Pago: ${metodoPago === 'efectivo' ? 'Efectivo 💵' : 'Electrónico 💳'}\n\n` +
+      '🔍 Estamos buscando al conductor disponible más cercano...\n\n' +
+      '⏳ Te notificaremos cuando un conductor acepte tu servicio.\n\n' +
+      '_Para cancelar, responde *0*_';
+
+    return respuesta;
+  } catch (e) {
+    console.error('[WA] Error creando servicio:', e.message);
+    limpiarEstado(telefono);
+    return '❌ Error al solicitar el servicio. Por favor intenta de nuevo escribiendo *1*.';
+  }
+}
+
+// Notificar al cliente de WhatsApp cuando un conductor acepta su servicio
+async function notificarClienteWhatsApp(telefono, conductorNombre, conductorPlaca, conductorCelular) {
+  const mensaje = `🚕 *¡Conductor asignado!*\n\n` +
+    `👤 Conductor: *${conductorNombre}*\n` +
+    `🚗 Placa: *${conductorPlaca || 'N/A'}*\n` +
+    `📱 WhatsApp: https://wa.me/${conductorCelular || ''}\n\n` +
+    `Tu conductor va en camino. ¡Buen viaje! 🙌`;
+  
+  await enviarMensaje(telefono, mensaje);
+  limpiarEstado(telefono);
 }
 
 // Enviar mensaje via WhatsApp Cloud API
@@ -659,3 +946,4 @@ router.get('/plantillas', verifyToken, async (req, res) => {
 });
 
 module.exports = router;
+module.exports.notificarClienteWhatsApp = notificarClienteWhatsApp;

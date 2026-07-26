@@ -229,6 +229,22 @@ router.put('/:servicioId/aceptar/:ofertaId', verifyToken, async (req, res) => {
       enviarPushAUsuario(oferta.conductorUid, { titulo: 'Oferta aceptada', cuerpo: 'Tu oferta fue aceptada. Ve al punto de recogida.', datos: { tipo: 'oferta_aceptada', servicioId } });
     } catch (e) {}
 
+    // Si el servicio fue solicitado por WhatsApp, notificar al cliente por WhatsApp
+    const servicioData = servicioDoc.data();
+    if (servicioData.fuenteSolicitud === 'whatsapp' && servicioData.clienteCelular) {
+      try {
+        const { notificarClienteWhatsApp } = require('./whatsapp');
+        await notificarClienteWhatsApp(
+          servicioData.clienteCelular,
+          oferta.conductorNombre,
+          oferta.conductorPlaca,
+          oferta.conductorCelular
+        );
+      } catch (e) {
+        console.error('[OFERTAS] Error notificando cliente WhatsApp:', e.message);
+      }
+    }
+
     res.json({
       message: 'Oferta aceptada',
       conductor: oferta.conductorNombre,
