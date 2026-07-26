@@ -257,6 +257,41 @@ async function procesarMensaje(telefono, texto) {
   const estadoConv = getEstado(telefono);
   let respuesta = '';
 
+  // ═══ ESTADO: ESPERANDO CALIFICACIÓN ═══
+  if (estadoConv.estado === 'esperando_calificacion') {
+    const calificacion = parseInt(textoLower);
+    if (calificacion >= 1 && calificacion <= 5) {
+      const servicioId = estadoConv.datos.servicioId;
+      const conductorNombre = estadoConv.datos.conductorNombre;
+      
+      // Guardar calificación en el servicio
+      try {
+        await db.collection('servicios').doc(servicioId).update({
+          calificacion: calificacion * 2, // Convertir escala 1-5 a 1-10 (como usa la app)
+          calificacionWhatsApp: calificacion,
+          calificadoEn: new Date().toISOString(),
+        });
+      } catch (e) {}
+
+      limpiarEstado(telefono);
+      const estrellas = '⭐'.repeat(calificacion);
+      respuesta = `${estrellas}\n\n` +
+        `¡Gracias por calificar! Le diste *${calificacion}/5* a *${conductorNombre}*.\n\n` +
+        `🚕 ¡Gracias por usar UntaXtame! Escribe *1* cuando necesites otro taxi.`;
+    } else {
+      respuesta = '⭐ Por favor califica del *1* al *5*:\n\n' +
+        '1️⃣ Muy malo | 2️⃣ Malo | 3️⃣ Regular | 4️⃣ Bueno | 5️⃣ Excelente\n\n' +
+        '_O escribe *0* para omitir_';
+      
+      if (textoLower === '0' || textoLower.includes('omitir') || textoLower.includes('no')) {
+        limpiarEstado(telefono);
+        respuesta = '👍 Sin problema. ¡Gracias por usar UntaXtame!\n\nEscribe *1* cuando necesites otro taxi.';
+      }
+    }
+    await enviarMensaje(telefono, respuesta);
+    return respuesta;
+  }
+
   // ═══ ESTADO: ESPERANDO MÉTODO DE PAGO ═══
   if (estadoConv.estado === 'esperando_pago') {
     if (textoLower === '1' || textoLower.includes('efectivo')) {
@@ -1094,6 +1129,30 @@ router.get('/plantillas', verifyToken, async (req, res) => {
   }
 });
 
+// Notificar al cliente de WhatsApp que el servicio terminó y pedir calificación
+async function notificarServicioCompletadoWhatsApp(telefono, datos) {
+  const { servicioId, conductorNombre, tarifa, metodoPago } = datos;
+
+  // Cambiar estado a esperando calificación
+  setEstado(telefono, 'esperando_calificacion', { servicioId, conductorNombre });
+
+  const msg = `✅ *¡Servicio completado!*\n\n` +
+    `👤 Conductor: *${conductorNombre}*\n` +
+    `💰 Tarifa: *$${tarifa.toLocaleString('es-CO')} COP*\n` +
+    `💳 Pago: ${metodoPago === 'efectivo' ? 'Efectivo' : 'Electrónico'}\n\n` +
+    `⭐ *¿Cómo calificas el servicio?*\n\n` +
+    `Responde con un número del *1* al *5*:\n\n` +
+    `1️⃣ Muy malo\n` +
+    `2️⃣ Malo\n` +
+    `3️⃣ Regular\n` +
+    `4️⃣ Bueno\n` +
+    `5️⃣ Excelente ⭐\n\n` +
+    `_Gracias por usar UntaXtame 🚕_`;
+
+  await enviarMensaje(telefono, msg);
+}
+
 module.exports = router;
 module.exports.notificarClienteWhatsApp = notificarClienteWhatsApp;
 module.exports.enviarOfertaWhatsApp = enviarOfertaWhatsApp;
+module.exports.notificarServicioCompletadoWhatsApp = notificarServicioCompletadoWhatsApp;

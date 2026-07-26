@@ -267,6 +267,21 @@ router.put('/completar/:servicioId', verifyToken, async (req, res) => {
       await db.collection('usuarios').doc(data.conductorUid).update({ disponible: true });
     }
 
+    // Notificar al cliente de WhatsApp que el servicio terminó y pedir calificación
+    if (data.fuenteSolicitud === 'whatsapp' && data.clienteCelular) {
+      try {
+        const { notificarServicioCompletadoWhatsApp } = require('./whatsapp');
+        await notificarServicioCompletadoWhatsApp(data.clienteCelular, {
+          servicioId: req.params.servicioId,
+          conductorNombre: data.conductorNombre,
+          tarifa: data.tarifaAcordada || data.tarifaMinima || 8000,
+          metodoPago: data.metodoPago,
+        });
+      } catch (e) {
+        console.error('[SERVICES] Error notificando WhatsApp completado:', e.message);
+      }
+    }
+
     res.json({ message: 'Servicio completado', comision: comisionResult, clientePago });
   } catch (err) {
     res.status(500).json({ error: err.message });
