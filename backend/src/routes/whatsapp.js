@@ -295,18 +295,22 @@ async function procesarMensaje(telefono, texto) {
   // ═══ ESTADO: ESPERANDO MÉTODO DE PAGO ═══
   if (estadoConv.estado === 'esperando_pago') {
     if (textoLower === '1' || textoLower.includes('efectivo')) {
-      // Si ya tiene ubicación guardada (envió ubicación primero), crear servicio directo
+      // Si ya tiene ubicación guardada (envió ubicación primero), pedir destino
       if (estadoConv.datos.ubicacionDirecta) {
         const ubi = estadoConv.datos.ubicacionDirecta;
-        const nombre = estadoConv.datos.nombre || telefono;
-        // Reverse geocode
         let direccion = `${ubi.lat.toFixed(5)}, ${ubi.lng.toFixed(5)}`;
         try {
           const geoRes = await fetch(`https://maps.googleapis.com/maps/api/geocode/json?latlng=${ubi.lat},${ubi.lng}&key=AIzaSyCz_s1BIBL0E9rJfQRXQ4lgnPb6GR9IiJE`);
           const geoData = await geoRes.json();
           if (geoData.results && geoData.results[0]) direccion = geoData.results[0].formatted_address;
         } catch (e) {}
-        respuesta = await crearServicioWhatsApp(telefono, { nombre, metodoPago: 'efectivo', direccion, lat: ubi.lat, lng: ubi.lng });
+        setEstado(telefono, 'esperando_destino', { origen: direccion, lat: ubi.lat, lng: ubi.lng, metodoPago: 'efectivo', nombre: estadoConv.datos.nombre || telefono });
+        respuesta = '✅ Método de pago: *Efectivo*\n' +
+          '📍 Recogida: *' + direccion + '*\n\n' +
+          '🏁 ¿Hacia dónde vas?\n\n' +
+          'Escribe la dirección de destino:\n' +
+          '👉 Ej: _Barrio el Centro, frente al parque_\n\n' +
+          '0️⃣ Cancelar';
       } else {
         setEstado(telefono, 'esperando_ubicacion', { metodoPago: 'efectivo' });
         respuesta = '✅ Método de pago: *Efectivo*\n\n' +
@@ -320,14 +324,19 @@ async function procesarMensaje(telefono, texto) {
     } else if (textoLower === '2' || textoLower.includes('electr') || textoLower.includes('nequi') || textoLower.includes('daviplata')) {
       if (estadoConv.datos.ubicacionDirecta) {
         const ubi = estadoConv.datos.ubicacionDirecta;
-        const nombre = estadoConv.datos.nombre || telefono;
         let direccion = `${ubi.lat.toFixed(5)}, ${ubi.lng.toFixed(5)}`;
         try {
           const geoRes = await fetch(`https://maps.googleapis.com/maps/api/geocode/json?latlng=${ubi.lat},${ubi.lng}&key=AIzaSyCz_s1BIBL0E9rJfQRXQ4lgnPb6GR9IiJE`);
           const geoData = await geoRes.json();
           if (geoData.results && geoData.results[0]) direccion = geoData.results[0].formatted_address;
         } catch (e) {}
-        respuesta = await crearServicioWhatsApp(telefono, { nombre, metodoPago: 'daviplata', direccion, lat: ubi.lat, lng: ubi.lng });
+        setEstado(telefono, 'esperando_destino', { origen: direccion, lat: ubi.lat, lng: ubi.lng, metodoPago: 'daviplata', nombre: estadoConv.datos.nombre || telefono });
+        respuesta = '✅ Método de pago: *Electrónico*\n' +
+          '📍 Recogida: *' + direccion + '*\n\n' +
+          '🏁 ¿Hacia dónde vas?\n\n' +
+          'Escribe la dirección de destino:\n' +
+          '👉 Ej: _Barrio el Centro, frente al parque_\n\n' +
+          '0️⃣ Cancelar';
       } else {
         setEstado(telefono, 'esperando_ubicacion', { metodoPago: 'daviplata' });
         respuesta = '✅ Método de pago: *Electrónico (Nequi/Daviplata)*\n\n' +
@@ -357,20 +366,41 @@ async function procesarMensaje(telefono, texto) {
       limpiarEstado(telefono);
       respuesta = '❌ Solicitud cancelada.\n\nEscribe *1* si deseas pedir un taxi nuevamente.';
     } else if (texto.trim().length >= 5) {
-      // Cualquier texto de 5+ caracteres se toma como dirección
-      const datos = estadoConv.datos;
-      respuesta = await crearServicioWhatsApp(telefono, {
-        nombre: datos.nombre || telefono,
-        metodoPago: datos.metodoPago || 'efectivo',
-        direccion: texto.trim(),
-        lat: null,
-        lng: null,
-      });
+      // Guardar origen y pedir destino
+      setEstado(telefono, 'esperando_destino', { origen: texto.trim(), lat: null, lng: null });
+      respuesta = '✅ Recogida: *' + texto.trim() + '*\n\n' +
+        '🏁 ¿Hacia dónde vas?\n\n' +
+        'Escribe la dirección de destino:\n' +
+        '👉 Ej: _Barrio el Centro, frente al parque_\n\n' +
+        '0️⃣ Cancelar';
     } else {
       respuesta = '📍 ¿Dónde te recogemos?\n\n' +
         '*Opción 1:* Envía tu ubicación GPS 📎 → Ubicación\n' +
         '*Opción 2:* Escribe tu dirección completa\n\n' +
         '0️⃣ Cancelar';
+    }
+    await enviarMensaje(telefono, respuesta);
+    return respuesta;
+  }
+
+  // ═══ ESTADO: ESPERANDO DESTINO ═══
+  if (estadoConv.estado === 'esperando_destino') {
+    if (textoLower === '0' || textoLower.includes('cancelar')) {
+      limpiarEstado(telefono);
+      respuesta = '❌ Solicitud cancelada.\n\nEscribe *1* si deseas pedir un taxi nuevamente.';
+    } else if (texto.trim().length >= 3) {
+      // Crear servicio con origen y destino
+      const datos = estadoConv.datos;
+      respuesta = await crearServicioWhatsApp(telefono, {
+        nombre: datos.nombre || telefono,
+        metodoPago: datos.metodoPago || 'efectivo',
+        direccion: datos.origen,
+        destino: texto.trim(),
+        lat: datos.lat || null,
+        lng: datos.lng || null,
+      });
+    } else {
+      respuesta = '🏁 ¿Hacia dónde vas? Escribe la dirección de destino.\n\n0️⃣ Cancelar';
     }
     await enviarMensaje(telefono, respuesta);
     return respuesta;
@@ -499,21 +529,35 @@ async function procesarUbicacion(telefono, lat, lng, nombre) {
     }
   } catch (e) {}
 
-  return await crearServicioWhatsApp(telefono, {
-    nombre: nombre || telefono,
-    metodoPago: datos.metodoPago || 'efectivo',
-    direccion,
-    lat,
-    lng,
-  });
+  // Guardar origen GPS y pedir destino
+  setEstado(telefono, 'esperando_destino', { origen: direccion, lat, lng });
+
+  const respuesta = '✅ Recogida: *' + direccion + '*\n' +
+    `📍 Ver mapa: https://www.google.com/maps?q=${lat},${lng}\n\n` +
+    '🏁 ¿Hacia dónde vas?\n\n' +
+    'Escribe la dirección de destino:\n' +
+    '👉 Ej: _Barrio el Centro, frente al parque_\n\n' +
+    '0️⃣ Cancelar';
+
+  await enviarMensaje(telefono, respuesta);
+  return respuesta;
 }
 
 // Procesar ubicación directa (sin flujo previo - pide taxi directo)
 async function procesarUbicacionDirecta(telefono, lat, lng, nombre) {
-  // Si envía ubicación sin flujo, asumir efectivo y crear servicio
+  // Si envía ubicación sin flujo, guardar y pedir método de pago
   setEstado(telefono, 'esperando_pago', { nombre, ubicacionDirecta: { lat, lng } });
   
-  const respuesta = '📍 ¡Ubicación recibida!\n\n' +
+  // Reverse geocode
+  let direccion = `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
+  try {
+    const geoRes = await fetch(`https://maps.googleapis.com/maps/api/geocode/json?latlng=${lat},${lng}&key=AIzaSyCz_s1BIBL0E9rJfQRXQ4lgnPb6GR9IiJE`);
+    const geoData = await geoRes.json();
+    if (geoData.results && geoData.results[0]) direccion = geoData.results[0].formatted_address;
+  } catch (e) {}
+
+  const respuesta = '📍 ¡Ubicación recibida!\n' +
+    `📌 ${direccion}\n\n` +
     '¿Cómo deseas pagar tu servicio?\n\n' +
     '1️⃣ Efectivo 💵\n' +
     '2️⃣ Electrónico (Nequi/Daviplata) 💳\n\n' +
@@ -525,7 +569,7 @@ async function procesarUbicacionDirecta(telefono, lat, lng, nombre) {
 
 // Crear servicio de taxi desde WhatsApp
 async function crearServicioWhatsApp(telefono, datos) {
-  const { nombre, metodoPago, direccion, lat, lng } = datos;
+  const { nombre, metodoPago, direccion, destino, lat, lng } = datos;
   const { v4: uuidv4 } = require('uuid');
 
   try {
@@ -540,7 +584,7 @@ async function crearServicioWhatsApp(telefono, datos) {
       destinoLat: null,
       destinoLng: null,
       origen: direccion,
-      destino: 'Por definir con el conductor',
+      destino: destino || 'Por definir con el conductor',
       metodoPago: metodoPago,
       estado: 'pendiente',
       conductorUid: null,
@@ -576,6 +620,7 @@ async function crearServicioWhatsApp(telefono, datos) {
     
     const respuesta = '✅ *¡Servicio solicitado exitosamente!*\n\n' +
       `📍 Recogida: ${direccion}${mapa}\n` +
+      `🏁 Destino: ${destino || 'Por definir'}\n` +
       `💰 Pago: ${metodoPago === 'efectivo' ? 'Efectivo 💵' : 'Electrónico 💳'}\n\n` +
       '🔍 Estamos buscando al conductor disponible más cercano...\n\n' +
       '⏳ Te notificaremos cuando un conductor acepte tu servicio.\n\n' +
