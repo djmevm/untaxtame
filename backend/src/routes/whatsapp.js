@@ -343,6 +343,20 @@ async function procesarMensaje(telefono, texto) {
 
   // ═══ ESTADO: SERVICIO ACTIVO (cliente tiene un servicio en curso) ═══
   if (estadoConv.estado === 'servicio_activo') {
+    // Verificar si hay oferta pendiente de respuesta
+    if (estadoConv.datos.ofertaPendiente) {
+      if (textoLower === 'si' || textoLower === 'sí' || textoLower === '1' || textoLower === 'aceptar' || textoLower === 'acepto') {
+        await aceptarOfertaDesdeWhatsApp(telefono, estadoConv.datos.ofertaPendiente);
+        return '';
+      } else if (textoLower === 'no' || textoLower === '2' || textoLower === 'rechazar') {
+        // Rechazar oferta y seguir esperando
+        setEstado(telefono, 'servicio_activo', { servicioId: estadoConv.datos.servicioId, ofertaPendiente: null });
+        respuesta = '❌ Oferta rechazada. Seguimos buscando otro conductor para ti...\n\n0️⃣ Cancelar servicio';
+        await enviarMensaje(telefono, respuesta);
+        return respuesta;
+      }
+    }
+
     if (textoLower === '0' || textoLower.includes('cancelar')) {
       // Cancelar servicio activo
       const servicioId = estadoConv.datos.servicioId;
@@ -529,6 +543,104 @@ async function notificarClienteWhatsApp(telefono, conductorNombre, conductorPlac
   
   await enviarMensaje(telefono, mensaje);
   limpiarEstado(telefono);
+}
+
+// Notificar al cliente de WhatsApp cuando llega una oferta de un conductor
+async function enviarOfertaWhatsApp(telefono, datos) {
+  const { servicioId, ofertaId, conductorNombre, conductorPlaca, monto, mensaje } = datos;
+
+  // Guardar la oferta pendiente en el estado del usuario
+  setEstado(telefono, 'servicio_activo', { 
+    servicioId, 
+    ofertaPendiente: { ofertaId, servicioId, conductorNombre, conductorPlaca, monto } 
+  });
+
+  const msg = `🚕 *¡Tienes una oferta de taxi!*\n\n` +
+    `👤 Conductor: *${conductorNombre}*\n` +
+    `🚗 Placa: *${conductorPlaca}*\n` +
+    `💰 Tarifa: *$${monto.toLocaleString('es-CO')} COP*\n` +
+    (mensaje ? `💬 Mensaje: ${mensaje}\n` : '') +
+    `\n¿Aceptas este conductor?\n\n` +
+    `✅ Responde *SI* para aceptar\n` +
+    `❌ Responde *NO* para rechazar y esperar otra oferta\n` +
+    `0️⃣ Cancelar servicio`;
+
+  await enviarMensaje(telefono, msg);
+}
+
+// Aceptar oferta desde WhatsApp
+async function aceptarOfertaDesdeWhatsApp(telefono, ofertaData) {
+  const { ofertaId, servicioId } = ofertaData;
+
+  try {
+    const servicioRef = db.collection('servicios').doc(servicioId);
+    const servicioDoc = await servicioRef.get();
+
+    if (!servicioDoc.exists || servicioDoc.data().estado !== 'pendiente') {
+      await enviarMensaje(telefono, '⚠️ Este servicio ya no está disponible.');
+      limpiarEstado(telefono);
+      return;
+    }
+
+    const ofertaRef = db.collection('servicios').doc(servicioId).collection('ofertas').doc(ofertaId);
+    const ofertaDoc = await ofertaRef.get();
+
+    if (!ofertaDoc.exists) {
+      await enviarMensaje(telefono, '⚠️ Esta oferta ya no está disponible.');
+      return;
+    }
+
+    const oferta = ofertaDoc.data();
+
+    // Marcar oferta como aceptada
+    await ofertaRef.update({ estado: 'aceptada' });
+
+    // Rechazar las demás ofertas
+    const todasOfertas = await db.collection('servicios').doc(servicioId).collection('ofertas').get();
+    const batch = db.batch();
+    todasOfertas.docs.forEach(doc => {
+      if (doc.id !== ofertaId) batch.update(doc.ref, { estado: 'rechazada' });
+    });
+    await batch.commit();
+
+    // Actualizar servicio con el conductor
+    await servicioRef.update({
+      conductorUid: oferta.conductorUid,
+      conductorNombre: oferta.conductorNombre,
+      conductorPlaca: oferta.conductorPlaca,
+      conductorCelular: oferta.conductorCelular,
+      tarifaAcordada: oferta.monto,
+      estado: 'aceptado',
+      actualizadoEn: new Date().toISOString(),
+    });
+
+    // Marcar conductor como no disponible
+    await db.collection('usuarios').doc(oferta.conductorUid).update({ disponible: false });
+
+    // Push al conductor
+    try {
+      const { enviarPushAUsuario } = require('../services/pushNotifications');
+      enviarPushAUsuario(oferta.conductorUid, { 
+        titulo: '✅ Oferta aceptada', 
+        cuerpo: 'Tu oferta fue aceptada. Ve al punto de recogida.', 
+        datos: { tipo: 'oferta_aceptada', servicioId } 
+      });
+    } catch (e) {}
+
+    // Notificar al cliente
+    limpiarEstado(telefono);
+    const msg = `✅ *¡Conductor aceptado!*\n\n` +
+      `👤 Conductor: *${oferta.conductorNombre}*\n` +
+      `🚗 Placa: *${oferta.conductorPlaca || 'N/A'}*\n` +
+      `💰 Tarifa: *$${oferta.monto.toLocaleString('es-CO')} COP*\n` +
+      `📱 WhatsApp: https://wa.me/${oferta.conductorCelular || ''}\n\n` +
+      `🚕 Tu conductor va en camino. ¡Buen viaje! 🙌`;
+
+    await enviarMensaje(telefono, msg);
+  } catch (e) {
+    console.error('[WA] Error aceptando oferta:', e.message);
+    await enviarMensaje(telefono, '⚠️ Error al aceptar. Intenta de nuevo respondiendo *SI*.');
+  }
 }
 
 // Enviar mensaje via WhatsApp Cloud API
@@ -955,3 +1067,4 @@ router.get('/plantillas', verifyToken, async (req, res) => {
 
 module.exports = router;
 module.exports.notificarClienteWhatsApp = notificarClienteWhatsApp;
+module.exports.enviarOfertaWhatsApp = enviarOfertaWhatsApp;

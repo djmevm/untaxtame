@@ -129,6 +129,19 @@ router.post('/:servicioId', verifyToken, async (req, res) => {
           datos: { tipo: 'nueva_oferta', servicioId, ofertaId: docRef.id, totalOfertas }
         });
       }
+
+      // Si el servicio fue solicitado por WhatsApp, notificar oferta al cliente por WhatsApp
+      if (servicioData.fuenteSolicitud === 'whatsapp' && servicioData.clienteCelular) {
+        const { enviarOfertaWhatsApp } = require('./whatsapp');
+        await enviarOfertaWhatsApp(servicioData.clienteCelular, {
+          servicioId,
+          ofertaId: docRef.id,
+          conductorNombre,
+          conductorPlaca: conductorData.placa || 'N/A',
+          monto: parseInt(monto),
+          mensaje: mensaje || '',
+        });
+      }
     } catch (e) {}
 
     res.status(201).json({ message: 'Oferta enviada', ofertaId: docRef.id, oferta });
