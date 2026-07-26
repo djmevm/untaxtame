@@ -486,7 +486,7 @@ async function procesarMensaje(telefono, texto) {
       '0️⃣ Cancelar';
   } else if (textoLower === '2' || textoLower.includes('descarga') || textoLower.includes('app') || textoLower.includes('instalar')) {
     respuesta = '📲 Descarga UntaXtame y pide tu taxi facil!\n\n' +
-      '🔗 Play Store: https://play.google.com/store/apps/details?id=com.untaxtame\n\n' +
+      '🔗 Play Store: https://play.google.com/store/apps/details?id=com.untaxtame.taxi\n\n' +
       '🔗 Descarga directa: https://untaxtame.vercel.app/descargar.html\n\n' +
       '⚠️ _La app aún no está disponible para iPhone (iOS). Próximamente._\n\n' +
       '✅ GPS en tiempo real\n' +
