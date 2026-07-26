@@ -275,11 +275,12 @@ async function procesarMensaje(telefono, texto) {
       } else {
         setEstado(telefono, 'esperando_ubicacion', { metodoPago: 'efectivo' });
         respuesta = '✅ Método de pago: *Efectivo*\n\n' +
-          '📍 Ahora envíanos tu ubicación GPS:\n\n' +
-          '👉 Toca el botón *📎* (adjuntar)\n' +
-          '👉 Selecciona *Ubicación*\n' +
-          '👉 Toca *Enviar tu ubicación actual*\n\n' +
-          '⏳ Esperando tu ubicación...';
+          '📍 ¿Dónde te recogemos?\n\n' +
+          '*Opción 1:* Envía tu ubicación GPS\n' +
+          '👉 Toca *📎* → *Ubicación* → *Enviar ubicación actual*\n\n' +
+          '*Opción 2:* Escribe tu dirección\n' +
+          '👉 Ej: _Calle 20 con Carrera 15, barrio Centro_\n\n' +
+          '0️⃣ Cancelar';
       }
     } else if (textoLower === '2' || textoLower.includes('electr') || textoLower.includes('nequi') || textoLower.includes('daviplata')) {
       if (estadoConv.datos.ubicacionDirecta) {
@@ -295,11 +296,12 @@ async function procesarMensaje(telefono, texto) {
       } else {
         setEstado(telefono, 'esperando_ubicacion', { metodoPago: 'daviplata' });
         respuesta = '✅ Método de pago: *Electrónico (Nequi/Daviplata)*\n\n' +
-          '📍 Ahora envíanos tu ubicación GPS:\n\n' +
-          '👉 Toca el botón *📎* (adjuntar)\n' +
-          '👉 Selecciona *Ubicación*\n' +
-          '👉 Toca *Enviar tu ubicación actual*\n\n' +
-          '⏳ Esperando tu ubicación...';
+          '📍 ¿Dónde te recogemos?\n\n' +
+          '*Opción 1:* Envía tu ubicación GPS\n' +
+          '👉 Toca *📎* → *Ubicación* → *Enviar ubicación actual*\n\n' +
+          '*Opción 2:* Escribe tu dirección\n' +
+          '👉 Ej: _Calle 20 con Carrera 15, barrio Centro_\n\n' +
+          '0️⃣ Cancelar';
       }
     } else if (textoLower === '0' || textoLower.includes('cancelar')) {
       limpiarEstado(telefono);
@@ -319,23 +321,21 @@ async function procesarMensaje(telefono, texto) {
     if (textoLower === '0' || textoLower.includes('cancelar')) {
       limpiarEstado(telefono);
       respuesta = '❌ Solicitud cancelada.\n\nEscribe *1* si deseas pedir un taxi nuevamente.';
+    } else if (texto.trim().length >= 5) {
+      // Cualquier texto de 5+ caracteres se toma como dirección
+      const datos = estadoConv.datos;
+      respuesta = await crearServicioWhatsApp(telefono, {
+        nombre: datos.nombre || telefono,
+        metodoPago: datos.metodoPago || 'efectivo',
+        direccion: texto.trim(),
+        lat: null,
+        lng: null,
+      });
     } else {
-      respuesta = '📍 Necesito tu *ubicación GPS* para enviarte un taxi.\n\n' +
-        '👉 Toca *📎* → *Ubicación* → *Enviar tu ubicación actual*\n\n' +
-        '💡 Si no puedes enviar la ubicación, escribe tu dirección completa y te ayudaremos.\n\n' +
-        '0️⃣ Cancelar solicitud';
-      
-      // Si parece una dirección de texto, crear servicio con dirección manual
-      if (texto.length > 10 && (texto.includes('calle') || texto.includes('carrera') || texto.includes('barrio') || texto.includes('cra') || texto.includes('cl'))) {
-        const datos = estadoConv.datos;
-        respuesta = await crearServicioWhatsApp(telefono, {
-          nombre: datos.nombre || telefono,
-          metodoPago: datos.metodoPago || 'efectivo',
-          direccion: texto,
-          lat: null,
-          lng: null,
-        });
-      }
+      respuesta = '📍 ¿Dónde te recogemos?\n\n' +
+        '*Opción 1:* Envía tu ubicación GPS 📎 → Ubicación\n' +
+        '*Opción 2:* Escribe tu dirección completa\n\n' +
+        '0️⃣ Cancelar';
     }
     await enviarMensaje(telefono, respuesta);
     return respuesta;
