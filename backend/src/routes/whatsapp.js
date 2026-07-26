@@ -423,6 +423,7 @@ async function procesarMensaje(telefono, texto) {
     respuesta = '📲 Descarga UntaXtame y pide tu taxi facil!\n\n' +
       '🔗 Play Store: https://play.google.com/store/apps/details?id=com.untaxtame\n\n' +
       '🔗 Descarga directa: https://untaxtame.vercel.app/descargar.html\n\n' +
+      '⚠️ _La app aún no está disponible para iPhone (iOS). Próximamente._\n\n' +
       '✅ GPS en tiempo real\n' +
       '✅ Chat con tu conductor\n' +
       '✅ Paga con Daviplata, Nequi o Efectivo\n' +
@@ -435,7 +436,8 @@ async function procesarMensaje(telefono, texto) {
       'Servicio de atención 24/7.';
   } else {
     respuesta = '¡Hola! Bienvenido a *UntaXtame S.A.S* 🚕\n\n' +
-      'Somos tu servicio de taxi seguro en Tame, Arauca. Servicio 24/7.\n\n' +
+      'Somos tu servicio de taxi seguro en Tame, Arauca. Servicio 24/7.\n' +
+      '💰 Tarifa mínima: *$8.000 COP*\n\n' +
       '¿En qué podemos ayudarte?\n\n' +
       '1️⃣ *Necesito un taxi* 🚕\n' +
       '2️⃣ Descargar la app 📲\n' +
