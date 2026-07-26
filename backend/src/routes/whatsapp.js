@@ -343,14 +343,33 @@ async function procesarMensaje(telefono, texto) {
 
   // ═══ ESTADO: SERVICIO ACTIVO (cliente tiene un servicio en curso) ═══
   if (estadoConv.estado === 'servicio_activo') {
-    // Verificar si hay oferta pendiente de respuesta
+    // Verificar si hay ofertas disponibles para elegir
+    const ofertasLista = estadoConv.datos.ofertasLista || [];
+    
+    if (ofertasLista.length > 0) {
+      // Verificar si el cliente respondió con un número para elegir oferta
+      const numero = parseInt(textoLower);
+      if (numero >= 1 && numero <= ofertasLista.length) {
+        const ofertaElegida = ofertasLista[numero - 1];
+        await aceptarOfertaDesdeWhatsApp(telefono, ofertaElegida);
+        return '';
+      }
+      
+      // Compatibilidad: "si" acepta la primera oferta
+      if (textoLower === 'si' || textoLower === 'sí' || textoLower === 'acepto' || textoLower === 'aceptar') {
+        const ofertaElegida = ofertasLista[0];
+        await aceptarOfertaDesdeWhatsApp(telefono, ofertaElegida);
+        return '';
+      }
+    }
+
+    // Compatibilidad con ofertaPendiente antigua
     if (estadoConv.datos.ofertaPendiente) {
       if (textoLower === 'si' || textoLower === 'sí' || textoLower === '1' || textoLower === 'aceptar' || textoLower === 'acepto') {
         await aceptarOfertaDesdeWhatsApp(telefono, estadoConv.datos.ofertaPendiente);
         return '';
-      } else if (textoLower === 'no' || textoLower === '2' || textoLower === 'rechazar') {
-        // Rechazar oferta y seguir esperando
-        setEstado(telefono, 'servicio_activo', { servicioId: estadoConv.datos.servicioId, ofertaPendiente: null });
+      } else if (textoLower === 'no' || textoLower === 'rechazar') {
+        setEstado(telefono, 'servicio_activo', { servicioId: estadoConv.datos.servicioId, ofertaPendiente: null, ofertasLista: [] });
         respuesta = '❌ Oferta rechazada. Seguimos buscando otro conductor para ti...\n\n0️⃣ Cancelar servicio';
         await enviarMensaje(telefono, respuesta);
         return respuesta;
@@ -549,21 +568,29 @@ async function notificarClienteWhatsApp(telefono, conductorNombre, conductorPlac
 async function enviarOfertaWhatsApp(telefono, datos) {
   const { servicioId, ofertaId, conductorNombre, conductorPlaca, monto, mensaje } = datos;
 
-  // Guardar la oferta pendiente en el estado del usuario
+  // Obtener estado actual y agregar oferta a la lista
+  const estadoConv = getEstado(telefono);
+  const ofertasLista = estadoConv.datos.ofertasLista || [];
+  ofertasLista.push({ ofertaId, servicioId, conductorNombre, conductorPlaca, monto });
+
+  // Actualizar estado con la lista de ofertas
   setEstado(telefono, 'servicio_activo', { 
     servicioId, 
-    ofertaPendiente: { ofertaId, servicioId, conductorNombre, conductorPlaca, monto } 
+    ofertasLista,
+    ofertaPendiente: null,
   });
 
-  const msg = `🚕 *¡Tienes una oferta de taxi!*\n\n` +
-    `👤 Conductor: *${conductorNombre}*\n` +
-    `🚗 Placa: *${conductorPlaca}*\n` +
-    `💰 Tarifa: *$${monto.toLocaleString('es-CO')} COP*\n` +
-    (mensaje ? `💬 Mensaje: ${mensaje}\n` : '') +
-    `\n¿Aceptas este conductor?\n\n` +
-    `✅ Responde *SI* para aceptar\n` +
-    `❌ Responde *NO* para rechazar y esperar otra oferta\n` +
-    `0️⃣ Cancelar servicio`;
+  // Construir mensaje con todas las ofertas disponibles
+  let msg = `🚕 *¡Nueva oferta de taxi!*\n\n`;
+  
+  ofertasLista.forEach((oferta, i) => {
+    msg += `*${i + 1}️⃣* ${oferta.conductorNombre} | 🚗 ${oferta.conductorPlaca} | 💰 $${oferta.monto.toLocaleString('es-CO')}\n`;
+  });
+
+  msg += `\n━━━━━━━━━━━━━━━━━━━\n`;
+  msg += `✅ Responde con el *número* de la oferta que prefieras\n`;
+  msg += `   Ej: *1* para la primera, *2* para la segunda...\n\n`;
+  msg += `0️⃣ Cancelar servicio`;
 
   await enviarMensaje(telefono, msg);
 }
