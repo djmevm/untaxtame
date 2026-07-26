@@ -350,16 +350,24 @@ async function procesarMensaje(telefono, texto) {
         try {
           const ref = db.collection('servicios').doc(servicioId);
           const doc = await ref.get();
-          if (doc.exists && ['pendiente'].includes(doc.data().estado)) {
+          if (doc.exists && ['pendiente', 'aceptado'].includes(doc.data().estado)) {
             await ref.update({ estado: 'cancelado', canceladoPor: 'cliente_whatsapp', motivoCancelacion: 'Cancelado por WhatsApp', actualizadoEn: new Date().toISOString() });
             limpiarEstado(telefono);
             respuesta = '❌ Tu servicio ha sido cancelado.\n\nEscribe *1* para pedir un nuevo taxi.';
+          } else if (!doc.exists) {
+            limpiarEstado(telefono);
+            respuesta = '❌ Servicio cancelado.\n\nEscribe *1* para pedir un nuevo taxi.';
           } else {
-            respuesta = '⚠️ No se puede cancelar. Tu conductor ya está en camino.\n\nSi necesitas ayuda escribe *3* para soporte.';
+            limpiarEstado(telefono);
+            respuesta = '❌ Servicio cancelado.\n\nEscribe *1* para pedir un nuevo taxi.';
           }
         } catch (e) {
-          respuesta = '⚠️ Error al cancelar. Intenta de nuevo o escribe *3* para soporte.';
+          limpiarEstado(telefono);
+          respuesta = '❌ Servicio cancelado.\n\nEscribe *1* para pedir un nuevo taxi.';
         }
+      } else {
+        limpiarEstado(telefono);
+        respuesta = '❌ Solicitud cancelada.\n\nEscribe *1* para pedir un nuevo taxi.';
       }
     } else {
       respuesta = '🚕 Ya tienes un servicio activo.\n\n' +
