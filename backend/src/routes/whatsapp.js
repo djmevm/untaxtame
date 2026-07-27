@@ -499,7 +499,8 @@ async function procesarMensaje(telefono, texto) {
   } else {
     respuesta = '¡Hola! Bienvenido a *UntaXtame S.A.S* 🚕\n\n' +
       'Somos tu servicio de taxi seguro en Tame, Arauca. Servicio 24/7.\n' +
-      '💰 Tarifa mínima: *$8.000 COP*\n\n' +
+      '💰 Tarifa mínima: *$8.000 COP*\n' +
+      '🌙 Recargo nocturno de 6:00 PM a 6:00 AM\n\n' +
       '¿En qué podemos ayudarte?\n\n' +
       '1️⃣ *Necesito un taxi* 🚕\n' +
       '2️⃣ Descargar la app 📲\n' +
