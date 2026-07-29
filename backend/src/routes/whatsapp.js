@@ -609,7 +609,7 @@ async function crearServicioWhatsApp(telefono, datos) {
       const { enviarPushAConductores } = require('../services/pushNotifications');
       enviarPushAConductores({
         titulo: '🚕 Nuevo servicio (WhatsApp)',
-        cuerpo: `${nombre}: ${direccion} | Pago: ${metodoPago}`,
+        cuerpo: `Usuario WhatsApp: ${direccion} → ${destino || 'Por definir'} | Pago: ${metodoPago}`,
         datos: { tipo: 'nuevo_servicio', servicioId },
       });
     } catch (e) {}
