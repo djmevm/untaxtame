@@ -575,7 +575,7 @@ async function crearServicioWhatsApp(telefono, datos) {
     const servicio = {
       id: servicioId,
       clienteUid: `whatsapp_${telefono}`,
-      clienteNombre: nombre,
+      clienteNombre: 'Usuario WhatsApp',
       clienteCelular: telefono,
       clienteDireccion: direccion,
       ubicacionGPS: lat && lng ? { lat, lng, texto: direccion } : null,
