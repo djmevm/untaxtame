@@ -79,6 +79,7 @@ function inicializarWebSocket(server) {
       uid, ...data,
     }));
     broadcastARol('cliente', { tipo: 'ubicaciones_conductores', conductores: ubicaciones });
+    broadcastARol('admin', { tipo: 'ubicaciones_conductores', conductores: ubicaciones });
   }, 3000);
 
   console.log('[WS] WebSocket server inicializado en /ws');
