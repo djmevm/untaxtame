@@ -127,6 +127,33 @@ router.get('/conductores/en-servicio', verifyToken, async (req, res) => {
   }
 });
 
+// Obtener TODOS los conductores con su ubicación (mapa admin)
+router.get('/conductores/ubicaciones', verifyToken, async (req, res) => {
+  try {
+    const snapshot = await db.collection('usuarios')
+      .where('rol', '==', 'conductor')
+      .where('estadoVerificacion', '==', 'aprobado')
+      .get();
+
+    const conductores = snapshot.docs.map(d => {
+      const data = d.data();
+      return {
+        uid: data.uid,
+        nombre: data.nombre,
+        placa: data.placa,
+        telefono: data.telefono,
+        ubicacionActual: data.ubicacionActual || null,
+        ultimaUbicacion: data.ultimaUbicacion || data.ubicacionActual || null,
+        enServicio: data.enServicio || false,
+        disponible: data.disponible || false,
+      };
+    });
+    res.json(conductores);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Bloquear o desbloquear usuario (admin)
 router.put('/:uid/bloquear', verifyToken, verifyAdmin, async (req, res) => {
   const { bloqueado, motivo } = req.body;

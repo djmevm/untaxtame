@@ -8,6 +8,7 @@ import Usuarios from './components/Usuarios';
 import Dashboard from './components/Dashboard';
 import Emergencias from './components/Emergencias';
 import MapaConductores from './components/MapaConductores';
+import MapaUbicaciones from './components/MapaUbicaciones';
 import Billetera from './components/Billetera';
 import CodigosRadio from './components/CodigosRadio';
 import WhatsApp from './components/WhatsApp';
@@ -169,7 +170,8 @@ export default function App() {
         <button className={tab === 'radio' ? 'active' : ''} onClick={() => setTab('radio')}>📻 Radio</button>
         <button className={tab === 'billetera' ? 'active' : ''} onClick={() => setTab('billetera')}>💰 Billetera</button>
         <button className={tab === 'whatsapp' ? 'active' : ''} onClick={() => setTab('whatsapp')}>📱 WhatsApp</button>
-        <button className={tab === 'mapa' ? 'active' : ''} onClick={() => setTab('mapa')}>📍 Mapa</button>
+        <button className={tab === 'rastreo' ? 'active' : ''} onClick={() => setTab('rastreo')}>⚡ Rastreo</button>
+        <button className={tab === 'mapa' ? 'active' : ''} onClick={() => setTab('mapa')}>🗺️ Mapa</button>
       </nav>
       <main className="main">
         {tab === 'dashboard' && <Dashboard />}
@@ -179,7 +181,8 @@ export default function App() {
         {tab === 'radio' && <CodigosRadio />}
         {tab === 'billetera' && <Billetera />}
         {tab === 'whatsapp' && <WhatsApp />}
-        {tab === 'mapa' && <MapaConductores />}
+        {tab === 'rastreo' && <MapaConductores />}
+        {tab === 'mapa' && <MapaUbicaciones />}
       </main>
     </div>
   );
