@@ -4,7 +4,7 @@ import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import api from '../api';
 
-// Ícono de taxi
+// Ícono de taxi con placa
 function crearIconoTaxi(nombre, placa, sinGPS) {
   const primerNombre = nombre?.split(' ')[0] || '';
   const color = sinGPS ? '#9E9E9E' : '#FFC107';
@@ -20,6 +20,21 @@ function crearIconoTaxi(nombre, placa, sinGPS) {
   });
 }
 
+// Ícono de cliente con placa del conductor asignado
+function crearIconoCliente(nombre, placa) {
+  const primerNombre = nombre?.split(' ')[0] || 'Cliente';
+  return L.divIcon({
+    className: '',
+    html: `<div style="text-align:center">
+      <div style="font-size:24px">👤</div>
+      <div style="background:#1565C0;color:#fff;font-weight:bold;font-size:9px;padding:2px 6px;border-radius:4px;white-space:nowrap;margin-top:-2px">${primerNombre}</div>
+      ${placa ? `<div style="background:#E53935;color:#fff;font-weight:bold;font-size:8px;padding:1px 5px;border-radius:3px;margin-top:2px">🚗 ${placa}</div>` : ''}
+    </div>`,
+    iconSize: [80, 65],
+    iconAnchor: [40, 65],
+  });
+}
+
 function CentrarMapa({ centro }) {
   const map = useMap();
   useEffect(() => {
@@ -30,25 +45,32 @@ function CentrarMapa({ centro }) {
 
 export default function MapaUbicaciones() {
   const [conductores, setConductores] = useState([]);
+  const [servicios, setServicios] = useState([]);
   const [reporteGPS, setReporteGPS] = useState([]);
   const [cargando, setCargando] = useState(true);
   const [ultimaActualizacion, setUltimaActualizacion] = useState(null);
 
   const cargar = async () => {
     try {
-      const res = await api.get('/users/conductores/ubicaciones');
-      const todos = res.data || [];
+      const [ubiRes, srvRes] = await Promise.all([
+        api.get('/users/conductores/ubicaciones'),
+        api.get('/services/todos').catch(() => ({ data: [] })),
+      ]);
+      const todos = ubiRes.data || [];
       setConductores(todos.filter(c => c.ubicacionActual?.lat));
 
-      // Detectar conductores que perdieron GPS (tenían ubicación antes pero ya no)
-      const sinGPS = todos.filter(c => !c.ubicacionActual?.lat && c.ultimaUbicacion?.lat);
-      const conGPSViejo = todos.filter(c => {
-        if (!c.ubicacionActual?.actualizadoEn) return false;
-        const mins = (Date.now() - new Date(c.ubicacionActual.actualizadoEn).getTime()) / 60000;
-        return mins > 5; // Más de 5 minutos sin actualizar
-      });
+      // Servicios activos
+      setServicios((srvRes.data || []).filter(s =>
+        ['pendiente', 'aceptado', 'en_curso', 'conductor_en_sitio'].includes(s.estado)
+      ));
 
-      setReporteGPS([...sinGPS, ...conGPSViejo]);
+      // GPS perdido: sin ubicación o más de 5 min sin actualizar
+      const sinGPS = todos.filter(c => {
+        if (!c.ubicacionActual?.lat) return !!c.ultimaUbicacion?.lat;
+        const mins = (Date.now() - new Date(c.ubicacionActual.actualizadoEn || 0).getTime()) / 60000;
+        return mins > 5;
+      });
+      setReporteGPS(sinGPS);
       setUltimaActualizacion(new Date());
     } catch {}
     finally { setCargando(false); }
@@ -56,7 +78,7 @@ export default function MapaUbicaciones() {
 
   useEffect(() => {
     cargar();
-    const intervalo = setInterval(cargar, 60000); // Cada 1 minuto
+    const intervalo = setInterval(cargar, 60000);
     return () => clearInterval(intervalo);
   }, []);
 
@@ -64,7 +86,10 @@ export default function MapaUbicaciones() {
 
   const centro = conductores.length > 0
     ? [conductores[0].ubicacionActual.lat, conductores[0].ubicacionActual.lng]
-    : [6.4531, -71.4353]; // Tame, Arauca
+    : [6.4531, -71.4353];
+
+  // Servicios con cliente que tiene GPS
+  const serviciosConGPS = servicios.filter(s => s.ubicacionGPS?.lat);
 
   return (
     <div>
@@ -79,25 +104,61 @@ export default function MapaUbicaciones() {
           <div className="label">🚕 Con GPS activo</div>
         </div>
         <div className="stat-card">
+          <div className="num" style={{ color: '#1565C0' }}>{servicios.length}</div>
+          <div className="label">📋 Servicios activos</div>
+        </div>
+        <div className="stat-card">
           <div className="num" style={{ color: '#E53935' }}>{reporteGPS.length}</div>
           <div className="label">⚠️ GPS perdido</div>
         </div>
       </div>
 
+      {/* ═══ SERVICIOS ACTIVOS CON CLIENTES (PRIORIDAD ARRIBA) ═══ */}
+      {servicios.length > 0 && (
+        <>
+          <h3 style={{ marginBottom: 12 }}>📋 Servicios activos ({servicios.length})</h3>
+          <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: 24 }}>
+            <thead>
+              <tr style={{ background: '#E3F2FD' }}>
+                <th style={th}>👤 Cliente</th>
+                <th style={th}>📍 Origen</th>
+                <th style={th}>🏁 Destino</th>
+                <th style={th}>🚕 Conductor</th>
+                <th style={th}>🚗 Placa</th>
+                <th style={th}>💰 Pago</th>
+                <th style={th}>Estado</th>
+              </tr>
+            </thead>
+            <tbody>
+              {servicios.map(s => (
+                <tr key={s.id} style={{ borderBottom: '1px solid #eee' }}>
+                  <td style={td}><strong>{s.clienteNombre}</strong></td>
+                  <td style={td}>{s.origen}</td>
+                  <td style={td}>{s.destino}</td>
+                  <td style={td}>{s.conductorNombre || <span style={{ color: '#F97316' }}>Buscando...</span>}</td>
+                  <td style={td}><span style={{ color: '#FFC107', fontWeight: 'bold' }}>{s.conductorPlaca || '—'}</span></td>
+                  <td style={td}>{s.metodoPago?.toUpperCase()}</td>
+                  <td style={td}>
+                    <span style={{ background: s.estado === 'pendiente' ? '#FFF3E0' : '#E8F5E9', color: s.estado === 'pendiente' ? '#F57F17' : '#2E7D32', padding: '3px 8px', borderRadius: 6, fontSize: 11, fontWeight: 'bold' }}>
+                      {s.estado === 'pendiente' ? '🔍 Pendiente' : s.estado === 'aceptado' ? '🚕 En camino' : s.estado === 'conductor_en_sitio' ? '📍 En sitio' : '🚗 En curso'}
+                    </span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </>
+      )}
+
+      {/* ═══ MAPA ═══ */}
       <div style={{ marginBottom: 24, borderRadius: 16, overflow: 'hidden', boxShadow: '0 2px 12px rgba(0,0,0,0.1)' }}>
         <MapContainer center={centro} zoom={14} style={{ height: 500, borderRadius: 16 }}>
-          <TileLayer
-            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-            attribution='&copy; OpenStreetMap'
-          />
+          <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" attribution='&copy; OpenStreetMap' />
           <CentrarMapa centro={centro} />
 
+          {/* Conductores */}
           {conductores.map(c => (
-            <Marker
-              key={c.uid}
-              position={[c.ubicacionActual.lat, c.ubicacionActual.lng]}
-              icon={crearIconoTaxi(c.nombre, c.placa, false)}
-            >
+            <Marker key={c.uid} position={[c.ubicacionActual.lat, c.ubicacionActual.lng]} icon={crearIconoTaxi(c.nombre, c.placa, false)}>
               <Popup>
                 <div style={{ textAlign: 'center' }}>
                   <strong>🚕 {c.nombre}</strong><br />
@@ -112,24 +173,32 @@ export default function MapaUbicaciones() {
             </Marker>
           ))}
 
-          {/* Mostrar última ubicación conocida de los que perdieron GPS */}
-          {reporteGPS.filter(c => c.ubicacionActual?.lat || c.ultimaUbicacion?.lat).map(c => {
+          {/* Clientes con servicio activo + placa del conductor */}
+          {serviciosConGPS.map(s => (
+            <Marker key={s.id} position={[s.ubicacionGPS.lat, s.ubicacionGPS.lng]} icon={crearIconoCliente(s.clienteNombre, s.conductorPlaca)}>
+              <Popup>
+                <div style={{ textAlign: 'center' }}>
+                  <strong>👤 {s.clienteNombre}</strong><br />
+                  <span style={{ fontSize: 12 }}>📍 {s.origen}</span><br />
+                  <span style={{ fontSize: 12 }}>🏁 {s.destino}</span><br />
+                  {s.conductorNombre && <span style={{ fontSize: 12, color: '#E53935' }}>🚕 {s.conductorNombre} | 🚗 {s.conductorPlaca}</span>}<br />
+                  <span style={{ fontSize: 11, color: '#888' }}>{s.estado}</span>
+                </div>
+              </Popup>
+            </Marker>
+          ))}
+
+          {/* GPS perdido - última ubicación conocida */}
+          {reporteGPS.filter(c => (c.ubicacionActual?.lat || c.ultimaUbicacion?.lat)).map(c => {
             const ubi = c.ubicacionActual?.lat ? c.ubicacionActual : c.ultimaUbicacion;
             return (
-              <Marker
-                key={c.uid + '-lost'}
-                position={[ubi.lat, ubi.lng]}
-                icon={crearIconoTaxi(c.nombre, c.placa, true)}
-              >
+              <Marker key={c.uid + '-lost'} position={[ubi.lat, ubi.lng]} icon={crearIconoTaxi(c.nombre, c.placa, true)}>
                 <Popup>
                   <div style={{ textAlign: 'center' }}>
                     <strong>⚠️ {c.nombre}</strong><br />
                     <span style={{ color: '#E53935', fontWeight: 'bold' }}>GPS PERDIDO</span><br />
                     <span style={{ fontSize: 12 }}>{c.placa}</span><br />
-                    <span style={{ fontSize: 11, color: '#aaa' }}>
-                      Última señal: {ubi.actualizadoEn ? new Date(ubi.actualizadoEn).toLocaleString('es-CO') : '—'}
-                    </span><br />
-                    <a href={`https://www.google.com/maps?q=${ubi.lat},${ubi.lng}`} target="_blank" rel="noopener noreferrer" style={{ fontSize: 12 }}>🗺️ Última ubicación</a>
+                    <span style={{ fontSize: 11, color: '#aaa' }}>Última señal: {ubi.actualizadoEn ? new Date(ubi.actualizadoEn).toLocaleString('es-CO') : '—'}</span>
                   </div>
                 </Popup>
               </Marker>
@@ -138,10 +207,41 @@ export default function MapaUbicaciones() {
         </MapContainer>
       </div>
 
-      {/* Reporte de GPS perdido */}
-      <h3 style={{ marginTop: 24, marginBottom: 16, color: '#E53935' }}>⚠️ Reporte GPS perdido</h3>
+      {/* ═══ CONDUCTORES ACTIVOS ═══ */}
+      <h3 style={{ marginTop: 24, marginBottom: 12 }}>🚕 Conductores con GPS activo ({conductores.length})</h3>
+      {conductores.length === 0 ? (
+        <p style={{ color: '#999', textAlign: 'center', padding: 20 }}>No hay conductores con GPS activo</p>
+      ) : (
+        <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: 24 }}>
+          <thead>
+            <tr style={{ background: '#FFF8E1' }}>
+              <th style={th}>Conductor</th>
+              <th style={th}>Placa</th>
+              <th style={th}>Coordenadas</th>
+              <th style={th}>Actualizado</th>
+              <th style={th}>Mapa</th>
+            </tr>
+          </thead>
+          <tbody>
+            {conductores.map(c => (
+              <tr key={c.uid} style={{ borderBottom: '1px solid #eee' }}>
+                <td style={td}>{c.nombre}</td>
+                <td style={td}><span style={{ color: '#FFC107', fontWeight: 'bold' }}>{c.placa}</span></td>
+                <td style={td}>{c.ubicacionActual.lat.toFixed(5)}, {c.ubicacionActual.lng.toFixed(5)}</td>
+                <td style={td}>{c.ubicacionActual.actualizadoEn ? new Date(c.ubicacionActual.actualizadoEn).toLocaleTimeString('es-CO') : '—'}</td>
+                <td style={td}>
+                  <a href={`https://www.google.com/maps?q=${c.ubicacionActual.lat},${c.ubicacionActual.lng}`} target="_blank" rel="noopener noreferrer" style={{ color: '#1565C0', textDecoration: 'none', fontWeight: 'bold' }}>📍 Ver</a>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+
+      {/* ═══ REPORTE GPS PERDIDO (AL FINAL) ═══ */}
+      <h3 style={{ marginTop: 24, marginBottom: 12, color: '#E53935' }}>⚠️ Reporte GPS perdido ({reporteGPS.length})</h3>
       {reporteGPS.length === 0 ? (
-        <p style={{ color: '#999', textAlign: 'center', padding: 20 }}>✅ Todos los conductores tienen GPS activo</p>
+        <p style={{ color: '#2E7D32', textAlign: 'center', padding: 20 }}>✅ Todos los conductores tienen GPS activo</p>
       ) : (
         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
           <thead>
@@ -168,9 +268,7 @@ export default function MapaUbicaciones() {
                   <td style={td}><span style={{ color: '#E53935', fontWeight: 'bold' }}>{minutos} min</span></td>
                   <td style={td}>
                     {ubi && (
-                      <a href={`https://www.google.com/maps?q=${ubi.lat},${ubi.lng}`} target="_blank" rel="noopener noreferrer" style={{ color: '#1565C0', fontWeight: 'bold', textDecoration: 'none' }}>
-                        📍 Ver
-                      </a>
+                      <a href={`https://www.google.com/maps?q=${ubi.lat},${ubi.lng}`} target="_blank" rel="noopener noreferrer" style={{ color: '#1565C0', fontWeight: 'bold', textDecoration: 'none' }}>📍 Ver</a>
                     )}
                   </td>
                 </tr>
@@ -179,35 +277,6 @@ export default function MapaUbicaciones() {
           </tbody>
         </table>
       )}
-
-      {/* Lista de todos los conductores con ubicación */}
-      <h3 style={{ marginTop: 24, marginBottom: 16 }}>🚕 Todos los conductores ({conductores.length})</h3>
-      <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-        <thead>
-          <tr style={{ background: '#FFF8E1' }}>
-            <th style={th}>Conductor</th>
-            <th style={th}>Placa</th>
-            <th style={th}>Coordenadas</th>
-            <th style={th}>Actualizado</th>
-            <th style={th}>Mapa</th>
-          </tr>
-        </thead>
-        <tbody>
-          {conductores.map(c => (
-            <tr key={c.uid} style={{ borderBottom: '1px solid #eee' }}>
-              <td style={td}>{c.nombre}</td>
-              <td style={td}><span style={{ color: '#FFC107', fontWeight: 'bold' }}>{c.placa}</span></td>
-              <td style={td}>{c.ubicacionActual.lat.toFixed(5)}, {c.ubicacionActual.lng.toFixed(5)}</td>
-              <td style={td}>{c.ubicacionActual.actualizadoEn ? new Date(c.ubicacionActual.actualizadoEn).toLocaleTimeString('es-CO') : '—'}</td>
-              <td style={td}>
-                <a href={`https://www.google.com/maps?q=${c.ubicacionActual.lat},${c.ubicacionActual.lng}`} target="_blank" rel="noopener noreferrer" style={{ color: '#1565C0', textDecoration: 'none' }}>
-                  🗺️ Ver
-                </a>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
     </div>
   );
 }
