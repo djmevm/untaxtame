@@ -304,23 +304,42 @@ export default function Servicios() {
           ) : (
             <table>
               <thead>
-                <tr><th>Conductor</th><th>Placa</th><th>Monto ofertado</th><th>Mensaje</th><th>Estado</th><th>Fecha</th></tr>
+                <tr><th>Conductor</th><th>Placa</th><th>Monto ofertado</th><th>Mensaje</th><th>Estado</th><th>Fecha</th><th>Acción</th></tr>
               </thead>
               <tbody>
                 {ofertas.map((o, i) => (
-                  <tr key={o.id || i} style={o.aceptada ? { backgroundColor: '#E8F5E9' } : {}}>
+                  <tr key={o.id || i} style={o.estado === 'aceptada' ? { backgroundColor: '#E8F5E9' } : {}}>
                     <td><strong>{o.conductorNombre}</strong></td>
                     <td style={{ color: '#FFC107', fontWeight: 'bold' }}>{o.conductorPlaca || '—'}</td>
                     <td style={{ fontWeight: 'bold', color: '#2E7D32' }}>${(o.monto || 0).toLocaleString('es-CO')}</td>
                     <td style={{ fontSize: 13, color: '#666' }}>{o.mensaje || '—'}</td>
                     <td>
-                      {o.aceptada ? (
+                      {o.estado === 'aceptada' ? (
                         <span style={{ background: '#2E7D32', color: '#fff', padding: '3px 10px', borderRadius: 10, fontSize: 11, fontWeight: 'bold' }}>✅ ACEPTADA</span>
+                      ) : o.estado === 'rechazada' ? (
+                        <span style={{ background: '#E53935', color: '#fff', padding: '3px 10px', borderRadius: 10, fontSize: 11, fontWeight: 'bold' }}>❌ RECHAZADA</span>
                       ) : (
-                        <span style={{ background: '#eee', color: '#666', padding: '3px 10px', borderRadius: 10, fontSize: 11 }}>Pendiente</span>
+                        <span style={{ background: '#FFF3E0', color: '#F57F17', padding: '3px 10px', borderRadius: 10, fontSize: 11, fontWeight: 'bold' }}>⏳ Pendiente</span>
                       )}
                     </td>
                     <td style={{ fontSize: 12, whiteSpace: 'nowrap' }}>{o.creadoEn ? new Date(o.creadoEn).toLocaleString('es-CO', { hour: '2-digit', minute: '2-digit', hour12: true }) : '—'}</td>
+                    <td>
+                      {detalle.estado === 'pendiente' && o.estado === 'pendiente' && (
+                        <button onClick={async () => {
+                          if (!window.confirm(`✅ ¿Asignar a ${o.conductorNombre} (${o.conductorPlaca}) por $${o.monto.toLocaleString('es-CO')}?`)) return;
+                          try {
+                            await api.put(`/ofertas/${detalle.id}/aceptar/${o.id}`);
+                            alert(`✅ Conductor ${o.conductorNombre} asignado exitosamente`);
+                            verDetalle({ ...detalle, estado: 'aceptado', conductorNombre: o.conductorNombre });
+                            cargar();
+                          } catch (err) {
+                            alert('Error: ' + (err.response?.data?.error || err.message));
+                          }
+                        }} style={{ background: '#2E7D32', color: '#fff', border: 'none', borderRadius: 8, padding: '6px 14px', cursor: 'pointer', fontWeight: 'bold', fontSize: 12 }}>
+                          ✅ Asignar
+                        </button>
+                      )}
+                    </td>
                   </tr>
                 ))}
               </tbody>
