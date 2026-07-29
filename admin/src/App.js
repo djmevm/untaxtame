@@ -171,15 +171,15 @@ export default function App() {
           <h1>🚕 UntaXtame S.A.S</h1>
           <p>Panel Administrador — {perfil.nombre}</p>
         </div>
-        <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginRight: 16 }}>
+        <div style={{ display: 'flex', gap: 14, alignItems: 'center', marginRight: 20, background: 'rgba(0,0,0,0.15)', borderRadius: 10, padding: '8px 16px' }}>
           {adminsEnLinea.map(a => (
-            <div key={a.uid} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-              <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#4CAF50', display: 'inline-block' }}></span>
-              <span style={{ fontSize: 11, color: '#fff', opacity: 0.9 }}>{a.nombre?.split(' ')[0]}</span>
+            <div key={a.uid} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <span style={{ width: 10, height: 10, borderRadius: '50%', background: '#4CAF50', display: 'inline-block', boxShadow: '0 0 6px #4CAF50' }}></span>
+              <span style={{ fontSize: 13, color: '#fff', fontWeight: 'bold' }}>{a.nombre?.split(' ')[0]}</span>
             </div>
           ))}
           {adminsEnLinea.length === 0 && (
-            <span style={{ fontSize: 11, color: '#fff', opacity: 0.6 }}>Solo tú en línea</span>
+            <span style={{ fontSize: 13, color: '#fff', fontWeight: '500' }}>Solo tú en línea</span>
           )}
         </div>
         <button onClick={cerrarSesion} style={{
