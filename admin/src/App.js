@@ -98,6 +98,7 @@ export default function App() {
   const [cargando, setCargando] = useState(true);
   const [errorAcceso, setErrorAcceso] = useState('');
   const [tab, setTab] = useState('dashboard');
+  const [adminsEnLinea, setAdminsEnLinea] = useState([]);
 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (user) => {
@@ -133,6 +134,21 @@ export default function App() {
     setTab('dashboard');
   };
 
+  // Registrar presencia y consultar admins en línea
+  useEffect(() => {
+    if (!perfil?.uid) return;
+    const registrar = async () => {
+      try {
+        await api.post('/admin/presencia', { uid: perfil.uid, nombre: perfil.nombre });
+        const res = await api.get('/admin/en-linea');
+        setAdminsEnLinea(res.data || []);
+      } catch {}
+    };
+    registrar();
+    const intervalo = setInterval(registrar, 30000); // Cada 30 seg
+    return () => clearInterval(intervalo);
+  }, [perfil?.uid]);
+
   if (cargando) {
     return (
       <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f5f5f5' }}>
@@ -154,6 +170,17 @@ export default function App() {
         <div style={{ flex: 1 }}>
           <h1>🚕 UntaXtame S.A.S</h1>
           <p>Panel Administrador — {perfil.nombre}</p>
+        </div>
+        <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginRight: 16 }}>
+          {adminsEnLinea.map(a => (
+            <div key={a.uid} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+              <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#4CAF50', display: 'inline-block' }}></span>
+              <span style={{ fontSize: 11, color: '#fff', opacity: 0.9 }}>{a.nombre?.split(' ')[0]}</span>
+            </div>
+          ))}
+          {adminsEnLinea.length === 0 && (
+            <span style={{ fontSize: 11, color: '#fff', opacity: 0.6 }}>Solo tú en línea</span>
+          )}
         </div>
         <button onClick={cerrarSesion} style={{
           background: 'rgba(0,0,0,0.15)', border: 'none', borderRadius: 8,

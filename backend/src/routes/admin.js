@@ -2,6 +2,31 @@ const express = require('express');
 const router = express.Router();
 const { db, auth } = require('../firebase');
 
+// ═══ PRESENCIA DE ADMINS EN LÍNEA ═══
+const adminsPresencia = new Map(); // uid → { nombre, timestamp }
+
+// Registrar presencia (cada admin llama esto cada 30 seg)
+router.post('/presencia', async (req, res) => {
+  const { uid, nombre } = req.body;
+  if (!uid) return res.status(400).json({ error: 'Se requiere uid' });
+  adminsPresencia.set(uid, { uid, nombre: nombre || 'Admin', timestamp: Date.now() });
+  res.json({ ok: true });
+});
+
+// Consultar quién está en línea (activo en los últimos 60 seg)
+router.get('/en-linea', (req, res) => {
+  const ahora = Date.now();
+  const enLinea = [];
+  adminsPresencia.forEach((val, key) => {
+    if (ahora - val.timestamp < 60000) { // Activo en último minuto
+      enLinea.push(val);
+    } else {
+      adminsPresencia.delete(key); // Limpiar inactivos
+    }
+  });
+  res.json(enLinea);
+});
+
 // Crear usuario administrador (protegido por clave secreta)
 // Usar una sola vez para crear el primer admin
 // POST /api/admin/crear
