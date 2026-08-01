@@ -302,12 +302,14 @@ async function procesarMensaje(telefono, texto) {
         '0️⃣ Cancelar';
     } else if (textoLower === '2' || textoLower.includes('programar') || textoLower.includes('madrugada')) {
       setEstado(telefono, 'esperando_hora_programada', { nombre: estadoConv.datos.nombre || '' });
-      respuesta = '🌙 *Programar taxi para la madrugada*\n\n' +
+      respuesta = '🌙 *Programar taxi nocturno*\n\n' +
         '¿A qué hora necesitas el taxi?\n\n' +
         'Escribe la hora. Ejemplos:\n' +
         '👉 _4:00 AM_\n' +
         '👉 _3:30 AM_\n' +
-        '👉 _5:00 AM_\n\n' +
+        '👉 _9:00 PM_\n' +
+        '👉 _11:30 PM_\n\n' +
+        '_(Disponible de 6:00 PM a 6:00 AM)_\n\n' +
         '0️⃣ Cancelar';
     } else if (textoLower === '0' || textoLower.includes('cancelar')) {
       limpiarEstado(telefono);
@@ -338,8 +340,8 @@ async function procesarMensaje(telefono, texto) {
         if (periodo.startsWith('p') && horas < 12) horas += 12;
         if (periodo.startsWith('a') && horas === 12) horas = 0;
 
-        // Validar que sea horario de madrugada (10 PM - 6 AM)
-        if ((horas >= 0 && horas <= 6) || horas >= 22) {
+        // Validar que sea horario nocturno (6 PM - 6 AM)
+        if ((horas >= 0 && horas <= 6) || horas >= 18) {
           // Calcular la fecha/hora programada
           const ahora = new Date();
           const programada = new Date(ahora);
@@ -367,7 +369,7 @@ async function procesarMensaje(telefono, texto) {
             `2️⃣ Electrónico (Nequi/Daviplata) 💳\n\n` +
             `0️⃣ Cancelar`;
         } else {
-          respuesta = '⚠️ La programación solo está disponible en horario de madrugada (10:00 PM a 6:00 AM).\n\n' +
+          respuesta = '⚠️ La programación solo está disponible en horario nocturno (6:00 PM a 6:00 AM).\n\n' +
             'Escribe una hora válida. Ej: _4:00 AM_\n\n' +
             '0️⃣ Cancelar';
         }
@@ -569,17 +571,17 @@ async function procesarMensaje(telefono, texto) {
 
   // ═══ ESTADO IDLE: MENÚ PRINCIPAL ═══
   if (textoLower === '1' || textoLower.includes('taxi') || textoLower.includes('servicio') || textoLower.includes('necesito')) {
-    // Verificar si es horario de madrugada (10 PM - 6 AM) para ofrecer programar
+    // Verificar si es horario nocturno (6 PM - 6 AM) para ofrecer programar
     const horaActual = new Date().toLocaleString('en-US', { timeZone: 'America/Bogota', hour: 'numeric', hour12: false });
     const hora = parseInt(horaActual);
-    const esMadrugada = hora >= 22 || hora < 6;
+    const esMadrugada = hora >= 18 || hora < 6;
 
     if (esMadrugada) {
       setEstado(telefono, 'esperando_tipo_servicio', { nombre: '' });
       respuesta = '🚕 *¡Solicitar Taxi UntaXtame!*\n\n' +
         '¿Cuándo necesitas el taxi?\n\n' +
         '1️⃣ *Ahora mismo* 🚕\n' +
-        '2️⃣ *Programar para la madrugada* 🌙\n\n' +
+        '2️⃣ *Programar para más tarde* 🌙\n\n' +
         '0️⃣ Cancelar';
     } else {
       setEstado(telefono, 'esperando_pago', { nombre: '' });
