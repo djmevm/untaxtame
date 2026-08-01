@@ -292,6 +292,97 @@ async function procesarMensaje(telefono, texto) {
     return respuesta;
   }
 
+  // ═══ ESTADO: ESPERANDO TIPO SERVICIO (ahora o programar) ═══
+  if (estadoConv.estado === 'esperando_tipo_servicio') {
+    if (textoLower === '1' || textoLower.includes('ahora')) {
+      setEstado(telefono, 'esperando_pago', { nombre: estadoConv.datos.nombre || '' });
+      respuesta = 'Selecciona tu método de pago:\n\n' +
+        '1️⃣ Efectivo 💵\n' +
+        '2️⃣ Electrónico (Nequi/Daviplata) 💳\n\n' +
+        '0️⃣ Cancelar';
+    } else if (textoLower === '2' || textoLower.includes('programar') || textoLower.includes('madrugada')) {
+      setEstado(telefono, 'esperando_hora_programada', { nombre: estadoConv.datos.nombre || '' });
+      respuesta = '🌙 *Programar taxi para la madrugada*\n\n' +
+        '¿A qué hora necesitas el taxi?\n\n' +
+        'Escribe la hora. Ejemplos:\n' +
+        '👉 _4:00 AM_\n' +
+        '👉 _3:30 AM_\n' +
+        '👉 _5:00 AM_\n\n' +
+        '0️⃣ Cancelar';
+    } else if (textoLower === '0' || textoLower.includes('cancelar')) {
+      limpiarEstado(telefono);
+      respuesta = '❌ Solicitud cancelada.\n\nEscribe *1* cuando necesites un taxi.';
+    } else {
+      respuesta = '¿Cuándo necesitas el taxi?\n\n' +
+        '1️⃣ *Ahora mismo* 🚕\n' +
+        '2️⃣ *Programar para la madrugada* 🌙\n\n' +
+        '0️⃣ Cancelar';
+    }
+    await enviarMensaje(telefono, respuesta);
+    return respuesta;
+  }
+
+  // ═══ ESTADO: ESPERANDO HORA PROGRAMADA ═══
+  if (estadoConv.estado === 'esperando_hora_programada') {
+    if (textoLower === '0' || textoLower.includes('cancelar')) {
+      limpiarEstado(telefono);
+      respuesta = '❌ Solicitud cancelada.\n\nEscribe *1* cuando necesites un taxi.';
+    } else {
+      // Parsear hora del mensaje (ej: "4:00 AM", "4am", "4:30", "3:00 am")
+      const horaMatch = texto.match(/(\d{1,2}):?(\d{2})?\s*(am|pm|a\.?\s*m\.?|p\.?\s*m\.?)?/i);
+      if (horaMatch) {
+        let horas = parseInt(horaMatch[1]);
+        const minutos = parseInt(horaMatch[2] || '0');
+        const periodo = (horaMatch[3] || 'am').toLowerCase().replace(/[.\s]/g, '');
+
+        if (periodo.startsWith('p') && horas < 12) horas += 12;
+        if (periodo.startsWith('a') && horas === 12) horas = 0;
+
+        // Validar que sea horario de madrugada (10 PM - 6 AM)
+        if ((horas >= 0 && horas <= 6) || horas >= 22) {
+          // Calcular la fecha/hora programada
+          const ahora = new Date();
+          const programada = new Date(ahora);
+          programada.setHours(horas, minutos, 0, 0);
+          
+          // Si la hora ya pasó hoy, programar para mañana
+          if (programada <= ahora) {
+            programada.setDate(programada.getDate() + 1);
+          }
+
+          const horaFormateada = programada.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', hour12: true, timeZone: 'America/Bogota' });
+          const fechaFormateada = programada.toLocaleDateString('es-CO', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'America/Bogota' });
+
+          setEstado(telefono, 'esperando_pago', { 
+            nombre: estadoConv.datos.nombre || '',
+            programado: true,
+            horaProgramada: programada.toISOString(),
+            horaTexto: horaFormateada,
+          });
+          respuesta = `🌙 *Taxi programado para:*\n` +
+            `📅 ${fechaFormateada}\n` +
+            `⏰ ${horaFormateada}\n\n` +
+            `Ahora selecciona tu método de pago:\n\n` +
+            `1️⃣ Efectivo 💵\n` +
+            `2️⃣ Electrónico (Nequi/Daviplata) 💳\n\n` +
+            `0️⃣ Cancelar`;
+        } else {
+          respuesta = '⚠️ La programación solo está disponible en horario de madrugada (10:00 PM a 6:00 AM).\n\n' +
+            'Escribe una hora válida. Ej: _4:00 AM_\n\n' +
+            '0️⃣ Cancelar';
+        }
+      } else {
+        respuesta = '⚠️ No entendí la hora. Escríbela así:\n\n' +
+          '👉 _4:00 AM_\n' +
+          '👉 _3:30 AM_\n' +
+          '👉 _5:00 AM_\n\n' +
+          '0️⃣ Cancelar';
+      }
+    }
+    await enviarMensaje(telefono, respuesta);
+    return respuesta;
+  }
+
   // ═══ ESTADO: ESPERANDO MÉTODO DE PAGO ═══
   if (estadoConv.estado === 'esperando_pago') {
     if (textoLower === '1' || textoLower.includes('efectivo')) {
@@ -395,6 +486,9 @@ async function procesarMensaje(telefono, texto) {
         destino: texto.trim(),
         lat: datos.lat || null,
         lng: datos.lng || null,
+        programado: datos.programado || false,
+        horaProgramada: datos.horaProgramada || null,
+        horaTexto: datos.horaTexto || null,
       });
     } else {
       respuesta = '🏁 ¿Hacia dónde vas? Escribe la dirección de destino.\n\n0️⃣ Cancelar';
@@ -475,12 +569,26 @@ async function procesarMensaje(telefono, texto) {
 
   // ═══ ESTADO IDLE: MENÚ PRINCIPAL ═══
   if (textoLower === '1' || textoLower.includes('taxi') || textoLower.includes('servicio') || textoLower.includes('necesito')) {
-    setEstado(telefono, 'esperando_pago', { nombre: '' });
-    respuesta = '🚕 *¡Solicitar Taxi UntaXtame!*\n\n' +
-      'Selecciona tu método de pago:\n\n' +
-      '1️⃣ Efectivo 💵\n' +
-      '2️⃣ Electrónico (Nequi/Daviplata) 💳\n\n' +
-      '0️⃣ Cancelar';
+    // Verificar si es horario de madrugada (10 PM - 6 AM) para ofrecer programar
+    const horaActual = new Date().toLocaleString('en-US', { timeZone: 'America/Bogota', hour: 'numeric', hour12: false });
+    const hora = parseInt(horaActual);
+    const esMadrugada = hora >= 22 || hora < 6;
+
+    if (esMadrugada) {
+      setEstado(telefono, 'esperando_tipo_servicio', { nombre: '' });
+      respuesta = '🚕 *¡Solicitar Taxi UntaXtame!*\n\n' +
+        '¿Cuándo necesitas el taxi?\n\n' +
+        '1️⃣ *Ahora mismo* 🚕\n' +
+        '2️⃣ *Programar para la madrugada* 🌙\n\n' +
+        '0️⃣ Cancelar';
+    } else {
+      setEstado(telefono, 'esperando_pago', { nombre: '' });
+      respuesta = '🚕 *¡Solicitar Taxi UntaXtame!*\n\n' +
+        'Selecciona tu método de pago:\n\n' +
+        '1️⃣ Efectivo 💵\n' +
+        '2️⃣ Electrónico (Nequi/Daviplata) 💳\n\n' +
+        '0️⃣ Cancelar';
+    }
   } else if (textoLower === '2' || textoLower.includes('descarga') || textoLower.includes('app') || textoLower.includes('instalar')) {
     respuesta = '📲 Descarga UntaXtame y pide tu taxi facil!\n\n' +
       '🔗 Play Store: https://play.google.com/store/apps/details?id=com.untaxtame.taxi\n\n' +
@@ -567,7 +675,7 @@ async function procesarUbicacionDirecta(telefono, lat, lng, nombre) {
 
 // Crear servicio de taxi desde WhatsApp
 async function crearServicioWhatsApp(telefono, datos) {
-  const { nombre, metodoPago, direccion, destino, lat, lng } = datos;
+  const { nombre, metodoPago, direccion, destino, lat, lng, programado, horaProgramada, horaTexto } = datos;
   const { v4: uuidv4 } = require('uuid');
 
   try {
@@ -584,7 +692,7 @@ async function crearServicioWhatsApp(telefono, datos) {
       origen: direccion,
       destino: destino || 'Por definir con el conductor',
       metodoPago: metodoPago,
-      estado: 'pendiente',
+      estado: programado ? 'programado' : 'pendiente',
       conductorUid: null,
       conductorNombre: null,
       conductorPlaca: null,
@@ -595,6 +703,9 @@ async function crearServicioWhatsApp(telefono, datos) {
       totalOfertas: 0,
       requisitos: [],
       fuenteSolicitud: 'whatsapp',
+      programado: programado || false,
+      horaProgramada: horaProgramada || null,
+      horaTexto: horaTexto || null,
       creadoEn: new Date().toISOString(),
       actualizadoEn: new Date().toISOString(),
     };
@@ -604,18 +715,32 @@ async function crearServicioWhatsApp(telefono, datos) {
     // Marcar estado como servicio activo
     setEstado(telefono, 'servicio_activo', { servicioId, nombre });
 
-    // Notificar a conductores via push
-    try {
-      const { enviarPushAConductores } = require('../services/pushNotifications');
-      enviarPushAConductores({
-        titulo: '🚕 Nuevo servicio (WhatsApp)',
-        cuerpo: `Usuario WhatsApp: ${direccion} → ${destino || 'Por definir'} | Pago: ${metodoPago}`,
-        datos: { tipo: 'nuevo_servicio', servicioId },
-      });
-    } catch (e) {}
+    // Si NO es programado, notificar a conductores inmediatamente
+    if (!programado) {
+      try {
+        const { enviarPushAConductores } = require('../services/pushNotifications');
+        enviarPushAConductores({
+          titulo: '🚕 Nuevo servicio (WhatsApp)',
+          cuerpo: `Usuario WhatsApp: ${direccion} → ${destino || 'Por definir'} | Pago: ${metodoPago}`,
+          datos: { tipo: 'nuevo_servicio', servicioId },
+        });
+      } catch (e) {}
+    }
 
     const mapa = lat && lng ? `\n📍 Ver mapa: https://www.google.com/maps?q=${lat},${lng}` : '';
     
+    if (programado) {
+      const respuesta = '✅ *¡Servicio programado exitosamente!* 🌙\n\n' +
+        `📍 Recogida: ${direccion}${mapa}\n` +
+        `🏁 Destino: ${destino || 'Por definir'}\n` +
+        `💰 Pago: ${metodoPago === 'efectivo' ? 'Efectivo 💵' : 'Electrónico 💳'}\n` +
+        `⏰ Hora: *${horaTexto}*\n\n` +
+        '🔔 15 minutos antes de la hora programada enviaremos tu servicio a los conductores.\n' +
+        'Te notificaremos cuando un conductor acepte.\n\n' +
+        '_Para cancelar, responde *0*_';
+      return respuesta;
+    }
+
     const respuesta = '✅ *¡Servicio solicitado exitosamente!*\n\n' +
       `📍 Recogida: ${direccion}${mapa}\n` +
       `🏁 Destino: ${destino || 'Por definir'}\n` +
@@ -1194,6 +1319,80 @@ async function notificarServicioCompletadoWhatsApp(telefono, datos) {
 
   await enviarMensaje(telefono, msg);
 }
+
+// ═══ CRON: Revisar servicios programados cada minuto ═══
+setInterval(async () => {
+  try {
+    const ahora = new Date();
+    const en15min = new Date(ahora.getTime() + 15 * 60 * 1000);
+
+    const snapshot = await db.collection('servicios')
+      .where('estado', '==', 'programado')
+      .get();
+
+    for (const doc of snapshot.docs) {
+      const servicio = doc.data();
+      if (!servicio.horaProgramada) continue;
+
+      const horaServicio = new Date(servicio.horaProgramada);
+      const minutosParaHora = (horaServicio - ahora) / 60000;
+
+      // Si faltan 15 minutos o menos, activar el servicio
+      if (minutosParaHora <= 15 && minutosParaHora > -5) {
+        // Cambiar estado a pendiente
+        await db.collection('servicios').doc(servicio.id).update({
+          estado: 'pendiente',
+          activadoEn: ahora.toISOString(),
+          actualizadoEn: ahora.toISOString(),
+        });
+
+        // Notificar a conductores
+        try {
+          const { enviarPushAConductores } = require('../services/pushNotifications');
+          enviarPushAConductores({
+            titulo: '🌙 Servicio programado activado',
+            cuerpo: `Usuario WhatsApp: ${servicio.origen} → ${servicio.destino} | Pago: ${servicio.metodoPago}`,
+            datos: { tipo: 'nuevo_servicio', servicioId: servicio.id },
+          });
+        } catch (e) {}
+
+        // Notificar al cliente por WhatsApp
+        if (servicio.clienteCelular) {
+          await enviarMensaje(servicio.clienteCelular,
+            '🔔 *¡Tu taxi programado se activó!*\n\n' +
+            `📍 Recogida: ${servicio.origen}\n` +
+            `🏁 Destino: ${servicio.destino}\n` +
+            `⏰ Hora programada: ${servicio.horaTexto || ''}\n\n` +
+            '🔍 Buscando conductor disponible...\n' +
+            'Te notificaremos cuando uno acepte.'
+          );
+        }
+
+        console.log(`[CRON] Servicio programado activado: ${servicio.id} para ${servicio.horaTexto}`);
+      }
+
+      // Si ya pasó más de 30 minutos de la hora programada sin aceptar, cancelar
+      if (minutosParaHora < -30) {
+        await db.collection('servicios').doc(servicio.id).update({
+          estado: 'cancelado',
+          canceladoPor: 'sistema',
+          motivoCancelacion: 'Servicio programado expirado - no se encontró conductor',
+          actualizadoEn: ahora.toISOString(),
+        });
+
+        if (servicio.clienteCelular) {
+          await enviarMensaje(servicio.clienteCelular,
+            '❌ *Servicio programado cancelado*\n\n' +
+            'No se encontró conductor disponible para tu servicio programado.\n\n' +
+            'Escribe *1* para solicitar un taxi ahora.'
+          );
+        }
+      }
+    }
+  } catch (e) {
+    console.error('[CRON] Error revisando servicios programados:', e.message);
+  }
+}, 60000); // Cada 1 minuto
 
 module.exports = router;
 module.exports.notificarClienteWhatsApp = notificarClienteWhatsApp;
