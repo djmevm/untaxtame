@@ -7,16 +7,17 @@ import api from '../api';
 // Ícono de taxi con placa
 function crearIconoTaxi(nombre, placa, sinGPS) {
   const primerNombre = nombre?.split(' ')[0] || '';
-  const color = sinGPS ? '#9E9E9E' : '#FFC107';
+  const primerApellido = nombre?.split(' ').slice(1).find(p => p.length > 2) || nombre?.split(' ')[1] || '';
+  const nombreDisplay = primerApellido ? `${primerNombre} ${primerApellido}` : primerNombre;
   return L.divIcon({
     className: '',
     html: `<div style="text-align:center">
-      <div style="font-size:26px">${sinGPS ? '⚠️' : '🚕'}</div>
-      <div style="background:${color};color:#000;font-weight:bold;font-size:9px;padding:2px 6px;border-radius:4px;white-space:nowrap;margin-top:-2px">${primerNombre}</div>
-      <div style="background:#333;color:${color};font-weight:bold;font-size:8px;padding:1px 5px;border-radius:3px;margin-top:2px">${placa || '---'}</div>
+      <div style="font-size:28px">🚕</div>
+      <div style="background:#FFC107;color:#000;font-weight:bold;font-size:10px;padding:3px 8px;border-radius:4px;white-space:nowrap;margin-top:-2px">${nombreDisplay}</div>
+      <div style="background:#222;color:#FFC107;font-weight:bold;font-size:9px;padding:2px 6px;border-radius:3px;margin-top:2px;letter-spacing:1px">${placa || '---'}</div>
     </div>`,
-    iconSize: [80, 60],
-    iconAnchor: [40, 60],
+    iconSize: [100, 65],
+    iconAnchor: [50, 65],
   });
 }
 
@@ -64,11 +65,12 @@ export default function MapaUbicaciones() {
         ['pendiente', 'aceptado', 'en_curso', 'conductor_en_sitio'].includes(s.estado)
       ));
 
-      // GPS perdido: sin ubicación o más de 5 min sin actualizar
+      // GPS perdido: sin ubicación o más de 30 min sin actualizar
       const sinGPS = todos.filter(c => {
         if (!c.ubicacionActual?.lat) return !!c.ultimaUbicacion?.lat;
-        const mins = (Date.now() - new Date(c.ubicacionActual.actualizadoEn || 0).getTime()) / 60000;
-        return mins > 5;
+        if (!c.ubicacionActual?.actualizadoEn) return false;
+        const mins = (Date.now() - new Date(c.ubicacionActual.actualizadoEn).getTime()) / 60000;
+        return mins > 30;
       });
       setReporteGPS(sinGPS);
       setUltimaActualizacion(new Date());
@@ -188,22 +190,7 @@ export default function MapaUbicaciones() {
             </Marker>
           ))}
 
-          {/* GPS perdido - última ubicación conocida */}
-          {reporteGPS.filter(c => (c.ubicacionActual?.lat || c.ultimaUbicacion?.lat)).map(c => {
-            const ubi = c.ubicacionActual?.lat ? c.ubicacionActual : c.ultimaUbicacion;
-            return (
-              <Marker key={c.uid + '-lost'} position={[ubi.lat, ubi.lng]} icon={crearIconoTaxi(c.nombre, c.placa, true)}>
-                <Popup>
-                  <div style={{ textAlign: 'center' }}>
-                    <strong>⚠️ {c.nombre}</strong><br />
-                    <span style={{ color: '#E53935', fontWeight: 'bold' }}>GPS PERDIDO</span><br />
-                    <span style={{ fontSize: 12 }}>{c.placa}</span><br />
-                    <span style={{ fontSize: 11, color: '#aaa' }}>Última señal: {ubi.actualizadoEn ? new Date(ubi.actualizadoEn).toLocaleString('es-CO') : '—'}</span>
-                  </div>
-                </Popup>
-              </Marker>
-            );
-          })}
+          {/* GPS perdido - solo en tabla abajo, no en mapa */}
         </MapContainer>
       </div>
 
