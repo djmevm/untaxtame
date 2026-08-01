@@ -61,9 +61,29 @@ export default function MapaConductores() {
   const cargarServicios = async () => {
     try {
       const sRes = await api.get('/services/todos');
-      setServicios((sRes.data || []).filter(s =>
-        ['pendiente', 'aceptado', 'en_curso', 'conductor_en_sitio'].includes(s.estado) && s.ubicacionGPS?.lat
-      ));
+      const serviciosActivos = (sRes.data || []).filter(s =>
+        ['pendiente', 'aceptado', 'en_curso', 'conductor_en_sitio'].includes(s.estado)
+      );
+      setServicios(serviciosActivos.filter(s => s.ubicacionGPS?.lat));
+
+      // Fallback: si no hay datos del WebSocket, cargar ubicaciones por HTTP
+      if (conductoresRef.current.size === 0) {
+        try {
+          const ubiRes = await api.get('/users/conductores/en-servicio');
+          const enServicio = (ubiRes.data || []).filter(c => c.ubicacionActual?.lat);
+          enServicio.forEach(c => {
+            conductoresRef.current.set(c.uid, {
+              uid: c.uid,
+              lat: c.ubicacionActual.lat,
+              lng: c.ubicacionActual.lng,
+              nombre: c.nombre || '',
+              placa: c.placa || '',
+              timestamp: Date.now(),
+            });
+          });
+          setConductores(Array.from(conductoresRef.current.values()));
+        } catch {}
+      }
     } catch {}
     finally { setCargando(false); }
   };
@@ -130,6 +150,9 @@ export default function MapaConductores() {
       conductoresEnCarrera.add(s.conductorUid);
     }
   });
+
+  // Servicios con ubicación GPS para mostrar en mapa
+  const serviciosConGPS = servicios.filter(s => s.ubicacionGPS?.lat);
 
   if (cargando) return <p className="loading">Cargando mapa...</p>;
 
@@ -224,8 +247,39 @@ export default function MapaConductores() {
 
       {/* Lista de conductores en carrera */}
       <h3 style={{ marginTop: 24, marginBottom: 16 }}>🔴 Conductores en carrera (rastreo activo)</h3>
-      {conductores.filter(c => conductoresEnCarrera.has(c.uid)).length === 0 ? (
-        <p style={{ color: '#999', textAlign: 'center', padding: 20 }}>No hay conductores en carrera en este momento</p>
+      {servicios.filter(s => s.conductorUid && ['aceptado', 'en_curso', 'conductor_en_sitio'].includes(s.estado)).length === 0 && conductores.filter(c => conductoresEnCarrera.has(c.uid)).length === 0 ? (
+        <div>
+          {servicios.length > 0 ? (
+            <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: 16 }}>
+              <thead>
+                <tr style={{ background: '#FFEBEE' }}>
+                  <th style={{ padding: '8px 12px', textAlign: 'left', fontSize: 13 }}>Cliente</th>
+                  <th style={{ padding: '8px 12px', textAlign: 'left', fontSize: 13 }}>Conductor</th>
+                  <th style={{ padding: '8px 12px', textAlign: 'left', fontSize: 13 }}>Origen</th>
+                  <th style={{ padding: '8px 12px', textAlign: 'left', fontSize: 13 }}>Destino</th>
+                  <th style={{ padding: '8px 12px', textAlign: 'left', fontSize: 13 }}>Estado</th>
+                </tr>
+              </thead>
+              <tbody>
+                {servicios.filter(s => ['aceptado', 'en_curso', 'conductor_en_sitio'].includes(s.estado)).map(s => (
+                  <tr key={s.id} style={{ borderBottom: '1px solid #eee' }}>
+                    <td style={{ padding: '8px 12px', fontSize: 13 }}>{s.clienteNombre}</td>
+                    <td style={{ padding: '8px 12px', fontSize: 13, fontWeight: 'bold' }}>{s.conductorNombre || '—'} <span style={{ color: '#FFC107' }}>{s.conductorPlaca}</span></td>
+                    <td style={{ padding: '8px 12px', fontSize: 13 }}>{s.origen}</td>
+                    <td style={{ padding: '8px 12px', fontSize: 13 }}>{s.destino}</td>
+                    <td style={{ padding: '8px 12px', fontSize: 13 }}>
+                      <span style={{ background: '#FFF3E0', color: '#E65100', padding: '3px 8px', borderRadius: 6, fontSize: 11, fontWeight: 'bold' }}>
+                        {s.estado === 'aceptado' ? '🚕 En camino' : s.estado === 'conductor_en_sitio' ? '📍 En sitio' : '🚗 En curso'}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          ) : (
+            <p style={{ color: '#999', textAlign: 'center', padding: 20 }}>No hay conductores en carrera en este momento</p>
+          )}
+        </div>
       ) : (
         <div style={estilos.listaGrid}>
           {conductores.filter(c => conductoresEnCarrera.has(c.uid)).map(c => {
