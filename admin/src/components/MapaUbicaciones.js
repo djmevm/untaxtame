@@ -11,13 +11,13 @@ function crearIconoTaxi(nombre, placa, sinGPS) {
   const nombreDisplay = primerApellido ? `${primerNombre} ${primerApellido}` : primerNombre;
   return L.divIcon({
     className: '',
-    html: `<div style="text-align:center">
-      <div style="font-size:28px">🚕</div>
-      <div style="background:#FFC107;color:#000;font-weight:bold;font-size:10px;padding:3px 8px;border-radius:4px;white-space:nowrap;margin-top:-2px">${nombreDisplay}</div>
-      <div style="background:#222;color:#FFC107;font-weight:bold;font-size:9px;padding:2px 6px;border-radius:3px;margin-top:2px;letter-spacing:1px">${placa || '---'}</div>
+    html: `<div style="text-align:center;filter:drop-shadow(0 2px 4px rgba(0,0,0,0.3))">
+      <div style="font-size:32px;text-shadow:0 1px 3px rgba(0,0,0,0.3)">🚕</div>
+      <div style="background:#FFC107;color:#000;font-weight:bold;font-size:11px;padding:4px 10px;border-radius:6px;white-space:nowrap;margin-top:-2px;border:2px solid #F57F17;box-shadow:0 1px 4px rgba(0,0,0,0.2)">${nombreDisplay}</div>
+      <div style="background:#000;color:#FFC107;font-weight:bold;font-size:11px;padding:3px 8px;border-radius:4px;margin-top:3px;letter-spacing:2px;border:1px solid #FFC107;box-shadow:0 1px 4px rgba(0,0,0,0.3)">${placa || '---'}</div>
     </div>`,
-    iconSize: [100, 65],
-    iconAnchor: [50, 65],
+    iconSize: [120, 75],
+    iconAnchor: [60, 75],
   });
 }
 
@@ -154,7 +154,7 @@ export default function MapaUbicaciones() {
 
       {/* ═══ MAPA ═══ */}
       <div style={{ marginBottom: 24, borderRadius: 16, overflow: 'hidden', boxShadow: '0 2px 12px rgba(0,0,0,0.1)' }}>
-        <MapContainer center={centro} zoom={14} style={{ height: 500, borderRadius: 16 }}>
+        <MapContainer center={centro} zoom={15} style={{ height: 600, borderRadius: 16 }}>
           <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" attribution='&copy; OpenStreetMap' />
           <CentrarMapa centro={centro} />
 
