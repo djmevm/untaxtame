@@ -159,21 +159,40 @@ export default function MapaUbicaciones() {
           <CentrarMapa centro={centro} />
 
           {/* Conductores */}
-          {conductores.map(c => (
-            <Marker key={c.uid} position={[c.ubicacionActual.lat, c.ubicacionActual.lng]} icon={crearIconoTaxi(c.nombre, c.placa, false)}>
-              <Popup>
-                <div style={{ textAlign: 'center' }}>
-                  <strong>🚕 {c.nombre}</strong><br />
-                  <span style={{ color: '#FFC107', fontWeight: 'bold' }}>{c.placa}</span><br />
-                  <span style={{ fontSize: 12 }}>📞 {c.telefono || '—'}</span><br />
-                  <span style={{ fontSize: 11, color: '#aaa' }}>
-                    Actualizado: {c.ubicacionActual?.actualizadoEn ? new Date(c.ubicacionActual.actualizadoEn).toLocaleTimeString('es-CO') : '—'}
-                  </span><br />
-                  <a href={`https://www.google.com/maps?q=${c.ubicacionActual.lat},${c.ubicacionActual.lng}`} target="_blank" rel="noopener noreferrer" style={{ fontSize: 12 }}>🗺️ Google Maps</a>
-                </div>
-              </Popup>
-            </Marker>
-          ))}
+          {conductores.map(c => {
+            // Detectar conductores cercanos (dentro de ~50 metros)
+            const cercanos = conductores.filter(otro =>
+              otro.uid !== c.uid &&
+              Math.abs(otro.ubicacionActual.lat - c.ubicacionActual.lat) < 0.0005 &&
+              Math.abs(otro.ubicacionActual.lng - c.ubicacionActual.lng) < 0.0005
+            );
+            return (
+              <Marker key={c.uid} position={[c.ubicacionActual.lat, c.ubicacionActual.lng]} icon={crearIconoTaxi(c.nombre, c.placa, false)}>
+                <Popup maxWidth={300}>
+                  <div style={{ textAlign: 'center', minWidth: 200 }}>
+                    <strong style={{ fontSize: 15 }}>🚕 {c.nombre}</strong><br />
+                    <span style={{ color: '#FFC107', fontWeight: 'bold', fontSize: 14, letterSpacing: 2 }}>{c.placa}</span><br />
+                    <span style={{ fontSize: 13 }}>📞 {c.telefono || '—'}</span><br />
+                    <span style={{ fontSize: 11, color: '#aaa' }}>
+                      Actualizado: {c.ubicacionActual?.actualizadoEn ? new Date(c.ubicacionActual.actualizadoEn).toLocaleTimeString('es-CO') : '—'}
+                    </span><br />
+                    <a href={`https://www.google.com/maps?q=${c.ubicacionActual.lat},${c.ubicacionActual.lng}`} target="_blank" rel="noopener noreferrer" style={{ fontSize: 12, color: '#1565C0' }}>🗺️ Google Maps</a>
+                    {cercanos.length > 0 && (
+                      <div style={{ marginTop: 10, borderTop: '1px solid #eee', paddingTop: 8, textAlign: 'left' }}>
+                        <strong style={{ fontSize: 12, color: '#555' }}>📍 Taxistas en esta zona ({cercanos.length + 1}):</strong>
+                        <ul style={{ margin: '6px 0 0', padding: '0 0 0 16px', fontSize: 12 }}>
+                          <li><strong>{c.nombre}</strong> — <span style={{ color: '#FFC107' }}>{c.placa}</span></li>
+                          {cercanos.map(otro => (
+                            <li key={otro.uid}><strong>{otro.nombre}</strong> — <span style={{ color: '#FFC107' }}>{otro.placa}</span></li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                  </div>
+                </Popup>
+              </Marker>
+            );
+          })}
 
           {/* Clientes con servicio activo + placa del conductor */}
           {serviciosConGPS.map(s => (
