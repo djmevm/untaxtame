@@ -184,6 +184,20 @@ router.post('/webhook', async (req, res) => {
                 }
               } else if (msg.type === 'contacts') {
                 texto = `👤 Contacto compartido`;
+              } else if (msg.type === 'unsupported') {
+                texto = `⚠️ Mensaje no soportado`;
+              } else if (msg.type === 'interactive') {
+                // Respuesta a botones/listas interactivas
+                const respInteractiva = msg.interactive?.button_reply?.title || msg.interactive?.list_reply?.title || '[interactivo]';
+                texto = respInteractiva;
+              } else if (msg.type === 'button') {
+                texto = msg.button?.text || '[botón]';
+              } else if (msg.type === 'reaction') {
+                texto = `${msg.reaction?.emoji || '👍'} (reacción)`;
+              } else if (msg.type === 'order') {
+                texto = `🛒 Pedido recibido`;
+              } else {
+                texto = `[${msg.type || 'desconocido'}]`;
               }
 
               // Guardar mensaje en Firestore
