@@ -203,12 +203,12 @@ export default function PerfilConductorScreen() {
       try {
         const { status } = await Location.requestForegroundPermissionsAsync();
         if (status !== 'granted') return;
-        const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+        const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
         await api.put(`/users/conductor/${perfil?.uid}/ubicacion`, { lat: loc.coords.latitude, lng: loc.coords.longitude, enServicio: true });
       } catch {}
     };
     enviarUbicacion();
-    ubicacionInterval.current = setInterval(enviarUbicacion, 60000);
+    ubicacionInterval.current = setInterval(enviarUbicacion, 10000);
     return () => { if (ubicacionInterval.current) clearInterval(ubicacionInterval.current); };
   }, [perfil?.uid]);
 

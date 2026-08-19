@@ -51,25 +51,35 @@ export default function MapaUbicaciones() {
   const [cargando, setCargando] = useState(true);
   const [ultimaActualizacion, setUltimaActualizacion] = useState(null);
 
-  const cargar = async () => {
+    const cargar = async () => {
     try {
       const [ubiRes, srvRes] = await Promise.all([
         api.get('/users/conductores/ubicaciones'),
         api.get('/services/todos').catch(() => ({ data: [] })),
       ]);
       const todos = ubiRes.data || [];
-      setConductores(todos.filter(c => c.ubicacionActual?.lat));
+      const ahora = Date.now();
+
+      // Solo mostrar como "GPS activo" los que actualizaron en los últimos 30 minutos
+      const conGPSReciente = todos.filter(c => {
+        if (!c.ubicacionActual?.lat) return false;
+        if (!c.ubicacionActual?.actualizadoEn) return true; // si no tiene timestamp, mostrar igual
+        const mins = (ahora - new Date(c.ubicacionActual.actualizadoEn).getTime()) / 60000;
+        return mins <= 30;
+      });
+      setConductores(conGPSReciente);
 
       // Servicios activos
       setServicios((srvRes.data || []).filter(s =>
         ['pendiente', 'aceptado', 'en_curso', 'conductor_en_sitio'].includes(s.estado)
       ));
 
-      // GPS perdido: sin ubicación o más de 30 min sin actualizar
+      // GPS perdido: tiene ubicación pero lleva más de 30 min sin actualizar
       const sinGPS = todos.filter(c => {
+        if (!c.ubicacionActual?.lat && !c.ultimaUbicacion?.lat) return false;
         if (!c.ubicacionActual?.lat) return !!c.ultimaUbicacion?.lat;
         if (!c.ubicacionActual?.actualizadoEn) return false;
-        const mins = (Date.now() - new Date(c.ubicacionActual.actualizadoEn).getTime()) / 60000;
+        const mins = (ahora - new Date(c.ubicacionActual.actualizadoEn).getTime()) / 60000;
         return mins > 30;
       });
       setReporteGPS(sinGPS);
@@ -80,7 +90,7 @@ export default function MapaUbicaciones() {
 
   useEffect(() => {
     cargar();
-    const intervalo = setInterval(cargar, 60000);
+    const intervalo = setInterval(cargar, 1000);
     return () => clearInterval(intervalo);
   }, []);
 
@@ -97,7 +107,7 @@ export default function MapaUbicaciones() {
     <div>
       <h2 className="titulo">🗺️ Mapa de Ubicaciones</h2>
       <p style={{ color: '#666', marginBottom: 16 }}>
-        Se actualiza cada 60 segundos. Última actualización: {ultimaActualizacion ? ultimaActualizacion.toLocaleTimeString('es-CO') : '—'}
+        Se actualiza cada segundo. Última actualización: {ultimaActualizacion ? ultimaActualizacion.toLocaleTimeString('es-CO') : '—'}
       </p>
 
       <div className="stats">
