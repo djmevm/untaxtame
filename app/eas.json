@@ -11,13 +11,13 @@
       "distribution": "internal",
       "android": {
         "buildType": "apk",
-        "gradleCommand": ":app:assembleRelease"
+        "image": "latest"
       }
     },
     "production": {
       "android": {
         "buildType": "app-bundle",
-        "gradleCommand": ":app:bundleRelease"
+        "image": "latest"
       }
     }
   },
