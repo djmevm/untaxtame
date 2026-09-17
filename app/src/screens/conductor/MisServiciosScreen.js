@@ -23,7 +23,7 @@ export default function MisServiciosScreen() {
   const servicioActivoAnterior = React.useRef(null);
 
   // Notificar mensajes de chat cuando el chat está cerrado
-  const servicioActivoParaChat = servicios.find(function(s) { return ['aceptado', 'conductor_en_sitio'].includes(s.estado); });
+  const servicioActivoParaChat = servicios.find(function(s) { return ['aceptado', 'conductor_en_sitio', 'en_curso'].includes(s.estado); });
   useChatNotificacion(servicioActivoParaChat?.id, perfil?.uid, !!chatServicioId);
 
   const cargar = async () => {
@@ -162,8 +162,8 @@ export default function MisServiciosScreen() {
   };
 
   // Separar servicios activos de historial
-  const servicioActivo = servicios.find(s => ['aceptado', 'conductor_en_sitio'].includes(s.estado));
-  const historial = servicios.filter(s => !['aceptado', 'conductor_en_sitio'].includes(s.estado));
+  const servicioActivo = servicios.find(s => ['aceptado', 'conductor_en_sitio', 'en_curso'].includes(s.estado));
+  const historial = servicios.filter(s => !['aceptado', 'conductor_en_sitio', 'en_curso'].includes(s.estado));
 
   if (cargando) return <ActivityIndicator style={{ flex: 1 }} size="large" color="#FFC107" />;
 
@@ -182,6 +182,28 @@ export default function MisServiciosScreen() {
     } catch (err) {
       Alert.alert('Error', err.response?.data?.error || 'No se pudo confirmar la llegada');
     }
+  };
+
+  const iniciarViaje = async () => {
+    Alert.alert(
+      '🚗 ¿Iniciar viaje?',
+      `¿El pasajero ${servicioActivo.clienteNombre} ya subió al taxi?`,
+      [
+        { text: 'No', style: 'cancel' },
+        {
+          text: 'Sí, iniciamos', onPress: async () => {
+            try {
+              await api.put(`/services/iniciar/${servicioActivo.id}`, { conductorUid: perfil.uid });
+              reproducirSonido();
+              Alert.alert('🚗 Viaje iniciado', '¡Buen viaje! Completa el servicio al llegar al destino.');
+              cargar();
+            } catch (err) {
+              Alert.alert('Error', err.response?.data?.error || 'No se pudo iniciar el viaje');
+            }
+          }
+        },
+      ]
+    );
   };
 
   return (
@@ -246,13 +268,15 @@ export default function MisServiciosScreen() {
               </TouchableOpacity>
             )}
             {servicioActivo.estado === 'conductor_en_sitio' && (
-              <View style={styles.enSitioBadgeCard}>
-                <Text style={styles.enSitioBadgeTexto}>📍 EN EL PUNTO</Text>
-              </View>
+              <TouchableOpacity style={styles.btnIniciar} onPress={iniciarViaje}>
+                <Text style={styles.btnIniciarTexto}>🚗 Iniciar viaje</Text>
+              </TouchableOpacity>
             )}
-            <TouchableOpacity style={styles.btnCompletar} onPress={() => completar(servicioActivo)}>
-              <Text style={styles.btnCompletarTexto}>✅ Completar</Text>
-            </TouchableOpacity>
+            {servicioActivo.estado === 'en_curso' && (
+              <TouchableOpacity style={styles.btnCompletar} onPress={() => completar(servicioActivo)}>
+                <Text style={styles.btnCompletarTexto}>✅ Completar</Text>
+              </TouchableOpacity>
+            )}
           </View>
 
           <TouchableOpacity style={styles.btnCancelarServicio} onPress={() => cancelar(servicioActivo)}>
@@ -371,6 +395,8 @@ const styles = StyleSheet.create({
   btnCompletarTexto: { color: '#fff', fontWeight: 'bold', fontSize: 15 },
   btnLlegue: { flex: 1, backgroundColor: '#FF9800', borderRadius: 10, padding: 14, alignItems: 'center' },
   btnLlegueTexto: { color: '#fff', fontWeight: 'bold', fontSize: 15 },
+  btnIniciar: { flex: 1, backgroundColor: '#2E7D32', borderRadius: 10, padding: 14, alignItems: 'center' },
+  btnIniciarTexto: { color: '#fff', fontWeight: 'bold', fontSize: 15 },
   enSitioBadgeCard: { flex: 1, backgroundColor: '#FFF3E0', borderRadius: 10, padding: 14, alignItems: 'center', borderWidth: 2, borderColor: '#FF9800' },
   enSitioBadgeTexto: { color: '#E65100', fontWeight: 'bold', fontSize: 12 },
   btnCancelarServicio: { borderWidth: 2, borderColor: '#E53935', borderRadius: 10, padding: 12, alignItems: 'center' },

@@ -142,6 +142,28 @@ router.put('/aceptar/:servicioId', verifyToken, async (req, res) => {
   }
 });
 
+// Conductor inicia el viaje (pasajero subió al taxi)
+router.put('/iniciar/:servicioId', verifyToken, async (req, res) => {
+  const { conductorUid } = req.body;
+  try {
+    const ref = db.collection('servicios').doc(req.params.servicioId);
+    const doc = await ref.get();
+    if (!doc.exists) return res.status(404).json({ error: 'Servicio no encontrado' });
+
+    const data = doc.data();
+    if (data.conductorUid !== conductorUid) return res.status(403).json({ error: 'No eres el conductor de este servicio' });
+    if (data.estado !== 'conductor_en_sitio') return res.status(400).json({ error: 'El servicio no está en estado "conductor_en_sitio"' });
+
+    await ref.update({
+      estado: 'en_curso',
+      iniciadoEn: new Date().toISOString(),
+      actualizadoEn: new Date().toISOString(),
+    });
+
+    res.json({ message: 'Viaje iniciado' });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 // Conductor confirma llegada al punto de recogida
 router.put('/llegada/:servicioId', verifyToken, async (req, res) => {
   const { conductorUid, ubicacionConductor } = req.body;
