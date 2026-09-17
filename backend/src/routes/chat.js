@@ -108,9 +108,6 @@ router.get('/:servicioId/mensajes', verifyToken, async (req, res) => {
   }
 });
 
-module.exports = router;
-
-
 // ═══ CHAT DIRECTO ADMIN → USUARIO ═══
 
 // Enviar mensaje directo a un usuario
@@ -171,3 +168,5 @@ router.get('/directo/:uid/mensajes', verifyToken, async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
+
+module.exports = router;
