@@ -77,7 +77,7 @@ router.post('/crear', async (req, res) => {
 });
 
 // Test push notification (admin)
-router.post('/test-push/:uid', async (req, res) => {
+router.post('/test-push/:uid', verifyToken, verifyAdmin, async (req, res) => {
   const { uid } = req.params;
   try {
     const userDoc = await db.collection('usuarios').doc(uid).get();

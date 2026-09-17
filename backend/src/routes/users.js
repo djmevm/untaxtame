@@ -88,8 +88,10 @@ router.put('/conductor/:uid/servicios', verifyToken, verifyAdmin, async (req, re
 router.put('/conductor/:uid/ubicacion', verifyToken, async (req, res) => {
   const { lat, lng, enServicio } = req.body;
   try {
+    const ahora = new Date().toISOString();
     const update = {
-      ubicacionActual: { lat, lng, actualizadoEn: new Date().toISOString() },
+      ubicacionActual: { lat, lng, actualizadoEn: ahora },
+      ultimaActividadEn: ahora, // heartbeat para detectar conductores desconectados
     };
     if (enServicio !== undefined) {
       update.enServicio = enServicio;

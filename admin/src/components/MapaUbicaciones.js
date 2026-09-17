@@ -90,7 +90,7 @@ export default function MapaUbicaciones() {
 
   useEffect(() => {
     cargar();
-    const intervalo = setInterval(cargar, 1000);
+    const intervalo = setInterval(cargar, 5000);
     return () => clearInterval(intervalo);
   }, []);
 
@@ -107,7 +107,7 @@ export default function MapaUbicaciones() {
     <div>
       <h2 className="titulo">🗺️ Mapa de Ubicaciones</h2>
       <p style={{ color: '#666', marginBottom: 16 }}>
-        Se actualiza cada segundo. Última actualización: {ultimaActualizacion ? ultimaActualizacion.toLocaleTimeString('es-CO') : '—'}
+        Se actualiza cada 5 segundos. Última actualización: {ultimaActualizacion ? ultimaActualizacion.toLocaleTimeString('es-CO') : '—'}
       </p>
 
       <div className="stats">

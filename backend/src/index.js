@@ -121,6 +121,7 @@ app.use('*', (req, res) => {
 
 // ═══ AUTO-CANCELACIÓN — Servicios pendientes sin aceptar ofertas ═══
 const { iniciarAutoCancelacion } = require('./services/autoCancelacion');
+const { iniciarHeartbeat } = require('./services/conductorHeartbeat');
 
 const PORT = process.env.PORT || 3000;
 const HOST = process.env.HOST || '0.0.0.0'; // Escuchar en todas las interfaces (WiFi + datos móviles)
@@ -131,4 +132,7 @@ app.listen(PORT, HOST, () => {
 
   // Iniciar auto-cancelación de servicios expirados
   iniciarAutoCancelacion();
+
+  // Iniciar heartbeat de conductores (resetea disponible si cierran la app sin cancelar)
+  iniciarHeartbeat();
 });
