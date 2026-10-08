@@ -510,12 +510,10 @@ async function procesarMensaje(telefono, texto) {
       '2️⃣ Electrónico (Nequi/Daviplata) 💳\n\n' +
       '0️⃣ Cancelar';
   } else if (textoLower === '2' || textoLower.includes('programar')) {
-    // Entrada al flujo de viaje programado (cualquier hora del día)
+    // Entrada al flujo de viaje programado (cualquier fecha y hora)
     setEstado(telefono, 'prog_fecha_hora', { nombre: '' });
     respuesta = '⏰ *VIAJES PROGRAMADOS — UntaXtame*\n\n' +
-      'Programa tu viaje para *cualquier hora del día*. 🚕\n' +
-      '📅 Con mínimo *2 horas* de anticipación\n' +
-      '📅 Y máximo *24 horas* antes\n\n' +
+      'Programa tu viaje para *cualquier fecha y hora*. 🚕\n\n' +
       '¿Para qué fecha y hora necesitas el servicio?\n' +
       '_Ejemplo: 15/06 04:30 AM_ o _15/06 02:30 PM_\n\n' +
       '0️⃣ Cancelar';
@@ -580,18 +578,8 @@ async function procesarFlujoProgramado(telefono, texto, estadoConv) {
   if (estadoConv.estado === 'prog_fecha_hora') {
     const r = parsearFechaHora(texto, new Date());
     if (!r.ok) {
-      if (r.motivo === 'anticipacion_min') {
-        limpiarEstado(telefono);
-        respuesta = '⏱️ Tu viaje es en menos de *2 horas*, así que ya no se puede programar. Pero puedes pedirlo ahora mismo:\n\n' +
-          '1️⃣ Pedir taxi ahora 🚕\n' +
-          '2️⃣ Volver al menú 🔙';
-      } else if (r.motivo === 'anticipacion_max') {
-        respuesta = '📅 Solo podemos programar con un máximo de *24 horas* de anticipación.\n\n' +
-          'Por favor escribe una fecha/hora más cercana. _Ejemplo: 15/06 04:30 AM_\n\n0️⃣ Cancelar';
-      } else {
-        respuesta = '⚠️ No entendí la fecha y hora. Escríbela así:\n\n' +
-          '_Ejemplo: 15/06 04:30 AM_\n\n0️⃣ Cancelar';
-      }
+      respuesta = '⚠️ No entendí la fecha y hora. Escríbela así:\n\n' +
+        '_Ejemplo: 15/06 04:30 AM_ o _15/06 02:30 PM_\n\n0️⃣ Cancelar';
       await enviarMensaje(telefono, respuesta);
       return respuesta;
     }

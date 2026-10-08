@@ -186,7 +186,7 @@ export default function ViajesProgramadosScreen() {
   return (
     <View style={styles.container}>
       <Text style={styles.titulo}>Viajes Programados 🕐</Text>
-      <Text style={styles.ayuda}>Cualquier hora · anticipación 2–24 h · máx 3 por día</Text>
+      <Text style={styles.ayuda}>Cualquier fecha y hora · máx 3 por día</Text>
       <FlatList
         data={data}
         keyExtractor={(item) => item.key}

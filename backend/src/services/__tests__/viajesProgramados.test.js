@@ -27,19 +27,12 @@ describe('viajesProgramados — funciones puras', () => {
 
           const res = vp.parsearFechaHora(texto, ahora);
 
-          // Se permite CUALQUIER hora del día: solo valida anticipación mín/máx.
-          const anticip = vp.calcularAnticipacionHoras(ahora, objetivo);
-
-          if (anticip < vp.ANTICIPACION_MIN_HORAS) {
-            expect(res).toEqual({ ok: false, motivo: 'anticipacion_min' });
-          } else if (anticip > vp.ANTICIPACION_MAX_HORAS) {
-            expect(res).toEqual({ ok: false, motivo: 'anticipacion_max' });
-          } else {
-            expect(res.ok).toBe(true);
-            const rc = vp.componentesBogota(res.horaProgramada);
-            expect(rc.horas).toBe(c.horas);
-            expect(rc.minutos).toBe(c.minutos);
-          }
+          // Se permite CUALQUIER fecha y hora futura: sin ventana ni anticipación.
+          // Todos los objetivos aquí son futuros (día 16..30 vs hoy=15).
+          expect(res.ok).toBe(true);
+          const rc = vp.componentesBogota(res.horaProgramada);
+          expect(rc.horas).toBe(c.horas);
+          expect(rc.minutos).toBe(c.minutos);
         }
       ),
       { numRuns: 100 }
