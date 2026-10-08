@@ -34,6 +34,7 @@ const ofertasRoutes = require('./routes/ofertas');
 const billeteraRoutes = require('./routes/billetera');
 const radioRoutes = require('./routes/radio');
 const whatsappRoutes = require('./routes/whatsapp');
+const programadosRoutes = require('./routes/programados');
 
 const app = express();
 
@@ -87,6 +88,7 @@ app.use('/api/ofertas', ofertasRoutes);
 app.use('/api/billetera', billeteraRoutes);
 app.use('/api/radio', radioRoutes);
 app.use('/api/whatsapp', whatsappRoutes);
+app.use('/api/programados', programadosRoutes);
 
 // Ruta raíz (no exponer info sensible)
 app.get('/', (req, res) => {
@@ -122,6 +124,7 @@ app.use('*', (req, res) => {
 // ═══ AUTO-CANCELACIÓN — Servicios pendientes sin aceptar ofertas ═══
 const { iniciarAutoCancelacion } = require('./services/autoCancelacion');
 const { iniciarHeartbeat } = require('./services/conductorHeartbeat');
+const { iniciarCronRecordatorios } = require('./services/cronRecordatorios');
 
 const PORT = process.env.PORT || 3000;
 const HOST = process.env.HOST || '0.0.0.0'; // Escuchar en todas las interfaces (WiFi + datos móviles)
@@ -135,4 +138,7 @@ app.listen(PORT, HOST, () => {
 
   // Iniciar heartbeat de conductores (resetea disponible si cierran la app sin cancelar)
   iniciarHeartbeat();
+
+  // Iniciar cron de recordatorios de Viajes Programados de Madrugada
+  iniciarCronRecordatorios();
 });

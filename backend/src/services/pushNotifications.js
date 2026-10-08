@@ -24,6 +24,16 @@ async function enviarPushAConductores({ titulo, cuerpo, datos }) {
   } catch (e) {}
 }
 
+// Enviar push a todos los administradores
+async function enviarPushAAdmins({ titulo, cuerpo, datos }) {
+  try {
+    var snap = await db.collection('usuarios').where('rol', '==', 'admin').get();
+    var tokens = [];
+    snap.forEach(function(doc) { if (doc.data().pushToken) tokens.push(doc.data().pushToken); });
+    if (tokens.length > 0) await enviarPush(tokens, { titulo, cuerpo, datos });
+  } catch (e) {}
+}
+
 // Enviar via Expo Push API
 async function enviarPush(tokens, { titulo, cuerpo, datos }) {
   var esEmergencia = datos && (datos.tipo === 'emergencia' || datos.tipo === 'sos');
@@ -49,4 +59,4 @@ async function enviarPush(tokens, { titulo, cuerpo, datos }) {
   } catch (e) {}
 }
 
-module.exports = { enviarPushAUsuario, enviarPushAConductores };
+module.exports = { enviarPushAUsuario, enviarPushAConductores, enviarPushAAdmins };
