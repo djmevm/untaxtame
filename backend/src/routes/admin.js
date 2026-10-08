@@ -1,6 +1,8 @@
 const express = require('express');
 const router = express.Router();
 const { db, auth } = require('../firebase');
+const verifyToken = require('../middleware/verifyToken');
+const verifyAdmin = require('../middleware/verifyAdmin');
 
 // ═══ PRESENCIA DE ADMINS EN LÍNEA ═══
 const adminsPresencia = new Map(); // uid → { nombre, timestamp }
