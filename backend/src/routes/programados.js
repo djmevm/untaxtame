@@ -115,7 +115,7 @@ async function crearViajeProgramado(datos) {
   // Push inicial a conductores disponibles (nunca grupos de WhatsApp)
   try {
     enviarPushAConductores({
-      titulo: '🌙 Viaje programado de madrugada',
+      titulo: '🕐 Nuevo viaje programado',
       cuerpo:
         `${viaje.origen} → ${viaje.destino} · ${viaje.horaProgramadaTexto || ''} · ` +
         `$${TARIFA_MADRUGADA.toLocaleString('es-CO')}`,

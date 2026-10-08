@@ -124,12 +124,11 @@ function parsearFechaHora(texto, ahora) {
     return { ok: false, motivo: 'formato' };
   }
 
-  // 1) Ventana de madrugada
-  if (!estaEnVentanaMadrugada(horaProgramada)) {
-    return { ok: false, motivo: 'ventana' };
-  }
+  // Nota: se permite programar a CUALQUIER hora del día.
+  // La restricción de ventana de madrugada (3–6 AM) fue eliminada.
+  // Solo se validan las anticipaciones mínima y máxima.
 
-  // 2) Anticipación
+  // Anticipación
   const anticip = calcularAnticipacionHoras(ahora, horaProgramada);
   if (anticip < ANTICIPACION_MIN_HORAS) return { ok: false, motivo: 'anticipacion_min' };
   if (anticip > ANTICIPACION_MAX_HORAS) return { ok: false, motivo: 'anticipacion_max' };

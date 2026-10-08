@@ -99,7 +99,7 @@ async function procesarAsignados(ahora) {
         try {
           if (typeof enviarPushAUsuario === 'function' && viaje.conductorUid) {
             enviarPushAUsuario(viaje.conductorUid, {
-              titulo: `🌙 Viaje programado en ${umbral} min`,
+              titulo: `🕐 Viaje programado en ${umbral} min`,
               cuerpo: `Recoge a ${viaje.pasajeroNombre || 'tu pasajero'} en ${viaje.puntoEncuentro || viaje.origen || ''}`,
               datos: { tipo: 'recordatorio_programado', viajeId: viaje.id, minutos: umbral },
             });
@@ -183,7 +183,7 @@ async function procesarBuscando(ahora) {
         try {
           if (typeof enviarPushAConductores === 'function') {
             enviarPushAConductores({
-              titulo: '🌙 Viaje programado SIN asignar',
+              titulo: '🕐 Viaje programado SIN asignar',
               cuerpo: `${viaje.origen} → ${viaje.destino} · ${viaje.horaProgramadaTexto || ''} · $${TARIFA_MADRUGADA.toLocaleString('es-CO')}`,
               datos: { tipo: 'nuevo_viaje_programado', viajeId: viaje.id },
             });

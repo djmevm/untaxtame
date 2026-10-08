@@ -9,7 +9,7 @@ const TAB_ICONS = {
   PerfilCliente: '👤',
   Pendientes: '📡',
   MisServicios: '📋',
-  Programados: '🌙',
+  Programados: '🕐',
   PerfilConductor: '👤',
 };
 
@@ -20,7 +20,7 @@ const TAB_LABELS = {
   PerfilCliente: 'Mi Perfil',
   Pendientes: 'Disponibles',
   MisServicios: 'Mis Servicios',
-  Programados: 'Madrugada',
+  Programados: 'Programar',
   PerfilConductor: 'Mi Perfil',
 };
 

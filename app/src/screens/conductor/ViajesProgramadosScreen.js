@@ -47,7 +47,7 @@ export default function ViajesProgramadosScreen() {
 
   const aceptar = (viaje) => {
     Alert.alert(
-      '🌙 Aceptar viaje programado',
+      '🕐 Aceptar viaje programado',
       `${textoHora(viaje)}\n📍 ${viaje.origen} → 🎯 ${viaje.destino}\n💰 $${(viaje.tarifaMadrugada || 10000).toLocaleString('es-CO')}`,
       [
         { text: 'No', style: 'cancel' },
@@ -119,7 +119,7 @@ export default function ViajesProgramadosScreen() {
       return <Text style={styles.subtitulo}>{item.titulo}</Text>;
     }
     if (item.tipo === 'empty-disp' && disponibles.length === 0) {
-      return <Text style={styles.vacio}>No hay viajes de madrugada disponibles</Text>;
+      return <Text style={styles.vacio}>No hay viajes programados disponibles</Text>;
     }
     if (item.tipo === 'empty-asig' && asignados.length === 0) {
       return <Text style={styles.vacio}>No tienes viajes programados asignados</Text>;
@@ -185,8 +185,8 @@ export default function ViajesProgramadosScreen() {
 
   return (
     <View style={styles.container}>
-      <Text style={styles.titulo}>Viajes Programados 🌙</Text>
-      <Text style={styles.ayuda}>Madrugada: 3:00 AM – 6:00 AM · máx 3 por noche</Text>
+      <Text style={styles.titulo}>Viajes Programados 🕐</Text>
+      <Text style={styles.ayuda}>Cualquier hora · anticipación 2–24 h · máx 3 por día</Text>
       <FlatList
         data={data}
         keyExtractor={(item) => item.key}
