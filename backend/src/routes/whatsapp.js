@@ -527,11 +527,13 @@ async function procesarMensaje(telefono, texto) {
       '✅ Paga con Daviplata, Nequi o Efectivo\n' +
       '✅ Servicio 24/7';
   } else if (textoLower === '4' || textoLower.includes('soporte') || textoLower.includes('queja') || textoLower.includes('reclamo')) {
-    respuesta = '📋 Soporte y quejas UntaXtame\n\n' +
-      'Cuéntanos tu situación y te ayudaremos.\n\n' +
+    respuesta = '📋 *Soporte y quejas UntaXtame*\n\n' +
+      'Para atenderte mejor, por favor diligencia nuestro formulario de soporte y quejas. Es rápido y nos ayuda a dar seguimiento a tu caso:\n\n' +
+      '📝 https://forms.gle/zkBgY9ksSsTrAetHA\n\n' +
+      'También puedes escribirnos directamente:\n' +
       '📧 untaxtameapp@gmail.com\n' +
       '📱 WhatsApp: +57 322 3221058\n\n' +
-      'Servicio de atención 24/7.';
+      'Servicio de atención 24/7. 💛🖤';
   } else {
     respuesta = mostrarMenuPrincipal();
   }
