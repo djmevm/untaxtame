@@ -974,7 +974,15 @@ async function crearServicioWhatsApp(telefono, datos) {
     setEstado(telefono, 'servicio_activo', { servicioId, nombre });
 
     // Si NO es programado, notificar a conductores inmediatamente
+    let conductoresDisponibles = 0;
     if (!programado) {
+      try {
+        const snap = await db.collection('usuarios')
+          .where('rol', '==', 'conductor')
+          .where('disponible', '==', true)
+          .get();
+        conductoresDisponibles = snap.size;
+      } catch (e) {}
       try {
         const { enviarPushAConductores } = require('../services/pushNotifications');
         enviarPushAConductores({
@@ -999,12 +1007,23 @@ async function crearServicioWhatsApp(telefono, datos) {
       return respuesta;
     }
 
-    const respuesta = '✅ *¡Servicio solicitado exitosamente!*\n\n' +
+    // Mensaje base de confirmación
+    let estadoBusqueda;
+    if (conductoresDisponibles > 0) {
+      estadoBusqueda =
+        `🔍 Estamos avisando a *${conductoresDisponibles} taxista(s)* disponible(s).\n\n` +
+        '⏳ En un momento te llegarán las ofertas. Responde con el *número* de la que prefieras.';
+    } else {
+      estadoBusqueda =
+        '🔍 En este momento no hay taxistas disponibles, pero seguiremos buscando por unos minutos.\n\n' +
+        '⏳ Te avisaremos apenas uno se conecte. Gracias por tu paciencia. 💛';
+    }
+
+    const respuesta = '✅ *¡Solicitud recibida!*\n\n' +
       `📍 Recogida: ${direccion}${mapa}\n` +
       `🏁 Destino: ${destino || 'Por definir'}\n` +
       `💰 Pago: ${metodoPago === 'efectivo' ? 'Efectivo 💵' : 'Electrónico 💳'}\n\n` +
-      '🔍 Estamos buscando al conductor disponible más cercano...\n\n' +
-      '⏳ Te notificaremos cuando un conductor acepte tu servicio.\n\n' +
+      estadoBusqueda + '\n\n' +
       '_Para cancelar, responde *0*_';
 
     return respuesta;

@@ -63,13 +63,32 @@ export default function PedirTaxiScreen() {
     aireAcondicionado: false,
     mascotas: false,
   });
+  const [ultimoViaje, setUltimoViaje] = useState(null);
 
   useClienteServicioListener(perfil?.uid);
 
   // GPS del cliente — solo se activa al solicitar servicio (no periódico)
   useEffect(() => {
     obtenerUbicacion();
+    // Cargar el último viaje guardado (para "Pedir igual que la última vez")
+    (async () => {
+      try {
+        const AsyncStorage = require('@react-native-async-storage/async-storage').default;
+        const raw = await AsyncStorage.getItem('ultimoViaje');
+        if (raw) setUltimoViaje(JSON.parse(raw));
+      } catch {}
+    })();
   }, []);
+
+  // Rellenar el formulario con los datos del último viaje
+  const usarUltimoViaje = () => {
+    if (!ultimoViaje) return;
+    setOrigen(ultimoViaje.origen || '');
+    setDestino(ultimoViaje.destino || '');
+    setMetodoPago(ultimoViaje.metodoPago || '');
+    if (ultimoViaje.ubicacionGPS) setUbicacionGPS(ultimoViaje.ubicacionGPS);
+    if (ultimoViaje.destinoGPS) setDestinoGPS(ultimoViaje.destinoGPS);
+  };
 
   // Notificar mensajes de chat cuando el chat está cerrado
   useChatNotificacion(servicioActivo?.id, perfil?.uid, mostrarChat);
@@ -216,6 +235,24 @@ export default function PedirTaxiScreen() {
         requisitos: Object.entries(requisitos).filter(([k, v]) => v).map(([k]) => k),
       });
       setServicioActivo(res.data.servicio);
+
+      // Guardar el último viaje para "Pedir igual que la última vez"
+      try {
+        const AsyncStorage = require('@react-native-async-storage/async-storage').default;
+        await AsyncStorage.setItem('ultimoViaje', JSON.stringify({
+          origen, destino, metodoPago,
+          ubicacionGPS: ubicacionGPS || null,
+          destinoGPS: destinoGPS || null,
+        }));
+      } catch {}
+
+      // Mejora 2: avisar de inmediato si NO hay taxistas disponibles
+      if (res.data.sinConductores) {
+        Alert.alert(
+          '🔍 Buscando taxista',
+          'En este momento no hay taxistas disponibles, pero seguiremos buscando por unos minutos. Te avisaremos apenas uno se conecte. 💛',
+        );
+      }
     } catch (err) {
       const mensaje = err.response?.data?.error || err.message || 'No se pudo solicitar el taxi';
       Alert.alert('Error', mensaje);
@@ -403,6 +440,27 @@ export default function PedirTaxiScreen() {
                   <Text style={styles.saludoSub}>¿A dónde vamos hoy?</Text>
                 </View>
               </View>
+
+              {/* Aviso de lluvia — concientización del cliente */}
+              <View style={styles.avisoLluvia}>
+                <Text style={styles.avisoLluviaIcon}>🌧️</Text>
+                <Text style={styles.avisoLluviaTexto}>
+                  <Text style={{ fontWeight: 'bold' }}>¡Aviso!</Text> Con lluvia seguimos activos 24/7, pero los tiempos pueden ser más lentos por seguridad vial. ¡Gracias por tu paciencia! 💛🖤
+                </Text>
+              </View>
+
+              {/* Pedir igual que la última vez */}
+              {ultimoViaje && !origen && !destino && (
+                <TouchableOpacity style={styles.btnUltimoViaje} onPress={usarUltimoViaje} activeOpacity={0.8}>
+                  <Text style={styles.btnUltimoViajeIcon}>🔁</Text>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.btnUltimoViajeTitulo}>Pedir igual que la última vez</Text>
+                    <Text style={styles.btnUltimoViajeSub} numberOfLines={1}>
+                      {ultimoViaje.origen} → {ultimoViaje.destino}
+                    </Text>
+                  </View>
+                </TouchableOpacity>
+              )}
 
               {/* Campo origen editable */}
               <View style={styles.inputRow}>
@@ -631,16 +689,25 @@ export default function PedirTaxiScreen() {
           </View>
         </View>
       ) : servicioActivo.estado === 'pendiente' ? (
-        <OfertasRecibidas servicioId={servicioActivo.id} onAceptar={(oferta) => {
-          setServicioActivo(prev => ({
-            ...prev,
-            conductorNombre: oferta.conductorNombre,
-            conductorPlaca: oferta.conductorPlaca,
-            conductorCelular: oferta.conductorCelular,
-            tarifaAcordada: oferta.monto,
-            estado: 'aceptado',
-          }));
-        }} />
+        <>
+          {/* Aviso de qué esperar mientras llegan ofertas */}
+          <View style={styles.avisoEspera}>
+            <Text style={styles.avisoEsperaTitulo}>🔎 Buscando tu taxi…</Text>
+            <Text style={styles.avisoEsperaTexto}>
+              Estamos avisando a los taxistas. Cuando te hagan una oferta, aparecerá aquí abajo y tú eliges la que prefieras. Si nadie responde en unos minutos, te avisaremos.
+            </Text>
+          </View>
+          <OfertasRecibidas servicioId={servicioActivo.id} onAceptar={(oferta) => {
+            setServicioActivo(prev => ({
+              ...prev,
+              conductorNombre: oferta.conductorNombre,
+              conductorPlaca: oferta.conductorPlaca,
+              conductorCelular: oferta.conductorCelular,
+              tarifaAcordada: oferta.monto,
+              estado: 'aceptado',
+            }));
+          }} />
+        </>
       ) : (
         <View style={[styles.seccion, styles.esperandoCard]}>
           <Text style={styles.esperandoTexto}>⏳ Procesando servicio...</Text>
@@ -787,6 +854,39 @@ const styles = StyleSheet.create({
   saludoTexto: { fontSize: 18, color: '#333' },
   saludoNombre: { fontWeight: 'bold', color: '#000' },
   saludoSub: { fontSize: 13, color: '#888', marginTop: 2 },
+
+  // Aviso de lluvia
+  avisoLluvia: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 8,
+    backgroundColor: '#E3F2FD',
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 16,
+    borderLeftWidth: 4,
+    borderLeftColor: '#1565C0',
+  },
+  avisoLluviaIcon: { fontSize: 18, marginTop: 1 },
+  avisoLluviaTexto: { flex: 1, fontSize: 12.5, color: '#334155', lineHeight: 18 },
+
+  // Botón "pedir igual que la última vez"
+  btnUltimoViaje: {
+    flexDirection: 'row', alignItems: 'center', gap: 12,
+    backgroundColor: '#FFF8E1', borderRadius: 12, padding: 14, marginBottom: 16,
+    borderWidth: 2, borderColor: '#FFC107',
+  },
+  btnUltimoViajeIcon: { fontSize: 24 },
+  btnUltimoViajeTitulo: { fontSize: 15, fontWeight: 'bold', color: '#222' },
+  btnUltimoViajeSub: { fontSize: 12, color: '#777', marginTop: 2 },
+
+  // Aviso de espera mientras llegan ofertas
+  avisoEspera: {
+    backgroundColor: '#E3F2FD', borderRadius: 12, padding: 14, marginBottom: 12,
+    borderLeftWidth: 4, borderLeftColor: '#1565C0',
+  },
+  avisoEsperaTitulo: { fontSize: 15, fontWeight: 'bold', color: '#1565C0', marginBottom: 4 },
+  avisoEsperaTexto: { fontSize: 12.5, color: '#334155', lineHeight: 18 },
 
   // Inputs editables
   inputRow: {

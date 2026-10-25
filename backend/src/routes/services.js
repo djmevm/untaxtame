@@ -58,13 +58,30 @@ router.post('/solicitar', verifyToken, async (req, res) => {
 
     await db.collection('servicios').doc(servicioId).set(servicio);
 
+    // Contar conductores disponibles (aprobados y marcados como disponibles)
+    let conductoresDisponibles = 0;
+    try {
+      const snap = await db.collection('usuarios')
+        .where('rol', '==', 'conductor')
+        .where('disponible', '==', true)
+        .get();
+      conductoresDisponibles = snap.size;
+    } catch (e) {}
+
     // Push a conductores disponibles
     try {
       const { enviarPushAConductores } = require('../services/pushNotifications');
       enviarPushAConductores({ titulo: 'Nuevo servicio', cuerpo: clienteNombre + ': ' + origen + ' -> ' + destino, datos: { tipo: 'nuevo_servicio', servicioId } });
     } catch (e) {}
 
-    res.status(201).json({ message: 'Servicio solicitado', servicio });
+    // Respuesta con info del estado de la búsqueda (para que la app avise
+    // al cliente de inmediato y sepa qué esperar).
+    res.status(201).json({
+      message: 'Servicio solicitado',
+      servicio,
+      conductoresDisponibles,
+      sinConductores: conductoresDisponibles === 0,
+    });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
