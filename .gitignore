@@ -1,0 +1,32 @@
+.vercel
+.env*.local
+
+# Dependencias
+node_modules/
+**/node_modules/
+
+# Expo / React Native build & cache
+**/.expo/
+**/dist/
+**/android/
+**/ios/
+**/android_bak/
+
+# Builds web (admin / CRA)
+**/build/
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Binarios / artefactos
+*.apk
+*.aab
+*.jks
+*.keystore
+
+# Editor
+.vscode/
+.idea/
