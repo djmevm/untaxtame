@@ -603,7 +603,8 @@ function mostrarMenuPrincipal() {
   return '¡Hola! Bienvenido a *UntaXtame S.A.S* 🚕\n\n' +
     'Somos tu servicio de taxi seguro en Tame, Arauca. Servicio 24/7.\n' +
     '💰 Tarifa mínima: *$8.000 COP*\n' +
-    '🌙 Recargo nocturno de 6:00 PM a 6:00 AM\n\n' +
+    '🌙 Recargo nocturno de 6:00 PM a 6:00 AM\n' +
+    '📅 Recargo días festivos\n\n' +
     '¿En qué podemos ayudarte?\n\n' +
     '1️⃣ *Necesito un taxi ahora* 🚕\n' +
     '2️⃣ *Programar un viaje* (a cualquier hora) ⏰\n' +
