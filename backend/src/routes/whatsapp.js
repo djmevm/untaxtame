@@ -608,6 +608,7 @@ async function procesarMensaje(telefono, texto) {
 // ═══════════════════════════════════════════════════════════════════
 function mostrarMenuPrincipal() {
   return '¡Hola! Bienvenido a *UntaXtame S.A.S* 🚕\n\n' +
+    'Este Chatbot Empresarial de WhatsApp Business se comunica con la Aplicación de la Play Store y el Panel Admin Web para brindarles una mejor experiencia a nuestros clientes.\n\n' +
     'Somos tu servicio de taxi seguro en Tame, Arauca. Servicio 24/7.\n' +
     '💰 Tarifa mínima: *$8.000 COP*\n' +
     '🌙 Recargo nocturno de 6:00 PM a 6:00 AM\n' +
