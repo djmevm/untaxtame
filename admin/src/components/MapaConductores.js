@@ -1,355 +1,221 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Popup, Polyline, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import api from '../api';
 
 // ═══ WEBSOCKET EN TIEMPO REAL ═══
 const WS_URL = 'wss://untaxtame-production.up.railway.app/ws';
+const CENTRO_TAME = [6.46125, -71.73426];
 
-// Ícono de taxi
-function crearIconoTaxi(nombre, placa, enCarrera) {
-  const primerNombre = nombre?.split(' ')[0] || '';
-  const primerApellido = nombre?.split(' ').slice(1).find(p => p.length > 2) || nombre?.split(' ')[1] || '';
-  const borderColor = enCarrera ? '#E53935' : '#FFC107';
-  const statusDot = enCarrera ? '<div style="position:absolute;top:-2px;right:-2px;width:10px;height:10px;background:#E53935;border-radius:50%;border:2px solid #fff;animation:pulse 1s infinite"></div>' : '';
+// Estados de servicio con su etiqueta de proceso
+const PROCESO = {
+  aceptado: { label: '🚕 En camino al cliente', color: '#1565C0' },
+  conductor_en_sitio: { label: '📍 Conductor en el punto de recogida', color: '#F57F17' },
+  en_curso: { label: '🚗 Viaje en curso hacia el destino', color: '#2E7D32' },
+};
+
+function iconoTaxi(nombre, placa) {
+  const n = (nombre || '').split(' ')[0];
   return L.divIcon({
     className: '',
-    html: `<div style="text-align:center;position:relative">
-      ${statusDot}
-      <div style="font-size:28px">🚕</div>
-      <div style="background:${borderColor};color:#000;font-weight:bold;font-size:9px;padding:2px 6px;border-radius:4px;white-space:nowrap;margin-top:-2px">${primerNombre} ${primerApellido}</div>
-      <div style="background:#333;color:${borderColor};font-weight:bold;font-size:8px;padding:1px 5px;border-radius:3px;margin-top:2px">${placa || '---'}</div>
+    html: `<div style="text-align:center">
+      <div style="font-size:30px">🚕</div>
+      <div style="background:#FFC107;color:#000;font-weight:bold;font-size:10px;padding:2px 6px;border-radius:4px;white-space:nowrap;margin-top:-4px">${n}</div>
+      <div style="background:#000;color:#FFC107;font-weight:bold;font-size:9px;padding:1px 5px;border-radius:3px;margin-top:2px;letter-spacing:1px">${placa || '---'}</div>
     </div>`,
-    iconSize: [80, 60],
-    iconAnchor: [40, 60],
+    iconSize: [90, 60], iconAnchor: [45, 60],
   });
 }
 
-// Ícono de cliente
-function crearIconoCliente(nombre) {
-  const primerNombre = nombre?.split(' ')[0] || 'Cliente';
+function iconoCliente(nombre) {
+  const n = (nombre || 'Cliente').split(' ')[0];
   return L.divIcon({
     className: '',
     html: `<div style="text-align:center">
       <div style="font-size:26px">👤</div>
-      <div style="background:#1565C0;color:#fff;font-weight:bold;font-size:9px;padding:2px 6px;border-radius:4px;white-space:nowrap;margin-top:-2px">${primerNombre}</div>
+      <div style="background:#1565C0;color:#fff;font-weight:bold;font-size:10px;padding:2px 6px;border-radius:4px;white-space:nowrap;margin-top:-2px">${n}</div>
     </div>`,
-    iconSize: [80, 50],
-    iconAnchor: [40, 50],
+    iconSize: [80, 50], iconAnchor: [40, 50],
   });
 }
 
-function CentrarMapa({ centro }) {
+// Centrar el mapa en los puntos del servicio seleccionado
+function AjustarVista({ puntos }) {
   const map = useMap();
   useEffect(() => {
-    if (centro) map.setView(centro, 14);
-  }, []);
+    if (puntos && puntos.length === 1) {
+      map.setView(puntos[0], 16);
+    } else if (puntos && puntos.length > 1) {
+      map.fitBounds(puntos, { padding: [60, 60], maxZoom: 16 });
+    }
+  }, [puntos, map]);
   return null;
 }
 
 export default function MapaConductores() {
-  const [conductores, setConductores] = useState([]);
   const [servicios, setServicios] = useState([]);
+  const [seleccionado, setSeleccionado] = useState(null); // id del servicio seguido
   const [cargando, setCargando] = useState(true);
   const [wsConectado, setWsConectado] = useState(false);
   const [ultimaActualizacion, setUltimaActualizacion] = useState(null);
   const wsRef = useRef(null);
-  const conductoresRef = useRef(new Map());
+  const ubicacionesRef = useRef(new Map()); // uid conductor → {lat,lng,timestamp}
+  const [tick, setTick] = useState(0); // fuerza re-render al llegar ubicaciones
 
-  // Cargar servicios activos (HTTP)
+  // Cargar servicios activos por HTTP (datos base)
   const cargarServicios = async () => {
     try {
-      const sRes = await api.get('/services/todos');
-      const serviciosActivos = (sRes.data || []).filter(s =>
-        ['pendiente', 'aceptado', 'en_curso', 'conductor_en_sitio'].includes(s.estado)
+      const res = await api.get('/services/todos');
+      const activos = (res.data || []).filter(s =>
+        s.conductorUid && ['aceptado', 'conductor_en_sitio', 'en_curso'].includes(s.estado)
       );
-      setServicios(serviciosActivos.filter(s => s.ubicacionGPS?.lat));
-
-      // Fallback: si no hay datos del WebSocket, cargar ubicaciones por HTTP
-      if (conductoresRef.current.size === 0) {
-        try {
-          const ubiRes = await api.get('/users/conductores/en-servicio');
-          const enServicio = (ubiRes.data || []).filter(c => c.ubicacionActual?.lat);
-          enServicio.forEach(c => {
-            conductoresRef.current.set(c.uid, {
-              uid: c.uid,
-              lat: c.ubicacionActual.lat,
-              lng: c.ubicacionActual.lng,
-              nombre: c.nombre || '',
-              placa: c.placa || '',
-              timestamp: Date.now(),
-            });
-          });
-          setConductores(Array.from(conductoresRef.current.values()));
-        } catch {}
-      }
+      setServicios(activos);
+      // Autoseleccionar el primero si no hay ninguno seleccionado
+      setSeleccionado(prev => prev && activos.find(s => s.id === prev) ? prev : (activos[0]?.id || null));
     } catch {}
     finally { setCargando(false); }
   };
 
-  // Conectar WebSocket para ubicaciones en tiempo real
   useEffect(() => {
     cargarServicios();
-    const intervaloServicios = setInterval(cargarServicios, 15000);
+    const intServicios = setInterval(cargarServicios, 10000);
 
-    // WebSocket
     const conectarWS = () => {
-      const ws = new WebSocket(`${WS_URL}?uid=admin-mapa&rol=admin`);
-
-      ws.onopen = () => {
-        setWsConectado(true);
-        console.log('[Mapa WS] Conectado - rastreo en tiempo real activo');
-      };
-
+      const ws = new WebSocket(`${WS_URL}?uid=admin-rastreo&rol=admin`);
+      ws.onopen = () => setWsConectado(true);
       ws.onmessage = (event) => {
         try {
           const data = JSON.parse(event.data);
           if (data.tipo === 'ubicaciones_conductores' && data.conductores) {
-            // Actualizar posiciones en tiempo real
             data.conductores.forEach(c => {
-              conductoresRef.current.set(c.uid, {
-                uid: c.uid,
-                lat: c.lat,
-                lng: c.lng,
-                nombre: c.nombre || '',
-                placa: c.placa || '',
-                timestamp: c.timestamp || Date.now(),
-              });
+              ubicacionesRef.current.set(c.uid, { lat: c.lat, lng: c.lng, timestamp: c.timestamp || Date.now() });
             });
-
-            // Convertir Map a array para render
-            setConductores(Array.from(conductoresRef.current.values()));
             setUltimaActualizacion(new Date());
+            setTick(t => t + 1);
           }
         } catch {}
       };
-
-      ws.onclose = () => {
-        setWsConectado(false);
-        // Reconectar en 3 segundos
-        setTimeout(conectarWS, 3000);
-      };
-
+      ws.onclose = () => { setWsConectado(false); setTimeout(conectarWS, 3000); };
       ws.onerror = () => {};
       wsRef.current = ws;
     };
-
     conectarWS();
 
-    return () => {
-      clearInterval(intervaloServicios);
-      if (wsRef.current) wsRef.current.close();
-    };
+    return () => { clearInterval(intServicios); if (wsRef.current) wsRef.current.close(); };
   }, []);
 
-  // Determinar qué conductores están en carrera
-  const conductoresEnCarrera = new Set();
-  servicios.forEach(s => {
-    if (s.conductorUid && ['aceptado', 'en_curso', 'conductor_en_sitio'].includes(s.estado)) {
-      conductoresEnCarrera.add(s.conductorUid);
-    }
-  });
+  if (cargando) return <p className="loading">Cargando rastreo...</p>;
 
-  // Servicios con ubicación GPS para mostrar en mapa
-  const serviciosConGPS = servicios.filter(s => s.ubicacionGPS?.lat);
+  const servicio = servicios.find(s => s.id === seleccionado);
 
-  if (cargando) return <p className="loading">Cargando mapa...</p>;
+  // Posiciones para el servicio seleccionado
+  const ubiConductor = servicio ? ubicacionesRef.current.get(servicio.conductorUid) : null;
+  const posConductor = ubiConductor
+    ? [ubiConductor.lat, ubiConductor.lng]
+    : (servicio?.ubicacionConductor ? [servicio.ubicacionConductor.lat, servicio.ubicacionConductor.lng] : null);
+  const posCliente = servicio?.ubicacionGPS?.lat ? [servicio.ubicacionGPS.lat, servicio.ubicacionGPS.lng] : null;
 
-  const centro = conductores.length > 0
-    ? [conductores[0].lat, conductores[0].lng]
-    : servicios.length > 0
-      ? [servicios[0].ubicacionGPS.lat, servicios[0].ubicacionGPS.lng]
-      : [6.4531, -71.4353]; // Tame, Arauca
+  const puntos = [posConductor, posCliente].filter(Boolean);
+  const centro = puntos[0] || CENTRO_TAME;
+  const proceso = servicio ? (PROCESO[servicio.estado] || { label: servicio.estado, color: '#555' }) : null;
 
   return (
     <div>
-      <h2 className="titulo">📍 Rastreo en Tiempo Real</h2>
-
-      <div className="stats">
-        <div className="stat-card">
-          <div className="num" style={{ color: '#FFC107' }}>{conductores.length}</div>
-          <div className="label">🚕 Conductores activos</div>
-        </div>
-        <div className="stat-card">
-          <div className="num" style={{ color: '#E53935' }}>{conductoresEnCarrera.size}</div>
-          <div className="label">🔴 En carrera</div>
-        </div>
-        <div className="stat-card">
-          <div className="num" style={{ color: '#1565C0' }}>{servicios.length}</div>
-          <div className="label">👤 Clientes activos</div>
-        </div>
-        <div className="stat-card">
-          <div className="num" style={{ color: wsConectado ? '#2E7D32' : '#E53935', fontSize: 14 }}>
-            {wsConectado ? '🟢 EN VIVO' : '🔴 DESCONECTADO'}
-          </div>
-          <div className="label">
-            {ultimaActualizacion ? `⏱️ ${ultimaActualizacion.toLocaleTimeString('es-CO')}` : 'Esperando datos...'}
-          </div>
-        </div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10 }}>
+        <h2 className="titulo" style={{ marginBottom: 0 }}>⚡ Rastreo de Servicio en Vivo</h2>
+        <span style={{
+          background: wsConectado ? '#E8F5E9' : '#FFEBEE', color: wsConectado ? '#2E7D32' : '#B71C1C',
+          padding: '6px 14px', borderRadius: 20, fontWeight: 'bold', fontSize: 13,
+        }}>
+          {wsConectado ? '🟢 EN VIVO' : '🔴 Reconectando...'}
+          {ultimaActualizacion ? ` · ${ultimaActualizacion.toLocaleTimeString('es-CO')}` : ''}
+        </span>
       </div>
+      <p style={{ color: '#666', marginTop: 6, marginBottom: 16 }}>
+        Seguimiento segundo a segundo del viaje entre el cliente y su conductor.
+      </p>
 
-      <div style={estilos.mapaContainer}>
-        <MapContainer center={centro} zoom={14} style={{ height: 550, borderRadius: 16 }}>
-          <TileLayer
-            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-            attribution='&copy; OpenStreetMap'
-          />
-          <CentrarMapa centro={centro} />
-
-          {/* Conductores en tiempo real */}
-          {conductores.map(c => (
-            <Marker
-              key={c.uid}
-              position={[c.lat, c.lng]}
-              icon={crearIconoTaxi(c.nombre, c.placa, conductoresEnCarrera.has(c.uid))}
-            >
-              <Popup>
-                <div style={{ textAlign: 'center' }}>
-                  <strong>🚕 {c.nombre}</strong><br />
-                  <span style={{ color: '#FFC107', fontWeight: 'bold', letterSpacing: 2 }}>{c.placa}</span><br />
-                  {conductoresEnCarrera.has(c.uid) && (
-                    <span style={{ color: '#E53935', fontWeight: 'bold', fontSize: 12 }}>🔴 EN CARRERA</span>
-                  )}<br />
-                  <span style={{ fontSize: 11, color: '#aaa' }}>
-                    📍 {c.lat.toFixed(5)}, {c.lng.toFixed(5)}
-                  </span><br />
-                  <a href={`https://www.google.com/maps?q=${c.lat},${c.lng}`} target="_blank" rel="noopener noreferrer" style={{ fontSize: 12 }}>
-                    🗺️ Ver en Google Maps
-                  </a>
-                </div>
-              </Popup>
-            </Marker>
-          ))}
-
-          {/* Clientes con servicio activo */}
-          {servicios.map(s => (
-            <Marker
-              key={s.id}
-              position={[s.ubicacionGPS.lat, s.ubicacionGPS.lng]}
-              icon={crearIconoCliente(s.clienteNombre)}
-            >
-              <Popup>
-                <div style={{ textAlign: 'center' }}>
-                  <strong>👤 {s.clienteNombre}</strong><br />
-                  <span style={{ fontSize: 12 }}>📍 {s.origen}</span><br />
-                  <span style={{ fontSize: 12 }}>🏁 {s.destino}</span><br />
-                  <span style={{ fontSize: 11, color: '#888' }}>Estado: {s.estado}</span><br />
-                  {s.conductorNombre && (
-                    <span style={{ fontSize: 11, color: '#E53935' }}>🚕 {s.conductorNombre} ({s.conductorPlaca})</span>
-                  )}
-                </div>
-              </Popup>
-            </Marker>
-          ))}
-        </MapContainer>
-      </div>
-
-      {/* Lista de conductores en carrera */}
-      <h3 style={{ marginTop: 24, marginBottom: 16 }}>🔴 Conductores en carrera (rastreo activo)</h3>
-      {servicios.filter(s => s.conductorUid && ['aceptado', 'en_curso', 'conductor_en_sitio'].includes(s.estado)).length === 0 && conductores.filter(c => conductoresEnCarrera.has(c.uid)).length === 0 ? (
-        <div>
-          {servicios.length > 0 ? (
-            <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: 16 }}>
-              <thead>
-                <tr style={{ background: '#FFEBEE' }}>
-                  <th style={{ padding: '8px 12px', textAlign: 'left', fontSize: 13 }}>Cliente</th>
-                  <th style={{ padding: '8px 12px', textAlign: 'left', fontSize: 13 }}>Conductor</th>
-                  <th style={{ padding: '8px 12px', textAlign: 'left', fontSize: 13 }}>Origen</th>
-                  <th style={{ padding: '8px 12px', textAlign: 'left', fontSize: 13 }}>Destino</th>
-                  <th style={{ padding: '8px 12px', textAlign: 'left', fontSize: 13 }}>Estado</th>
-                </tr>
-              </thead>
-              <tbody>
-                {servicios.filter(s => ['aceptado', 'en_curso', 'conductor_en_sitio'].includes(s.estado)).map(s => (
-                  <tr key={s.id} style={{ borderBottom: '1px solid #eee' }}>
-                    <td style={{ padding: '8px 12px', fontSize: 13 }}>{s.clienteNombre}</td>
-                    <td style={{ padding: '8px 12px', fontSize: 13, fontWeight: 'bold' }}>{s.conductorNombre || '—'} <span style={{ color: '#FFC107' }}>{s.conductorPlaca}</span></td>
-                    <td style={{ padding: '8px 12px', fontSize: 13 }}>{s.origen}</td>
-                    <td style={{ padding: '8px 12px', fontSize: 13 }}>{s.destino}</td>
-                    <td style={{ padding: '8px 12px', fontSize: 13 }}>
-                      <span style={{ background: '#FFF3E0', color: '#E65100', padding: '3px 8px', borderRadius: 6, fontSize: 11, fontWeight: 'bold' }}>
-                        {s.estado === 'aceptado' ? '🚕 En camino' : s.estado === 'conductor_en_sitio' ? '📍 En sitio' : '🚗 En curso'}
-                      </span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          ) : (
-            <p style={{ color: '#999', textAlign: 'center', padding: 20 }}>No hay conductores en carrera en este momento</p>
-          )}
+      {servicios.length === 0 ? (
+        <div style={{ background: '#fff', borderRadius: 16, padding: 40, textAlign: 'center', boxShadow: '0 2px 12px rgba(0,0,0,0.08)' }}>
+          <div style={{ fontSize: 48, marginBottom: 8 }}>🚕</div>
+          <p style={{ color: '#999', fontSize: 16 }}>No hay servicios en curso en este momento</p>
         </div>
       ) : (
-        <div style={estilos.listaGrid}>
-          {conductores.filter(c => conductoresEnCarrera.has(c.uid)).map(c => {
-            const servicio = servicios.find(s => s.conductorUid === c.uid);
-            return (
-              <div key={c.uid} style={{ ...estilos.conductorCard, borderLeft: '4px solid #E53935' }}>
-                <div style={estilos.conductorHeader}>
-                  <div style={estilos.fotoPlaceholder}>{c.nombre?.charAt(0)?.toUpperCase()}</div>
-                  <div>
-                    <p style={estilos.nombre}>{c.nombre}</p>
-                    <p style={{ ...estilos.placa, color: '#E53935' }}>{c.placa}</p>
-                  </div>
-                </div>
-                {servicio && (
-                  <div style={{ marginBottom: 8 }}>
-                    <p style={{ margin: '2px 0', fontSize: 12, color: '#333' }}>👤 Cliente: {servicio.clienteNombre}</p>
-                    <p style={{ margin: '2px 0', fontSize: 12, color: '#333' }}>📍 {servicio.origen}</p>
-                    <p style={{ margin: '2px 0', fontSize: 12, color: '#333' }}>🏁 {servicio.destino}</p>
-                    <p style={{ margin: '2px 0', fontSize: 12, color: '#666' }}>💰 ${servicio.tarifaAcordada?.toLocaleString('es-CO') || '---'} | {servicio.metodoPago?.toUpperCase()}</p>
-                  </div>
-                )}
-                <p style={estilos.coordenadas}>📍 {c.lat.toFixed(5)}, {c.lng.toFixed(5)}</p>
-                <a href={`https://www.google.com/maps?q=${c.lat},${c.lng}`} target="_blank" rel="noopener noreferrer" style={estilos.linkMapa}>🗺️ Ver en Google Maps</a>
-              </div>
-            );
-          })}
-        </div>
-      )}
+        <>
+          {/* Selector de servicio activo */}
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 16 }}>
+            {servicios.map(s => (
+              <button key={s.id} onClick={() => setSeleccionado(s.id)} style={{
+                padding: '10px 14px', borderRadius: 10, cursor: 'pointer', fontWeight: 'bold', fontSize: 13,
+                border: `2px solid ${seleccionado === s.id ? '#F97316' : '#ddd'}`,
+                background: seleccionado === s.id ? '#FFF3E0' : '#fff', textAlign: 'left',
+              }}>
+                👤 {s.clienteNombre} <br />
+                <span style={{ fontSize: 11, color: '#777' }}>🚕 {s.conductorNombre} · {s.conductorPlaca}</span>
+              </button>
+            ))}
+          </div>
 
-      {/* Todos los conductores conectados */}
-      <h3 style={{ marginTop: 24, marginBottom: 16 }}>🚕 Todos los conductores conectados ({conductores.length})</h3>
-      {conductores.length === 0 ? (
-        <p style={{ color: '#999', textAlign: 'center', padding: 20 }}>No hay conductores conectados</p>
-      ) : (
-        <div style={estilos.listaGrid}>
-          {conductores.filter(c => !conductoresEnCarrera.has(c.uid)).map(c => (
-            <div key={c.uid} style={estilos.conductorCard}>
-              <div style={estilos.conductorHeader}>
-                <div style={estilos.fotoPlaceholder}>{c.nombre?.charAt(0)?.toUpperCase()}</div>
-                <div>
-                  <p style={estilos.nombre}>{c.nombre}</p>
-                  <p style={estilos.placa}>{c.placa}</p>
-                </div>
-              </div>
-              <p style={estilos.coordenadas}>📍 {c.lat.toFixed(5)}, {c.lng.toFixed(5)}</p>
-              <a href={`https://www.google.com/maps?q=${c.lat},${c.lng}`} target="_blank" rel="noopener noreferrer" style={estilos.linkMapa}>🗺️ Ver en Google Maps</a>
+          {/* Barra de estado del proceso */}
+          {servicio && proceso && (
+            <div style={{ background: proceso.color, color: '#fff', borderRadius: 12, padding: '12px 18px', marginBottom: 16, fontWeight: 'bold', fontSize: 15 }}>
+              {proceso.label}
             </div>
-          ))}
-        </div>
-      )}
+          )}
 
-      <style>{`
-        @keyframes pulse {
-          0% { transform: scale(1); opacity: 1; }
-          50% { transform: scale(1.3); opacity: 0.7; }
-          100% { transform: scale(1); opacity: 1; }
-        }
-      `}</style>
+          {/* Mapa del servicio seleccionado */}
+          <div style={{ borderRadius: 16, overflow: 'hidden', boxShadow: '0 2px 12px rgba(0,0,0,0.1)', marginBottom: 20 }}>
+            <MapContainer center={centro} zoom={16} style={{ height: 520 }}>
+              <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" attribution='&copy; OpenStreetMap' />
+              <AjustarVista puntos={puntos} />
+
+              {posConductor && servicio && (
+                <Marker position={posConductor} icon={iconoTaxi(servicio.conductorNombre, servicio.conductorPlaca)}>
+                  <Popup>
+                    <strong>🚕 {servicio.conductorNombre}</strong><br />
+                    Placa: {servicio.conductorPlaca}<br />
+                    {ubiConductor ? `📡 En vivo · ${new Date(ubiConductor.timestamp).toLocaleTimeString('es-CO')}` : '📍 Última posición conocida'}
+                  </Popup>
+                </Marker>
+              )}
+
+              {posCliente && servicio && (
+                <Marker position={posCliente} icon={iconoCliente(servicio.clienteNombre)}>
+                  <Popup>
+                    <strong>👤 {servicio.clienteNombre}</strong><br />
+                    📍 {servicio.origen}
+                  </Popup>
+                </Marker>
+              )}
+
+              {/* Línea entre conductor y cliente */}
+              {posConductor && posCliente && (
+                <Polyline positions={[posConductor, posCliente]} pathOptions={{ color: '#F97316', weight: 4, dashArray: '8 8' }} />
+              )}
+            </MapContainer>
+          </div>
+
+          {/* Detalle del servicio */}
+          {servicio && (
+            <div style={{ background: '#fff', borderRadius: 14, padding: 18, boxShadow: '0 2px 8px rgba(0,0,0,0.08)' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12 }}>
+                <div><strong>👤 Cliente:</strong> {servicio.clienteNombre}</div>
+                <div><strong>🚕 Conductor:</strong> {servicio.conductorNombre} <span style={{ color: '#FFC107', fontWeight: 'bold' }}>{servicio.conductorPlaca}</span></div>
+                <div><strong>📍 Origen:</strong> {servicio.origen}</div>
+                <div><strong>🏁 Destino:</strong> {servicio.destino}</div>
+                <div><strong>💰 Tarifa:</strong> ${servicio.tarifaAcordada?.toLocaleString('es-CO') || '—'}</div>
+                <div><strong>💳 Pago:</strong> {servicio.metodoPago?.toUpperCase()}</div>
+              </div>
+              {!ubiConductor && (
+                <p style={{ color: '#E53935', fontSize: 13, marginTop: 12, marginBottom: 0 }}>
+                  ⚠️ El conductor aún no transmite ubicación en vivo (requiere la app actualizada con GPS por WebSocket).
+                </p>
+              )}
+            </div>
+          )}
+        </>
+      )}
     </div>
   );
 }
-
-const estilos = {
-  mapaContainer: { marginBottom: 24, borderRadius: 16, overflow: 'hidden', boxShadow: '0 2px 12px rgba(0,0,0,0.1)' },
-  listaGrid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 16 },
-  conductorCard: { background: '#fff', borderRadius: 14, padding: 18, boxShadow: '0 2px 8px rgba(0,0,0,0.08)', borderLeft: '4px solid #FFC107' },
-  conductorHeader: { display: 'flex', alignItems: 'center', gap: 12, marginBottom: 10 },
-  fotoPlaceholder: { width: 48, height: 48, borderRadius: 24, background: '#FFC107', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold', fontSize: 20 },
-  nombre: { margin: 0, fontWeight: 'bold', fontSize: 16 },
-  placa: { margin: 0, color: '#FFC107', fontWeight: 'bold', letterSpacing: 2 },
-  coordenadas: { fontSize: 13, color: '#666', margin: '4px 0' },
-  linkMapa: { fontSize: 13, color: '#1565C0', fontWeight: '600', textDecoration: 'none' },
-};
