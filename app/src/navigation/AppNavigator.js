@@ -18,8 +18,10 @@ import RegistroConductorScreen from '../screens/auth/RegistroConductorScreen';
 
 // Cliente screens
 import PedirTaxiScreen from '../screens/cliente/PedirTaxiScreen';
+import ProgramarViajeScreen from '../screens/cliente/ProgramarViajeScreen';
 import HistorialClienteScreen from '../screens/cliente/HistorialClienteScreen';
 import HistorialPagosScreen from '../screens/cliente/HistorialPagosScreen';
+import ServiciosAliadosScreen from '../screens/cliente/ServiciosAliadosScreen';
 import PerfilClienteScreen from '../screens/cliente/PerfilClienteScreen';
 
 // Conductor screens
@@ -38,6 +40,8 @@ function ClienteTabs() {
       screenOptions={{ headerShown: false }}
     >
       <Tab.Screen name="PedirTaxi" component={PedirTaxiScreen} />
+      <Tab.Screen name="ProgramarViaje" component={ProgramarViajeScreen} />
+      <Tab.Screen name="ServiciosAliados" component={ServiciosAliadosScreen} />
       <Tab.Screen name="HistorialCliente" component={HistorialClienteScreen} />
       <Tab.Screen name="HistorialPagos" component={HistorialPagosScreen} />
       <Tab.Screen name="PerfilCliente" component={PerfilClienteScreen} />

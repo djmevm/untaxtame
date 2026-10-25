@@ -4,6 +4,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const TAB_ICONS = {
   PedirTaxi: '🚕',
+  ProgramarViaje: '🕐',
+  ServiciosAliados: '🛠️',
   HistorialCliente: '📋',
   HistorialPagos: '💳',
   PerfilCliente: '👤',
@@ -15,6 +17,8 @@ const TAB_ICONS = {
 
 const TAB_LABELS = {
   PedirTaxi: 'Pide Taxi',
+  ProgramarViaje: 'Programar',
+  ServiciosAliados: 'Aliados',
   HistorialCliente: 'Mis Viajes',
   HistorialPagos: 'Pagos',
   PerfilCliente: 'Mi Perfil',
