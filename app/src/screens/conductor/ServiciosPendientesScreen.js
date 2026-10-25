@@ -6,6 +6,7 @@ import {
 } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import MapView, { Marker, PROVIDER_GOOGLE } from 'react-native-maps';
+import * as Location from 'expo-location';
 import { useAuth } from '../../context/AuthContext';
 import api from '../../config/api';
 import { useConductorServiciosListener, useConductorOfertaAceptada } from '../../hooks/useServicioListener';
@@ -35,6 +36,35 @@ export default function ServiciosPendientesScreen() {
 
   // Saldo del conductor
   const { saldo, sinSaldo } = useSaldoConductor(perfil?.uid);
+
+  // Ubicación del conductor (para estimar distancia al cliente y ofertar mejor)
+  const [miUbicacion, setMiUbicacion] = useState(null);
+  useEffect(() => {
+    let activo = true;
+    const obtener = async () => {
+      try {
+        const { status } = await Location.requestForegroundPermissionsAsync();
+        if (status !== 'granted') return;
+        const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+        if (activo) setMiUbicacion({ lat: loc.coords.latitude, lng: loc.coords.longitude });
+      } catch {}
+    };
+    obtener();
+    const intervalo = setInterval(obtener, 30000); // refrescar cada 30s
+    return () => { activo = false; clearInterval(intervalo); };
+  }, []);
+
+  // Distancia en km entre el conductor y un punto (Haversine)
+  const distanciaA = (lat, lng) => {
+    if (!miUbicacion || lat == null || lng == null) return null;
+    const R = 6371;
+    const dLat = (lat - miUbicacion.lat) * Math.PI / 180;
+    const dLng = (lng - miUbicacion.lng) * Math.PI / 180;
+    const a = Math.sin(dLat / 2) ** 2 +
+      Math.cos(miUbicacion.lat * Math.PI / 180) * Math.cos(lat * Math.PI / 180) * Math.sin(dLng / 2) ** 2;
+    const km = R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return Math.round(km * 10) / 10;
+  };
 
   const verificarServicioActivo = async () => {
     try {
@@ -180,21 +210,33 @@ export default function ServiciosPendientesScreen() {
           <View style={styles.routeDotRed} />
         </View>
         <View style={styles.routeTexts}>
-          <Text style={styles.routeText} numberOfLines={1}>{item.origen}</Text>
-          <Text style={styles.routeText} numberOfLines={1}>{item.destino}</Text>
+          <Text style={styles.routeLabel}>RECOGER EN</Text>
+          <Text style={styles.routeText} numberOfLines={2}>{item.origen}</Text>
+          <Text style={[styles.routeLabel, { marginTop: 8 }]}>DESTINO</Text>
+          <Text style={styles.routeText} numberOfLines={2}>{item.destino}</Text>
         </View>
       </View>
 
-      {/* Mini mapa con ruta origen → destino */}
-      {item.ubicacionGPS && item.destinoLat && item.destinoLng && (
+      {/* Distancia del conductor al punto de recogida (para estimar la oferta) */}
+      {item.ubicacionGPS?.lat && distanciaA(item.ubicacionGPS.lat, item.ubicacionGPS.lng) != null && (
+        <View style={styles.distanciaPill}>
+          <Feather name="navigation" size={13} color="#1565C0" />
+          <Text style={styles.distanciaTexto}>
+            A {distanciaA(item.ubicacionGPS.lat, item.ubicacionGPS.lng)} km de ti
+          </Text>
+        </View>
+      )}
+
+      {/* Mini mapa: muestra el punto del cliente (y destino si existe) */}
+      {item.ubicacionGPS?.lat && (
         <MapView
-          style={{ height: 120, borderRadius: 10, marginVertical: 8 }}
+          style={{ height: 130, borderRadius: 10, marginVertical: 8 }}
           provider={PROVIDER_GOOGLE}
           initialRegion={{
-            latitude: (item.ubicacionGPS.lat + item.destinoLat) / 2,
-            longitude: (item.ubicacionGPS.lng + item.destinoLng) / 2,
-            latitudeDelta: Math.abs(item.ubicacionGPS.lat - item.destinoLat) * 1.8 + 0.005,
-            longitudeDelta: Math.abs(item.ubicacionGPS.lng - item.destinoLng) * 1.8 + 0.005,
+            latitude: item.destinoLat ? (item.ubicacionGPS.lat + item.destinoLat) / 2 : item.ubicacionGPS.lat,
+            longitude: item.destinoLng ? (item.ubicacionGPS.lng + item.destinoLng) / 2 : item.ubicacionGPS.lng,
+            latitudeDelta: item.destinoLat ? Math.abs(item.ubicacionGPS.lat - item.destinoLat) * 1.8 + 0.006 : 0.008,
+            longitudeDelta: item.destinoLng ? Math.abs(item.ubicacionGPS.lng - item.destinoLng) * 1.8 + 0.006 : 0.008,
           }}
           scrollEnabled={false}
           zoomEnabled={false}
@@ -202,8 +244,10 @@ export default function ServiciosPendientesScreen() {
           pitchEnabled={false}
           liteMode={true}
         >
-          <Marker coordinate={{ latitude: item.ubicacionGPS.lat, longitude: item.ubicacionGPS.lng }} pinColor="#2E7D32" title="Recogida" />
-          <Marker coordinate={{ latitude: item.destinoLat, longitude: item.destinoLng }} pinColor="#E53935" title="Destino" />
+          <Marker coordinate={{ latitude: item.ubicacionGPS.lat, longitude: item.ubicacionGPS.lng }} pinColor="#2E7D32" title="Recoger aquí" description={item.origen} />
+          {item.destinoLat && item.destinoLng && (
+            <Marker coordinate={{ latitude: item.destinoLat, longitude: item.destinoLng }} pinColor="#E53935" title="Destino" description={item.destino} />
+          )}
         </MapView>
       )}
 
@@ -240,9 +284,23 @@ export default function ServiciosPendientesScreen() {
 
       {/* Action buttons row */}
       <View style={styles.cardActions}>
-        {item.ubicacionGPS && (
-          <TouchableOpacity style={styles.iconBtn} onPress={() => Linking.openURL(`https://www.google.com/maps?q=${item.ubicacionGPS.lat},${item.ubicacionGPS.lng}`)}>
-            <Feather name="map-pin" size={16} color="#64748B" />
+        {item.ubicacionGPS?.lat && (
+          <TouchableOpacity
+            style={styles.btnComoLlegar}
+            onPress={() => {
+              // Abrir navegación turn-by-turn hacia el punto de recogida
+              const { lat, lng } = item.ubicacionGPS;
+              const navUrl = Platform.OS === 'android'
+                ? `google.navigation:q=${lat},${lng}`
+                : `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}&travelmode=driving`;
+              Linking.openURL(navUrl).catch(() =>
+                Linking.openURL(`https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}`)
+              );
+            }}
+            activeOpacity={0.8}
+          >
+            <Feather name="navigation" size={14} color="#1565C0" />
+            <Text style={styles.btnComoLlegarTexto}>Cómo llegar</Text>
           </TouchableOpacity>
         )}
         <TouchableOpacity
@@ -695,8 +753,49 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   routeText: {
-    fontSize: 12,
-    color: '#64748B',
+    fontSize: 13,
+    color: '#1E293B',
+    fontWeight: '600',
+  },
+  routeLabel: {
+    fontSize: 10,
+    color: '#94A3B8',
+    fontWeight: '700',
+    letterSpacing: 0.5,
+  },
+
+  // Distancia al cliente
+  distanciaPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    alignSelf: 'flex-start',
+    backgroundColor: '#E3F2FD',
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    marginBottom: 4,
+  },
+  distanciaTexto: {
+    fontSize: 13,
+    color: '#1565C0',
+    fontWeight: 'bold',
+  },
+
+  // Botón "cómo llegar" (navegación GPS)
+  btnComoLlegar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#E3F2FD',
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+  },
+  btnComoLlegarTexto: {
+    fontSize: 13,
+    color: '#1565C0',
+    fontWeight: 'bold',
   },
 
   // Info row

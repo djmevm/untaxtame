@@ -30,6 +30,18 @@ router.post('/solicitar', verifyToken, async (req, res) => {
   try {
     const servicioId = uuidv4();
 
+    // Si el origen es texto de coordenadas pero hay GPS, convertir a
+    // dirección legible para que el conductor sepa a dónde ir.
+    let origenLegible = origen;
+    try {
+      const pareceCoords = /^-?\d+\.\d+\s*,\s*-?\d+\.\d+$/.test(String(origen || '').trim());
+      if ((pareceCoords || !origen) && ubicacionGPS?.lat) {
+        const { direccionLegible } = require('../services/geocoding');
+        const dir = await direccionLegible(ubicacionGPS.lat, ubicacionGPS.lng);
+        if (dir) origenLegible = dir;
+      }
+    } catch (e) {}
+
     const servicio = {
       id: servicioId,
       clienteUid,
@@ -39,7 +51,7 @@ router.post('/solicitar', verifyToken, async (req, res) => {
       ubicacionGPS:     ubicacionGPS     || null,
       destinoLat:       destinoLat       || null,
       destinoLng:       destinoLng       || null,
-      origen,
+      origen:           origenLegible,
       destino,
       metodoPago: metodoPago.toLowerCase(),
       estado: 'pendiente',
