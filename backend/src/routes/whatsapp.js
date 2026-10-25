@@ -532,7 +532,8 @@ async function procesarMensaje(telefono, texto) {
       '📝 https://forms.gle/zkBgY9ksSsTrAetHA\n\n' +
       'También puedes escribirnos directamente:\n' +
       '📧 untaxtameapp@gmail.com\n' +
-      '📱 WhatsApp: +57 322 3221058\n\n' +
+      '📱 WhatsApp: +57 322 3221058\n' +
+      '📱 WhatsApp: +57 322 7487094\n\n' +
       'Servicio de atención 24/7. 💛🖤';
   } else {
     respuesta = mostrarMenuPrincipal();
