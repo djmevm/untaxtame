@@ -735,8 +735,13 @@ router.get('/ranking', verifyToken, async (req, res) => {
 
       // Cliente
       if (s.clienteUid) {
+        // Clasificar fuente: WhatsApp (uid "whatsapp_..." o fuenteSolicitud) vs App
+        const esWhatsApp = s.fuenteSolicitud === 'whatsapp' || String(s.clienteUid).startsWith('whatsapp_');
         const cl = clientes[s.clienteUid] || {
-          uid: s.clienteUid, nombre: s.clienteNombre || '—',
+          uid: s.clienteUid,
+          nombre: s.clienteNombre || '—',
+          fuente: esWhatsApp ? 'whatsapp' : 'app',
+          celular: s.clienteCelular || null,
           sumaCalif: 0, nCalif: 0, nServicios: 0,
         };
         cl.nServicios += 1;

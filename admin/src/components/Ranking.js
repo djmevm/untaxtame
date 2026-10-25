@@ -8,6 +8,7 @@ export default function Ranking() {
   const [data, setData] = useState({ conductores: [], clientes: [] });
   const [cargando, setCargando] = useState(true);
   const [anio, setAnio] = useState(new Date().getFullYear());
+  const [filtroCliente, setFiltroCliente] = useState('todos'); // todos | app | whatsapp
 
   const cargar = (y) => {
     setCargando(true);
@@ -112,27 +113,57 @@ export default function Ranking() {
         </tbody>
       </table>
 
-      {/* Tabla clientes */}
-      <h3 style={{ marginBottom: 12 }}>👤 Clientes ({data.clientes.length})</h3>
-      <table>
-        <thead>
-          <tr>
-            <th>#</th><th>Cliente</th><th>Promedio ⭐</th><th>Calificaciones</th><th>Viajes</th>
-          </tr>
-        </thead>
-        <tbody>
-          {data.clientes.length === 0 && <tr><td colSpan="5" style={{ textAlign: 'center', color: '#999' }}>Sin datos</td></tr>}
-          {data.clientes.map((c, i) => (
-            <tr key={c.uid} style={i < 3 ? { background: '#F5FAFF' } : {}}>
-              <td style={{ fontWeight: 'bold', textAlign: 'center' }}>{MEDALLA[i] || i + 1}</td>
-              <td>{c.nombre}</td>
-              <td style={{ fontWeight: 'bold' }}>{c.promedio}/10</td>
-              <td>{c.nCalif}</td>
-              <td>{c.nServicios}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+      {/* Tabla clientes con filtro de fuente */}
+      {(() => {
+        const clientesFiltrados = filtroCliente === 'todos'
+          ? data.clientes
+          : data.clientes.filter((c) => (c.fuente || 'app') === filtroCliente);
+        const nApp = data.clientes.filter((c) => (c.fuente || 'app') === 'app').length;
+        const nWA = data.clientes.filter((c) => c.fuente === 'whatsapp').length;
+        const badge = (fuente) => fuente === 'whatsapp'
+          ? <span style={{ background: '#E8F5E9', color: '#128C7E', padding: '2px 8px', borderRadius: 10, fontSize: 11, fontWeight: 'bold' }}>📱 WhatsApp</span>
+          : <span style={{ background: '#E3F2FD', color: '#1565C0', padding: '2px 8px', borderRadius: 10, fontSize: 11, fontWeight: 'bold' }}>📲 App</span>;
+        return (
+          <>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10, marginBottom: 12 }}>
+              <h3 style={{ margin: 0 }}>👤 Clientes ({clientesFiltrados.length})</h3>
+              <div style={{ display: 'flex', gap: 8 }}>
+                {[
+                  { k: 'todos', l: `Todos (${data.clientes.length})` },
+                  { k: 'app', l: `📲 App (${nApp})` },
+                  { k: 'whatsapp', l: `📱 WhatsApp (${nWA})` },
+                ].map((f) => (
+                  <button key={f.k} onClick={() => setFiltroCliente(f.k)} style={{
+                    padding: '6px 14px', borderRadius: 8, cursor: 'pointer', fontWeight: 'bold', fontSize: 12,
+                    border: `2px solid ${filtroCliente === f.k ? '#1565C0' : '#ddd'}`,
+                    background: filtroCliente === f.k ? '#E3F2FD' : '#fff',
+                  }}>{f.l}</button>
+                ))}
+              </div>
+            </div>
+            <table>
+              <thead>
+                <tr>
+                  <th>#</th><th>Cliente</th><th>Origen</th><th>Promedio ⭐</th><th>Calificaciones</th><th>Viajes</th>
+                </tr>
+              </thead>
+              <tbody>
+                {clientesFiltrados.length === 0 && <tr><td colSpan="6" style={{ textAlign: 'center', color: '#999' }}>Sin datos</td></tr>}
+                {clientesFiltrados.map((c, i) => (
+                  <tr key={c.uid} style={i < 3 ? { background: '#F5FAFF' } : {}}>
+                    <td style={{ fontWeight: 'bold', textAlign: 'center' }}>{MEDALLA[i] || i + 1}</td>
+                    <td>{c.nombre}{c.celular ? <><br /><span style={{ fontSize: 11, color: '#999' }}>{c.celular}</span></> : ''}</td>
+                    <td>{badge(c.fuente)}</td>
+                    <td style={{ fontWeight: 'bold' }}>{c.promedio}/10</td>
+                    <td>{c.nCalif}</td>
+                    <td>{c.nServicios}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </>
+        );
+      })()}
 
       <p style={{ color: '#888', fontSize: 12, marginTop: 16 }}>
         El ranking considera servicios completados del año seleccionado. El promedio se calcula sobre las calificaciones recibidas; en caso de empate, se ordena por cantidad de servicios.

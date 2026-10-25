@@ -235,6 +235,13 @@ router.post('/webhook', async (req, res) => {
                 console.error('[WA] Error guardando mensaje:', e.message);
               }
 
+              // Guardar el nombre del perfil de WhatsApp en el estado (si Meta lo envía)
+              // para poder mostrarlo en servicios, ranking y panel admin.
+              if (nombre && nombre !== msg.from) {
+                const est = getEstado(msg.from);
+                setEstado(msg.from, est.estado, { nombrePerfilWA: nombre });
+              }
+
               // Bot automático responde
               if (msg.type === 'text') {
                 const respuesta = await procesarMensaje(msg.from, msg.text.body);
@@ -955,10 +962,13 @@ async function crearServicioWhatsApp(telefono, datos) {
 
   try {
     const servicioId = uuidv4();
+    // Usar el nombre real del perfil de WhatsApp si está disponible.
+    const est = getEstado(telefono);
+    const nombreCliente = est?.datos?.nombrePerfilWA || nombre || 'Usuario WhatsApp';
     const servicio = {
       id: servicioId,
       clienteUid: `whatsapp_${telefono}`,
-      clienteNombre: 'Usuario WhatsApp',
+      clienteNombre: nombreCliente,
       clienteCelular: telefono,
       clienteDireccion: direccion,
       ubicacionGPS: lat && lng ? { lat, lng, texto: direccion } : null,
