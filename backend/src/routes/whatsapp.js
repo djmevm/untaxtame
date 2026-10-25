@@ -1004,17 +1004,30 @@ async function enviarOfertaWhatsApp(telefono, datos) {
     ofertaPendiente: null,
   });
 
-  // Construir mensaje con todas las ofertas disponibles
-  let msg = `🚕 *¡Nueva oferta de taxi!*\n\n`;
-  
+  // Construir mensaje con todas las ofertas disponibles.
+  // Lenguaje simple y directo, pensado para personas mayores / poca
+  // experiencia digital: un solo paso claro (responder con el número).
+  let msg = `🚕 *Un taxi quiere llevarte*\n\n`;
+  if (ofertasLista.length === 1) {
+    msg += `Un conductor te ofrece este viaje:\n\n`;
+  } else {
+    msg += `Tienes *${ofertasLista.length} conductores* disponibles:\n\n`;
+  }
+
   ofertasLista.forEach((oferta, i) => {
-    msg += `*${i + 1}️⃣* ${oferta.conductorNombre} | 🚗 ${oferta.conductorPlaca} | 💰 $${oferta.monto.toLocaleString('es-CO')}\n`;
+    msg += `*${i + 1}️⃣*  ${oferta.conductorNombre}\n`;
+    msg += `     🚗 Placa ${oferta.conductorPlaca}\n`;
+    msg += `     💰 Precio: $${oferta.monto.toLocaleString('es-CO')}\n\n`;
   });
 
-  msg += `\n━━━━━━━━━━━━━━━━━━━\n`;
-  msg += `✅ Responde con el *número* de la oferta que prefieras\n`;
-  msg += `   Ej: *1* para la primera, *2* para la segunda...\n\n`;
-  msg += `0️⃣ Cancelar servicio`;
+  msg += `━━━━━━━━━━━━━━━━━━━\n`;
+  msg += `👉 *Para aceptar, escribe el número.*\n`;
+  if (ofertasLista.length === 1) {
+    msg += `Escribe *1* y presiona enviar. ✅\n\n`;
+  } else {
+    msg += `Ejemplo: escribe *1* para el primero, *2* para el segundo. ✅\n\n`;
+  }
+  msg += `_(Si no deseas el taxi, escribe *0* para cancelar.)_`;
 
   await enviarMensaje(telefono, msg);
 }
@@ -1076,6 +1089,20 @@ async function aceptarOfertaDesdeWhatsApp(telefono, ofertaData) {
         cuerpo: 'Tu oferta fue aceptada. Ve al punto de recogida.', 
         datos: { tipo: 'oferta_aceptada', servicioId } 
       });
+    } catch (e) {}
+
+    // Push al cliente (si pidió por la app): para que su app se actualice
+    // aunque haya aceptado la oferta por WhatsApp.
+    try {
+      const servicioActual = servicioDoc.data();
+      if (servicioActual.clienteUid) {
+        const { enviarPushAUsuario } = require('../services/pushNotifications');
+        enviarPushAUsuario(servicioActual.clienteUid, {
+          titulo: '✅ Conductor asignado',
+          cuerpo: `${oferta.conductorNombre} (placa ${oferta.conductorPlaca || 'N/A'}) va en camino.`,
+          datos: { tipo: 'oferta_aceptada', servicioId },
+        });
+      }
     } catch (e) {}
 
     // Notificar al cliente

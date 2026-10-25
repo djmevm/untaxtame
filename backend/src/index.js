@@ -125,10 +125,19 @@ app.use('*', (req, res) => {
 const { iniciarAutoCancelacion } = require('./services/autoCancelacion');
 const { iniciarHeartbeat } = require('./services/conductorHeartbeat');
 const { iniciarCronRecordatorios } = require('./services/cronRecordatorios');
+const { inicializarWebSocket } = require('./services/websocket');
 
 const PORT = process.env.PORT || 3000;
 const HOST = process.env.HOST || '0.0.0.0'; // Escuchar en todas las interfaces (WiFi + datos móviles)
-app.listen(PORT, HOST, () => {
+
+// Crear servidor HTTP explícito para poder engancharle el WebSocket (/ws).
+const http = require('http');
+const server = http.createServer(app);
+
+// ═══ WEBSOCKET — Rastreo en tiempo real (panel admin, cliente, conductor) ═══
+inicializarWebSocket(server);
+
+server.listen(PORT, HOST, () => {
   console.log(`[UntaXtame] Servidor corriendo en ${HOST}:${PORT} — ${process.env.NODE_ENV || 'development'}`);
   console.log('[SEGURIDAD] Helmet, Rate Limiting, HPP, Sanitización, CORS — ACTIVOS');
   console.log('[RED] Accesible desde WiFi y datos móviles');

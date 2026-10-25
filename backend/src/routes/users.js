@@ -84,6 +84,35 @@ router.put('/conductor/:uid/servicios', verifyToken, verifyAdmin, async (req, re
   }
 });
 
+// Editar datos del perfil de un usuario (admin) — ej: cambio de taxi/placa
+router.put('/:uid/datos', verifyToken, verifyAdmin, async (req, res) => {
+  const uid = req.params.uid;
+  // Campos que el admin puede editar
+  const camposPermitidos = [
+    'nombre', 'telefono', 'cedula', 'placa', 'direccion',
+    'fotoVehiculo', 'serviciosOfrecidos', 'vencimientoDocumentos',
+  ];
+  const actualizacion = {};
+  for (const campo of camposPermitidos) {
+    if (req.body[campo] !== undefined && req.body[campo] !== null) {
+      actualizacion[campo] = campo === 'placa'
+        ? String(req.body[campo]).trim().toUpperCase()
+        : req.body[campo];
+    }
+  }
+  if (Object.keys(actualizacion).length === 0) {
+    return res.status(400).json({ error: 'No hay campos para actualizar' });
+  }
+  actualizacion.actualizadoEn = new Date().toISOString();
+  try {
+    await db.collection('usuarios').doc(uid).update(actualizacion);
+    const docActualizado = await db.collection('usuarios').doc(uid).get();
+    res.json({ message: 'Perfil actualizado por admin', usuario: docActualizado.data() });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Actualizar ubicación y estado del conductor
 router.put('/conductor/:uid/ubicacion', verifyToken, async (req, res) => {
   const { lat, lng, enServicio } = req.body;

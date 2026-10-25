@@ -130,10 +130,25 @@ router.post('/:servicioId', verifyToken, async (req, res) => {
         });
       }
 
-      // Si el servicio fue solicitado por WhatsApp, notificar oferta al cliente por WhatsApp
-      if (servicioData.fuenteSolicitud === 'whatsapp' && servicioData.clienteCelular) {
+      // ═══ AVISO POR WHATSAPP (refuerzo para todos los clientes) ═══
+      // Garantiza que el cliente se entere de las ofertas por WhatsApp,
+      // aunque haya pedido por la app y no sepa navegarla (adultos mayores,
+      // poca cultura digital). Puede elegir respondiendo el número por WhatsApp.
+      // Obtener el celular: del servicio o, si falta, del perfil del cliente.
+      let celularCliente = servicioData.clienteCelular;
+      if (!celularCliente && servicioData.clienteUid) {
+        try {
+          const clienteDoc = await db.collection('usuarios').doc(servicioData.clienteUid).get();
+          if (clienteDoc.exists) celularCliente = clienteDoc.data().telefono || null;
+        } catch {}
+      }
+
+      if (celularCliente) {
+        const numero = String(celularCliente).replace(/[^0-9]/g, '');
+        // Normalizar a formato internacional de Colombia (57...) si viene local.
+        const numeroWA = numero.length === 10 ? `57${numero}` : numero;
         const { enviarOfertaWhatsApp } = require('./whatsapp');
-        await enviarOfertaWhatsApp(servicioData.clienteCelular, {
+        await enviarOfertaWhatsApp(numeroWA, {
           servicioId,
           ofertaId: docRef.id,
           conductorNombre,
@@ -142,7 +157,9 @@ router.post('/:servicioId', verifyToken, async (req, res) => {
           mensaje: mensaje || '',
         });
       }
-    } catch (e) {}
+    } catch (e) {
+      console.error('[ofertas] Error notificando oferta al cliente:', e.message);
+    }
 
     res.status(201).json({ message: 'Oferta enviada', ofertaId: docRef.id, oferta });
   } catch (err) {
