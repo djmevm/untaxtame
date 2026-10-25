@@ -14,6 +14,7 @@ const router = express.Router();
 const { db } = require('../firebase');
 const { v4: uuidv4 } = require('uuid');
 const verifyToken = require('../middleware/verifyToken');
+const verifyAdmin = require('../middleware/verifyAdmin');
 const {
   enviarPushAConductores,
   enviarPushAUsuario,
@@ -125,6 +126,27 @@ async function crearViajeProgramado(datos) {
     console.error('[programados] Error push inicial a conductores:', e.message);
   }
 
+  // Confirmar al cliente por WhatsApp que su viaje quedó registrado
+  // (aplica tanto si lo crea el chatbot como el admin desde el panel).
+  if (viaje.clienteCelular) {
+    try {
+      const numero = String(viaje.clienteCelular).replace(/[^0-9]/g, '');
+      const numeroWA = numero.length === 10 ? `57${numero}` : numero;
+      const whatsapp = require('./whatsapp');
+      if (whatsapp && typeof whatsapp.enviarMensaje === 'function') {
+        await whatsapp.enviarMensaje(
+          numeroWA,
+          '✅ *¡Viaje programado registrado!* 🕐\n\n' +
+          `📅 ${viaje.horaProgramadaTexto || ''}\n` +
+          `📍 ${viaje.origen} → ${viaje.destino}\n\n` +
+          '🔍 Estamos buscando un conductor. Te avisaremos por aquí apenas un taxista acepte, con los datos del vehículo y la placa. 🚖'
+        );
+      }
+    } catch (e) {
+      console.error('[programados] Error confirmando al cliente:', e.message);
+    }
+  }
+
   return viaje;
 }
 
@@ -138,6 +160,52 @@ router.post('/', verifyToken, async (req, res) => {
   } catch (err) {
     console.error('[programados] Error creando viaje:', err.message);
     res.status(500).json({ error: 'No se pudo crear el viaje programado' });
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════════
+// GET /todos — Todos los viajes programados (panel admin)
+// ═══════════════════════════════════════════════════════════════════
+router.get('/todos', verifyToken, verifyAdmin, async (req, res) => {
+  try {
+    const snap = await db
+      .collection('servicios')
+      .where('esProgramado', '==', true)
+      .get();
+
+    const viajes = snap.docs
+      .map((doc) => {
+        const d = doc.data();
+        return {
+          id: d.id,
+          codigoReserva: d.codigoReserva,
+          estado: d.estado,
+          origen: d.origen,
+          destino: d.destino,
+          horaProgramada: d.horaProgramada,
+          horaProgramadaTexto: d.horaProgramadaTexto,
+          tarifaMadrugada: d.tarifaMadrugada,
+          pasajeroNombre: d.pasajeroNombre,
+          clienteNombre: d.clienteNombre,
+          clienteCelular: d.clienteCelular,
+          contacto: d.contacto,
+          cantidadPasajeros: d.cantidadPasajeros,
+          equipaje: d.equipaje,
+          conductorNombre: d.conductorNombre,
+          conductorPlaca: d.conductorPlaca,
+          conductorCelular: d.conductorCelular,
+          puntoEncuentro: d.puntoEncuentro,
+          creadoEn: d.creadoEn,
+        };
+      })
+      .sort((a, b) =>
+        String(b.horaProgramada || '').localeCompare(String(a.horaProgramada || ''))
+      );
+
+    res.json(viajes);
+  } catch (err) {
+    console.error('[programados] Error listando todos:', err.message);
+    res.status(500).json({ error: 'Error interno del servidor' });
   }
 });
 

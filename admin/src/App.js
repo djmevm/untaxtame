@@ -9,6 +9,7 @@ import Dashboard from './components/Dashboard';
 import Emergencias from './components/Emergencias';
 import MapaConductores from './components/MapaConductores';
 import MapaUbicaciones from './components/MapaUbicaciones';
+import Programados from './components/Programados';
 import Billetera from './components/Billetera';
 import CodigosRadio from './components/CodigosRadio';
 import WhatsApp from './components/WhatsApp';
@@ -192,6 +193,7 @@ export default function App() {
       <nav className="nav">
         <button className={tab === 'dashboard' ? 'active' : ''} onClick={() => setTab('dashboard')}>📊 Dashboard</button>
         <button className={tab === 'servicios' ? 'active' : ''} onClick={() => setTab('servicios')}>📋 Servicios</button>
+        <button className={tab === 'programados' ? 'active' : ''} onClick={() => setTab('programados')}>⏰ Programados</button>
         <button className={tab === 'usuarios' ? 'active' : ''} onClick={() => setTab('usuarios')}>👥 Usuarios</button>
         <button className={tab === 'emergencias' ? 'active' : ''} onClick={() => setTab('emergencias')}>🚨 Emergencias</button>
         <button className={tab === 'radio' ? 'active' : ''} onClick={() => setTab('radio')}>📻 Radio</button>
@@ -203,6 +205,7 @@ export default function App() {
       <main className="main">
         {tab === 'dashboard' && <Dashboard />}
         {tab === 'servicios' && <Servicios />}
+        {tab === 'programados' && <Programados />}
         {tab === 'usuarios' && <Usuarios />}
         {tab === 'emergencias' && <Emergencias />}
         {tab === 'radio' && <CodigosRadio />}
