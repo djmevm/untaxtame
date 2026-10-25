@@ -30,3 +30,12 @@ yarn-error.log*
 # Editor
 .vscode/
 .idea/
+
+# Secretos / credenciales (NO subir)
+*.env
+.env
+**/google-services.json
+google-service-account.json
+cors.json
+token*.txt
+*permanente*.txt

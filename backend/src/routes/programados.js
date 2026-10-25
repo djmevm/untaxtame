@@ -472,5 +472,42 @@ router.put('/llegada/:viajeId', verifyToken, async (req, res) => {
   }
 });
 
+// ═══════════════════════════════════════════════════════════════════
+// DELETE /:viajeId — Eliminar definitivamente un viaje programado (admin)
+// ═══════════════════════════════════════════════════════════════════
+router.delete('/:viajeId', verifyToken, verifyAdmin, async (req, res) => {
+  const viajeRef = db.collection('servicios').doc(req.params.viajeId);
+
+  try {
+    const snap = await viajeRef.get();
+    if (!snap.exists) return res.status(404).json({ error: 'Viaje no encontrado' });
+
+    const viaje = snap.data();
+    if (!viaje.esProgramado) {
+      return res.status(400).json({ error: 'Este servicio no es un viaje programado' });
+    }
+
+    // Si estaba asignado a un conductor, avisarle por push que se eliminó.
+    if (viaje.estado === 'programado_asignado' && viaje.conductorUid) {
+      try {
+        enviarPushAUsuario(viaje.conductorUid, {
+          titulo: 'Viaje programado eliminado',
+          cuerpo: `La central eliminó el viaje ${viaje.codigoReserva || ''} (${viaje.origen} → ${viaje.destino}).`,
+          datos: { tipo: 'programado_eliminado', viajeId: viaje.id },
+        });
+      } catch (e) {
+        console.error('[programados] Error notificando eliminación al conductor:', e.message);
+      }
+    }
+
+    await viajeRef.delete();
+
+    res.json({ message: 'Viaje programado eliminado', viajeId: req.params.viajeId });
+  } catch (err) {
+    console.error('[programados] Error eliminando viaje:', err.message);
+    res.status(500).json({ error: 'Error interno del servidor' });
+  }
+});
+
 module.exports = router;
 module.exports.crearViajeProgramado = crearViajeProgramado;

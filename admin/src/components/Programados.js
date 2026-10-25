@@ -31,11 +31,27 @@ export default function Programados() {
   const [mostrarForm, setMostrarForm] = useState(false);
   const [filtro, setFiltro] = useState('todos');
 
+  const [eliminandoId, setEliminandoId] = useState(null);
+
   const cargar = () => {
     api.get('/programados/todos')
       .then((res) => setViajes(res.data || []))
       .catch(() => {})
       .finally(() => setCargando(false));
+  };
+
+  const eliminar = async (v) => {
+    const codigo = v.codigoReserva || 'este viaje';
+    if (!window.confirm(`¿Eliminar definitivamente ${codigo}?\n\nEsta acción no se puede deshacer.`)) return;
+    setEliminandoId(v.id);
+    try {
+      await api.delete(`/programados/${v.id}`);
+      setViajes((prev) => prev.filter((x) => x.id !== v.id));
+    } catch (err) {
+      alert(err.response?.data?.error || 'No se pudo eliminar el viaje. Intenta de nuevo.');
+    } finally {
+      setEliminandoId(null);
+    }
   };
 
   useEffect(() => {
@@ -90,11 +106,12 @@ export default function Programados() {
             <th>Contacto</th>
             <th>Conductor</th>
             <th>Estado</th>
+            <th>Acciones</th>
           </tr>
         </thead>
         <tbody>
           {filtrados.length === 0 && (
-            <tr><td colSpan="7" style={{ textAlign: 'center', color: '#999' }}>Sin viajes programados</td></tr>
+            <tr><td colSpan="8" style={{ textAlign: 'center', color: '#999' }}>Sin viajes programados</td></tr>
           )}
           {filtrados.map((v) => {
             const ei = estadoInfo(v.estado);
@@ -114,6 +131,16 @@ export default function Programados() {
                   <span style={{ background: ei.bg, color: ei.color, padding: '4px 10px', borderRadius: 10, fontSize: 12, fontWeight: 'bold', whiteSpace: 'nowrap' }}>
                     {ei.label}
                   </span>
+                </td>
+                <td>
+                  <button
+                    onClick={() => eliminar(v)}
+                    disabled={eliminandoId === v.id}
+                    title="Eliminar viaje programado"
+                    style={styles.btnEliminar}
+                  >
+                    {eliminandoId === v.id ? '⏳' : '🗑️ Eliminar'}
+                  </button>
                 </td>
               </tr>
             );
@@ -254,6 +281,7 @@ function FormularioProgramado({ onCerrar, onCreado }) {
 
 const styles = {
   btnCrear: { background: '#2E7D32', color: '#fff', border: 'none', borderRadius: 8, padding: '10px 18px', cursor: 'pointer', fontWeight: 'bold', fontSize: 14 },
+  btnEliminar: { background: '#B71C1C', color: '#fff', border: 'none', borderRadius: 8, padding: '6px 12px', cursor: 'pointer', fontWeight: 'bold', fontSize: 12, whiteSpace: 'nowrap' },
   overlay: { position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: 20 },
   modal: { background: '#fff', borderRadius: 16, padding: 24, width: '100%', maxWidth: 520, maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 8px 40px rgba(0,0,0,0.3)' },
   grid: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 },
