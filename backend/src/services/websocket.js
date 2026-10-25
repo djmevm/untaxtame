@@ -1,11 +1,14 @@
 const { WebSocketServer } = require('ws');
 const url = require('url');
+const { db } = require('../firebase');
 
 // ═══ SERVIDOR WEBSOCKET — Tiempo Real ═══
 // Canales: ubicacion, chat, alertas, servicios
 
 const clientes = new Map(); // uid → Set<ws>
 const conductoresActivos = new Map(); // uid → { lat, lng, nombre, placa, timestamp }
+const ultimaPersistencia = new Map(); // uid → timestamp (throttle de escrituras a Firestore)
+const INTERVALO_PERSISTIR_MS = 15000; // persistir en Firestore máx 1 vez cada 15s por conductor
 
 function inicializarWebSocket(server) {
   const wss = new WebSocketServer({ server, path: '/ws' });
@@ -98,6 +101,19 @@ function manejarMensaje(ws, uid, rol, msg) {
           placa: msg.placa || '',
           timestamp: Date.now(),
         });
+
+        // Persistir en Firestore (con throttle) para que el panel admin
+        // (pestaña Mapa, que lee por HTTP) también vea los GPS activos.
+        const ahora = Date.now();
+        const ultima = ultimaPersistencia.get(uid) || 0;
+        if (ahora - ultima >= INTERVALO_PERSISTIR_MS) {
+          ultimaPersistencia.set(uid, ahora);
+          const iso = new Date(ahora).toISOString();
+          db.collection('usuarios').doc(uid).update({
+            ubicacionActual: { lat: msg.lat, lng: msg.lng, actualizadoEn: iso },
+            ultimaActividadEn: iso,
+          }).catch(() => {});
+        }
       }
       break;
 
