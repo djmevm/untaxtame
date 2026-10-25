@@ -523,7 +523,7 @@ router.put('/calificar/:servicioId', verifyToken, async (req, res) => {
       actualizadoEn: new Date().toISOString(),
     });
 
-    // Crear notificación para el conductor
+    // Crear notificación para el conductor que REALIZÓ el servicio
     const servicio = doc.data();
     if (servicio.conductorUid) {
       await db.collection('notificaciones').add({
@@ -538,6 +538,18 @@ router.put('/calificar/:servicioId', verifyToken, async (req, res) => {
         leida: false,
         creadoEn: new Date().toISOString(),
       });
+
+      // Push al teléfono del conductor (según su perfil) para que lo vea al instante
+      try {
+        const { enviarPushAUsuario } = require('../services/pushNotifications');
+        enviarPushAUsuario(servicio.conductorUid, {
+          titulo: `⭐ Te calificaron con ${puntuacion}/10`,
+          cuerpo: comentario
+            ? `${servicio.clienteNombre}: "${comentario}"`
+            : `${servicio.clienteNombre} calificó tu servicio.`,
+          datos: { tipo: 'calificacion', servicioId: req.params.servicioId },
+        });
+      } catch (e) {}
 
       // Actualizar reputación del conductor
       try {
@@ -572,6 +584,161 @@ router.put('/calificar/:servicioId', verifyToken, async (req, res) => {
     res.json({ message: 'Calificación guardada' });
   } catch (err) {
     res.status(500).json({ error: err.message });
+  }
+});
+
+// Calificar al CLIENTE (el conductor califica al pasajero tras completar)
+router.put('/calificar-cliente/:servicioId', verifyToken, async (req, res) => {
+  const { calificacion, comentario } = req.body;
+  const puntuacion = parseInt(calificacion);
+  if (!puntuacion || puntuacion < 1 || puntuacion > 10) {
+    return res.status(400).json({ error: 'La calificación debe ser entre 1 y 10' });
+  }
+  try {
+    const ref = db.collection('servicios').doc(req.params.servicioId);
+    const doc = await ref.get();
+    if (!doc.exists) return res.status(404).json({ error: 'Servicio no encontrado' });
+    const servicio = doc.data();
+    if (servicio.estado !== 'completado') {
+      return res.status(400).json({ error: 'Solo se pueden calificar servicios completados' });
+    }
+
+    await ref.update({
+      calificacionCliente: {
+        puntuacion,
+        comentario: comentario || '',
+        fecha: new Date().toISOString(),
+      },
+      actualizadoEn: new Date().toISOString(),
+    });
+
+    // Recalcular la reputación del cliente
+    if (servicio.clienteUid) {
+      try {
+        const serviciosSnap = await db.collection('servicios')
+          .where('clienteUid', '==', servicio.clienteUid)
+          .where('estado', '==', 'completado')
+          .get();
+
+        const calificaciones = serviciosSnap.docs
+          .map(d => d.data().calificacionCliente?.puntuacion)
+          .filter(p => p && p > 0);
+
+        if (calificaciones.length > 0) {
+          const promedio = calificaciones.reduce((a, b) => a + b, 0) / calificaciones.length;
+          await db.collection('usuarios').doc(servicio.clienteUid).update({
+            reputacionCliente: {
+              promedio: Math.round(promedio * 10) / 10,
+              porcentaje: Math.round(promedio * 10),
+              totalCalificaciones: calificaciones.length,
+              totalServicios: serviciosSnap.size,
+              actualizadoEn: new Date().toISOString(),
+            },
+          });
+        }
+      } catch (repErr) {
+        console.error('Error actualizando reputación del cliente:', repErr.message);
+      }
+
+      // Notificar al cliente (interna + push)
+      try {
+        await db.collection('notificaciones').add({
+          uid: servicio.clienteUid,
+          tipo: 'calificacion_cliente',
+          titulo: `⭐ El conductor te calificó: ${puntuacion}/10`,
+          mensaje: comentario
+            ? `${servicio.conductorNombre || 'Tu conductor'}: "${comentario}"`
+            : `${servicio.conductorNombre || 'Tu conductor'} calificó tu comportamiento como pasajero.`,
+          puntuacion,
+          servicioId: req.params.servicioId,
+          leida: false,
+          creadoEn: new Date().toISOString(),
+        });
+        const { enviarPushAUsuario } = require('../services/pushNotifications');
+        enviarPushAUsuario(servicio.clienteUid, {
+          titulo: `⭐ Te calificaron con ${puntuacion}/10`,
+          cuerpo: 'Tu conductor calificó tu viaje. ¡Gracias por usar UntaXtame!',
+          datos: { tipo: 'calificacion_cliente', servicioId: req.params.servicioId },
+        });
+      } catch (e) {}
+    }
+
+    res.json({ message: 'Calificación del cliente guardada' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Ranking: mejor taxista y mejor cliente (admin) — para premiación
+router.get('/ranking', verifyToken, async (req, res) => {
+  try {
+    // Rango de fechas opcional (?desde=ISO&hasta=ISO). Por defecto, año en curso.
+    const ahora = new Date();
+    const desde = req.query.desde
+      ? new Date(req.query.desde)
+      : new Date(Date.UTC(ahora.getUTCFullYear(), 0, 1));
+    const hasta = req.query.hasta ? new Date(req.query.hasta) : ahora;
+
+    const snap = await db.collection('servicios')
+      .where('estado', '==', 'completado')
+      .get();
+
+    // Acumuladores por conductor y por cliente
+    const conductores = {}; // uid → { nombre, placa, sumaCalif, nCalif, nServicios }
+    const clientes = {};    // uid → { nombre, sumaCalif, nCalif, nServicios }
+
+    snap.docs.forEach((d) => {
+      const s = d.data();
+      const fecha = s.creadoEn ? new Date(s.creadoEn) : null;
+      if (fecha && (fecha < desde || fecha > hasta)) return;
+
+      // Conductor
+      if (s.conductorUid) {
+        const c = conductores[s.conductorUid] || {
+          uid: s.conductorUid, nombre: s.conductorNombre || '—', placa: s.conductorPlaca || '',
+          sumaCalif: 0, nCalif: 0, nServicios: 0,
+        };
+        c.nServicios += 1;
+        const p = s.calificacion?.puntuacion;
+        if (p && p > 0) { c.sumaCalif += p; c.nCalif += 1; }
+        conductores[s.conductorUid] = c;
+      }
+
+      // Cliente
+      if (s.clienteUid) {
+        const cl = clientes[s.clienteUid] || {
+          uid: s.clienteUid, nombre: s.clienteNombre || '—',
+          sumaCalif: 0, nCalif: 0, nServicios: 0,
+        };
+        cl.nServicios += 1;
+        const pc = s.calificacionCliente?.puntuacion;
+        if (pc && pc > 0) { cl.sumaCalif += pc; cl.nCalif += 1; }
+        clientes[s.clienteUid] = cl;
+      }
+    });
+
+    const armar = (obj) => Object.values(obj).map((x) => ({
+      ...x,
+      promedio: x.nCalif > 0 ? Math.round((x.sumaCalif / x.nCalif) * 10) / 10 : 0,
+    }));
+
+    // Orden: primero por promedio, luego por cantidad de servicios
+    const rankConductores = armar(conductores).sort((a, b) =>
+      b.promedio - a.promedio || b.nServicios - a.nServicios
+    );
+    const rankClientes = armar(clientes).sort((a, b) =>
+      b.promedio - a.promedio || b.nServicios - a.nServicios
+    );
+
+    res.json({
+      desde: desde.toISOString(),
+      hasta: hasta.toISOString(),
+      conductores: rankConductores,
+      clientes: rankClientes,
+    });
+  } catch (err) {
+    console.error('[ranking] Error:', err.message);
+    res.status(500).json({ error: 'Error interno del servidor' });
   }
 });
 

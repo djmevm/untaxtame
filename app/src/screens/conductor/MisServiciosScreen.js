@@ -104,6 +104,28 @@ export default function MisServiciosScreen() {
     );
   };
 
+  const calificarCliente = (servicio) => {
+    // Calificación simple 1-5 estrellas (se mapea a 1-10 como el resto del sistema)
+    Alert.alert(
+      '⭐ Califica al pasajero',
+      `¿Cómo fue el viaje con ${servicio.clienteNombre}?`,
+      [
+        { text: '⭐ Malo', onPress: () => enviarCalifCliente(servicio, 2) },
+        { text: '⭐⭐⭐ Regular', onPress: () => enviarCalifCliente(servicio, 6) },
+        { text: '⭐⭐⭐⭐⭐ Excelente', onPress: () => enviarCalifCliente(servicio, 10) },
+      ]
+    );
+  };
+
+  const enviarCalifCliente = async (servicio, puntuacion) => {
+    try {
+      await api.put(`/services/calificar-cliente/${servicio.id}`, { calificacion: puntuacion });
+      Alert.alert('¡Gracias!', 'Tu calificación del pasajero fue registrada.');
+    } catch {
+      // Silencioso: no bloquear al conductor si falla
+    }
+  };
+
   const confirmarCompletado = async (servicio, clientePago) => {
     try {
       await api.put(`/services/completar/${servicio.id}`, {
@@ -116,6 +138,8 @@ export default function MisServiciosScreen() {
       } else {
         Alert.alert('⚠️ Servicio completado', 'Se registró que el cliente NO pagó. Esto quedará en su historial.');
       }
+      // Pedir al conductor que califique al pasajero (para el "mejor cliente")
+      setTimeout(() => calificarCliente(servicio), 600);
       cargar();
     } catch {
       Alert.alert('Error', 'No se pudo completar el servicio');

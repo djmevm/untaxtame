@@ -10,6 +10,7 @@ import Emergencias from './components/Emergencias';
 import MapaConductores from './components/MapaConductores';
 import MapaUbicaciones from './components/MapaUbicaciones';
 import Programados from './components/Programados';
+import Ranking from './components/Ranking';
 import Billetera from './components/Billetera';
 import CodigosRadio from './components/CodigosRadio';
 import WhatsApp from './components/WhatsApp';
@@ -198,6 +199,7 @@ export default function App() {
         <button className={tab === 'emergencias' ? 'active' : ''} onClick={() => setTab('emergencias')}>🚨 Emergencias</button>
         <button className={tab === 'radio' ? 'active' : ''} onClick={() => setTab('radio')}>📻 Radio</button>
         <button className={tab === 'billetera' ? 'active' : ''} onClick={() => setTab('billetera')}>💰 Billetera</button>
+        <button className={tab === 'ranking' ? 'active' : ''} onClick={() => setTab('ranking')}>🏆 Ranking</button>
         <button className={tab === 'whatsapp' ? 'active' : ''} onClick={() => setTab('whatsapp')}>📱 WhatsApp</button>
         <button className={tab === 'rastreo' ? 'active' : ''} onClick={() => setTab('rastreo')}>⚡ Rastreo</button>
         <button className={tab === 'mapa' ? 'active' : ''} onClick={() => setTab('mapa')}>🗺️ Mapa</button>
@@ -210,6 +212,7 @@ export default function App() {
         {tab === 'emergencias' && <Emergencias />}
         {tab === 'radio' && <CodigosRadio />}
         {tab === 'billetera' && <Billetera />}
+        {tab === 'ranking' && <Ranking />}
         {tab === 'whatsapp' && <WhatsApp />}
         {tab === 'rastreo' && <MapaConductores />}
         {tab === 'mapa' && <MapaUbicaciones />}
