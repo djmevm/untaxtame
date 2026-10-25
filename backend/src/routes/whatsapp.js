@@ -277,36 +277,75 @@ async function procesarMensaje(telefono, texto) {
   const estadoConv = getEstado(telefono);
   let respuesta = '';
 
-  // ═══ ESTADO: ESPERANDO CALIFICACIÓN ═══
+  // ═══ ESTADO: ESPERANDO CALIFICACIÓN (escala 1-10) ═══
   if (estadoConv.estado === 'esperando_calificacion') {
+    // Omitir calificación
+    if (textoLower === '0' || textoLower.includes('omitir') || textoLower === 'no') {
+      limpiarEstado(telefono);
+      respuesta = '👍 Sin problema. ¡Gracias por usar UntaXtame!\n\nEscribe *1* cuando necesites otro taxi.';
+      await enviarMensaje(telefono, respuesta);
+      return respuesta;
+    }
+
     const calificacion = parseInt(textoLower);
-    if (calificacion >= 1 && calificacion <= 5) {
+    if (calificacion >= 1 && calificacion <= 10) {
       const servicioId = estadoConv.datos.servicioId;
       const conductorNombre = estadoConv.datos.conductorNombre;
-      
-      // Guardar calificación en el servicio
+
+      // Guardar calificación 1-10 (misma escala que la app y el backend)
       try {
         await db.collection('servicios').doc(servicioId).update({
-          calificacion: calificacion * 2, // Convertir escala 1-5 a 1-10 (como usa la app)
-          calificacionWhatsApp: calificacion,
+          calificacion: {
+            puntuacion: calificacion,
+            comentario: '',
+            fecha: new Date().toISOString(),
+          },
           calificadoEn: new Date().toISOString(),
         });
+
+        // Recalcular reputación del conductor y notificarlo (push)
+        const sdoc = await db.collection('servicios').doc(servicioId).get();
+        const svc = sdoc.exists ? sdoc.data() : null;
+        if (svc && svc.conductorUid) {
+          try {
+            const serviciosSnap = await db.collection('servicios')
+              .where('conductorUid', '==', svc.conductorUid)
+              .where('estado', '==', 'completado')
+              .get();
+            const califs = serviciosSnap.docs
+              .map(d => d.data().calificacion?.puntuacion)
+              .filter(p => p && p > 0);
+            if (califs.length > 0) {
+              const prom = califs.reduce((a, b) => a + b, 0) / califs.length;
+              await db.collection('usuarios').doc(svc.conductorUid).update({
+                reputacion: {
+                  promedio: Math.round(prom * 10) / 10,
+                  porcentaje: Math.round(prom * 10),
+                  totalCalificaciones: califs.length,
+                  totalServicios: serviciosSnap.size,
+                  actualizadoEn: new Date().toISOString(),
+                },
+              });
+            }
+            const { enviarPushAUsuario } = require('../services/pushNotifications');
+            enviarPushAUsuario(svc.conductorUid, {
+              titulo: `⭐ Te calificaron con ${calificacion}/10`,
+              cuerpo: `${svc.clienteNombre || 'Un cliente'} calificó tu servicio.`,
+              datos: { tipo: 'calificacion', servicioId },
+            });
+          } catch (e) {}
+        }
       } catch (e) {}
 
       limpiarEstado(telefono);
-      const estrellas = '⭐'.repeat(calificacion);
-      respuesta = `${estrellas}\n\n` +
-        `¡Gracias por calificar! Le diste *${calificacion}/5* a *${conductorNombre}*.\n\n` +
+      respuesta = `⭐ *${calificacion}/10*\n\n` +
+        `¡Gracias por calificar a *${conductorNombre}*!\n\n` +
         `🚕 ¡Gracias por usar UntaXtame! Escribe *1* cuando necesites otro taxi.`;
     } else {
-      respuesta = '⭐ Por favor califica del *1* al *5*:\n\n' +
-        '1️⃣ Muy malo | 2️⃣ Malo | 3️⃣ Regular | 4️⃣ Bueno | 5️⃣ Excelente\n\n' +
-        '_O escribe *0* para omitir_';
-      
-      if (textoLower === '0' || textoLower.includes('omitir') || textoLower.includes('no')) {
-        limpiarEstado(telefono);
-        respuesta = '👍 Sin problema. ¡Gracias por usar UntaXtame!\n\nEscribe *1* cuando necesites otro taxi.';
-      }
+      respuesta = '⭐ *¿Cómo calificas el servicio?*\n\n' +
+        'Responde con un número del *1* al *10*:\n' +
+        '1 = Muy malo  ·  10 = Excelente\n\n' +
+        '_O escribe *0* para omitir._';
     }
     await enviarMensaje(telefono, respuesta);
     return respuesta;
@@ -1555,12 +1594,9 @@ async function notificarServicioCompletadoWhatsApp(telefono, datos) {
     `💰 Tarifa: *$${tarifa.toLocaleString('es-CO')} COP*\n` +
     `💳 Pago: ${metodoPago === 'efectivo' ? 'Efectivo' : 'Electrónico'}\n\n` +
     `⭐ *¿Cómo calificas el servicio?*\n\n` +
-    `Responde con un número del *1* al *5*:\n\n` +
-    `1️⃣ Muy malo\n` +
-    `2️⃣ Malo\n` +
-    `3️⃣ Regular\n` +
-    `4️⃣ Bueno\n` +
-    `5️⃣ Excelente ⭐\n\n` +
+    `Responde con un número del *1* al *10*:\n` +
+    `1 = Muy malo  ·  10 = Excelente ⭐\n\n` +
+    `_O escribe *0* para omitir._\n` +
     `_Gracias por usar UntaXtame 🚕_`;
 
   await enviarMensaje(telefono, msg);

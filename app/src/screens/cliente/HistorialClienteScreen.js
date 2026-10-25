@@ -40,9 +40,10 @@ export default function HistorialClienteScreen() {
   const completados = servicios.filter(s => s.estado === 'completado').length;
   const totalViajes = servicios.length;
   const promedioEstrellas = () => {
-    const calificados = servicios.filter(s => s.calificacion?.estrellas);
+    // Escala 1-10 (campo puntuacion). Compatibilidad con el viejo "estrellas".
+    const calificados = servicios.filter(s => s.calificacion?.puntuacion || s.calificacion?.estrellas);
     if (!calificados.length) return '—';
-    const suma = calificados.reduce((acc, s) => acc + s.calificacion.estrellas, 0);
+    const suma = calificados.reduce((acc, s) => acc + (s.calificacion.puntuacion || s.calificacion.estrellas || 0), 0);
     return (suma / calificados.length).toFixed(1);
   };
 
@@ -108,11 +109,11 @@ export default function HistorialClienteScreen() {
               </Text>
             </View>
 
-            {/* Calificación existente */}
-            {item.calificacion?.estrellas && (
+            {/* Calificación existente (escala 1-10) */}
+            {(item.calificacion?.puntuacion || item.calificacion?.estrellas) && (
               <View style={styles.calificacionFila}>
                 <Text style={styles.estrellasTexto}>
-                  {'★'.repeat(item.calificacion.estrellas)}{'☆'.repeat(5 - item.calificacion.estrellas)}
+                  ⭐ {item.calificacion.puntuacion || item.calificacion.estrellas}/10
                 </Text>
                 {item.calificacion.comentario ? (
                   <Text style={styles.comentario}>"{item.calificacion.comentario}"</Text>
@@ -121,7 +122,7 @@ export default function HistorialClienteScreen() {
             )}
 
             {/* Botón calificar */}
-            {item.estado === 'completado' && !item.calificacion?.estrellas && (
+            {item.estado === 'completado' && !(item.calificacion?.puntuacion || item.calificacion?.estrellas) && (
               <TouchableOpacity
                 style={styles.btnCalificar}
                 onPress={() => setServicioACalificar(item)}

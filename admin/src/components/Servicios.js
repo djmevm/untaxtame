@@ -135,7 +135,7 @@ export default function Servicios() {
       `"${(s.destino || '').replace(/"/g, '""')}"`,
       s.metodoPago?.toUpperCase() || '',
       s.estado || '',
-      s.calificacion?.estrellas || '',
+      s.calificacion?.puntuacion || s.calificacion?.estrellas || '',
       `"${(s.calificacion?.comentario || '').replace(/"/g, '""')}"`,
       s.tarifaEstimada?.tarifaEstimada || '',
       new Date(s.creadoEn).toLocaleString('es-CO'),
