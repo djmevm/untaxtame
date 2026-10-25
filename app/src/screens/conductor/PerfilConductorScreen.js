@@ -1,8 +1,9 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, Platform,
   ScrollView, Alert, TextInput, ActivityIndicator, Switch, Image, Vibration, Modal,
 } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import * as ImagePicker from 'expo-image-picker';
 import * as Location from 'expo-location';
 import { Audio } from 'expo-av';
@@ -148,6 +149,38 @@ export default function PerfilConductorScreen() {
   const [guardandoVenc, setGuardandoVenc] = useState(false);
   const [mostrarRadio, setMostrarRadio] = useState(false);
   const alertasMostradas = useRef({});
+
+  // Refrescar el perfil desde el backend cada vez que se abre esta pantalla.
+  // Así, si el administrador cambió datos (ej: placa por cambio de taxi),
+  // el conductor ve la información actualizada al entrar a "Mi Perfil".
+  useFocusEffect(
+    useCallback(() => {
+      let activo = true;
+      (async () => {
+        if (!perfil?.uid) return;
+        try {
+          const res = await api.get(`/auth/perfil/${perfil.uid}`);
+          if (!activo || !res.data) return;
+          // Actualizar el perfil global (y su caché) con los datos del backend.
+          if (setPerfil) setPerfil(res.data);
+          // Si no está editando, sincronizar los campos del formulario visible.
+          setEditando((edit) => {
+            if (!edit) {
+              setForm({
+                nombre: res.data.nombre || '',
+                telefono: res.data.telefono || '',
+                cedula: res.data.cedula || '',
+                placa: res.data.placa || '',
+              });
+            }
+            return edit;
+          });
+          if (res.data.vencimientoDocumentos) setVencimientos(res.data.vencimientoDocumentos);
+        } catch {}
+      })();
+      return () => { activo = false; };
+    }, [perfil?.uid])
+  );
 
   // Verificar vencimientos al cargar y cada 60s
   useEffect(() => {

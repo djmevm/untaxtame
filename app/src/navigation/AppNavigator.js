@@ -5,6 +5,7 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Text, ActivityIndicator, View } from 'react-native';
 import { useAuth } from '../context/AuthContext';
 import CustomTabBar from '../components/CustomTabBar';
+import { useEnviarUbicacion } from '../hooks/useWebSocket';
 
 // Bienvenida
 import BienvenidaScreen from '../screens/auth/BienvenidaScreen';
@@ -45,6 +46,13 @@ function ClienteTabs() {
 }
 
 function ConductorTabs() {
+  const { perfil } = useAuth();
+  // Transmitir la ubicación del conductor por WebSocket (rastreo en tiempo
+  // real del panel admin). Activo mientras el conductor esté disponible o
+  // en servicio. Corre a nivel de las tabs, sin importar la pestaña abierta.
+  const activo = !!(perfil && (perfil.disponible || perfil.enServicio));
+  useEnviarUbicacion(perfil?.uid, perfil?.nombre, perfil?.placa, activo);
+
   return (
     <Tab.Navigator
       tabBar={(props) => <CustomTabBar {...props} />}

@@ -96,9 +96,14 @@ api.interceptors.response.use(
           config.headers.Authorization = `Bearer ${res.data.token}`;
           return api(config);
         }
-      } catch {
-        // Refresh falló, limpiar tokens
-        await AsyncStorage.multiRemove(['authToken', 'refreshToken']);
+      } catch (refreshError) {
+        // Solo limpiar tokens si el servidor RECHAZA el refresh (token
+        // realmente inválido/expirado). Si fue un error de red/timeout,
+        // NO borramos la sesión para no desloguear al usuario sin señal.
+        const refreshStatus = refreshError?.response?.status;
+        if (refreshStatus === 401 || refreshStatus === 403) {
+          await AsyncStorage.multiRemove(['authToken', 'refreshToken']);
+        }
       }
     }
 

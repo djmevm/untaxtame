@@ -132,15 +132,33 @@ export default function Usuarios() {
           <div style={styles.perfilGrid}>
             <div style={styles.perfilItem}>
               <span style={styles.perfilLabel}>Nombre completo</span>
-              <span style={styles.perfilValor}>{u.nombre || '—'}</span>
+              <EditableField uid={u.uid} campo="nombre" valorActual={u.nombre || '—'} onUpdate={() => {
+                api.get('/users/todos').then(res => {
+                  setUsuarios(res.data);
+                  var actualizado = res.data.find(x => x.uid === u.uid);
+                  if (actualizado) setSeleccionado(actualizado);
+                }).catch(() => {});
+              }} />
             </div>
             <div style={styles.perfilItem}>
               <span style={styles.perfilLabel}>Número de cédula</span>
-              <span style={styles.perfilValor}>{u.cedula || '—'}</span>
+              <EditableField uid={u.uid} campo="cedula" valorActual={u.cedula || '—'} onUpdate={() => {
+                api.get('/users/todos').then(res => {
+                  setUsuarios(res.data);
+                  var actualizado = res.data.find(x => x.uid === u.uid);
+                  if (actualizado) setSeleccionado(actualizado);
+                }).catch(() => {});
+              }} />
             </div>
             <div style={styles.perfilItem}>
               <span style={styles.perfilLabel}>Número de celular</span>
-              <span style={styles.perfilValor}>{u.telefono || '—'}</span>
+              <EditableField uid={u.uid} campo="telefono" valorActual={u.telefono || '—'} onUpdate={() => {
+                api.get('/users/todos').then(res => {
+                  setUsuarios(res.data);
+                  var actualizado = res.data.find(x => x.uid === u.uid);
+                  if (actualizado) setSeleccionado(actualizado);
+                }).catch(() => {});
+              }} />
             </div>
             <div style={styles.perfilItem}>
               <span style={styles.perfilLabel}>Correo electrónico</span>
@@ -164,7 +182,13 @@ export default function Usuarios() {
               <>
                 <div style={styles.perfilItem}>
                   <span style={styles.perfilLabel}>Placa del taxi</span>
-                  <span style={{ ...styles.perfilValor, color: '#FFC107', fontWeight: 'bold', letterSpacing: 2, fontSize: 18 }}>{u.placa || '—'}</span>
+                  <EditableField uid={u.uid} campo="placa" valorActual={u.placa || '—'} transform="upper" onUpdate={() => {
+                    api.get('/users/todos').then(res => {
+                      setUsuarios(res.data);
+                      var actualizado = res.data.find(x => x.uid === u.uid);
+                      if (actualizado) setSeleccionado(actualizado);
+                    }).catch(() => {});
+                  }} />
                 </div>
                 <div style={styles.perfilItem}>
                   <span style={styles.perfilLabel}>Estado verificación</span>
@@ -489,6 +513,74 @@ export default function Usuarios() {
         </tbody>
       </table>
     </div>
+  );
+}
+
+// Componente para editar campos inline
+function EditableField({ uid, campo, valorActual, onUpdate, transform }) {
+  const [editando, setEditando] = React.useState(false);
+  const [valor, setValor] = React.useState(valorActual);
+  const [guardando, setGuardando] = React.useState(false);
+
+  // Mantener el valor sincronizado cuando cambia el valor original
+  React.useEffect(() => { setValor(valorActual); }, [valorActual]);
+
+  const guardar = async () => {
+    let limpio = (valor || '').trim();
+    if (transform === 'upper') limpio = limpio.toUpperCase();
+
+    if (!limpio || limpio === (valorActual || '').trim()) {
+      setEditando(false);
+      return;
+    }
+    setGuardando(true);
+    try {
+      // Vía principal: endpoint de admin (valida permisos y normaliza datos).
+      // La app lee el perfil del backend/Firestore, por lo que el cambio
+      // se refleja al refrescar el perfil del conductor.
+      await api.put(`/users/${uid}/datos`, { [campo]: limpio });
+      setEditando(false);
+      if (onUpdate) onUpdate();
+    } catch (err) {
+      // Respaldo: escribir directo a Firestore (fuente de verdad que lee la app).
+      try {
+        await updateDoc(doc(firestore, 'usuarios', uid), {
+          [campo]: limpio,
+          actualizadoEn: new Date().toISOString(),
+        });
+        setEditando(false);
+        if (onUpdate) onUpdate();
+      } catch (err2) {
+        alert('Error al guardar: ' + (err2.message || err.message || 'Error desconocido'));
+      }
+    } finally {
+      setGuardando(false);
+    }
+  };
+
+  if (editando) {
+    return (
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+        <input
+          type="text"
+          value={valor}
+          onChange={e => setValor(e.target.value)}
+          onKeyDown={e => { if (e.key === 'Enter') guardar(); if (e.key === 'Escape') setEditando(false); }}
+          autoFocus
+          disabled={guardando}
+          style={{ padding: '6px 10px', borderRadius: 6, border: '2px solid #FFC107', fontSize: 15, fontWeight: '600', width: '100%' }}
+        />
+        <button onClick={guardar} disabled={guardando} style={{ background: '#2E7D32', color: '#fff', border: 'none', borderRadius: 6, padding: '6px 12px', cursor: 'pointer', fontWeight: 'bold', fontSize: 12 }}>✓</button>
+        <button onClick={() => { setEditando(false); setValor(valorActual); }} style={{ background: '#E53935', color: '#fff', border: 'none', borderRadius: 6, padding: '6px 12px', cursor: 'pointer', fontWeight: 'bold', fontSize: 12 }}>✕</button>
+      </div>
+    );
+  }
+
+  return (
+    <span style={{ ...styles.perfilValor, display: 'flex', alignItems: 'center', gap: 8 }}>
+      {valorActual}
+      <button onClick={() => setEditando(true)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 16, padding: 0 }} title="Editar">✏️</button>
+    </span>
   );
 }
 

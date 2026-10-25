@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import {
   View, Text, FlatList, TouchableOpacity, StyleSheet,
-  Alert, ActivityIndicator, RefreshControl, Linking, TextInput, Modal
+  Alert, ActivityIndicator, RefreshControl, Linking, TextInput, Modal,
+  KeyboardAvoidingView, Platform, ScrollView, Keyboard, TouchableWithoutFeedback
 } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import MapView, { Marker, PROVIDER_GOOGLE } from 'react-native-maps';
@@ -358,63 +359,104 @@ export default function ServiciosPendientesScreen() {
       <ReconocimientoVozSOS servicioId={null} usuarioUid={perfil?.uid} />
 
       {/* Modal de oferta */}
-      <Modal visible={modalVisible} transparent animationType="slide">
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalCard}>
-            {/* Modal handle */}
-            <View style={styles.modalHandle} />
+      <Modal visible={modalVisible} transparent animationType="slide" onRequestClose={() => setModalVisible(false)}>
+        <KeyboardAvoidingView
+          style={styles.modalOverlay}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        >
+          <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+            <View style={styles.modalOverlayInner}>
+              <ScrollView
+                keyboardShouldPersistTaps="handled"
+                showsVerticalScrollIndicator={false}
+                contentContainerStyle={{ justifyContent: 'flex-end', flexGrow: 1 }}
+              >
+                <View style={styles.modalCard}>
+                  {/* Modal handle */}
+                  <View style={styles.modalHandle} />
 
-            <Text style={styles.modalTitle}>Tu oferta</Text>
-            <Text style={styles.modalSubtitle} numberOfLines={2}>
-              {servicioSeleccionado?.clienteNombre} — {servicioSeleccionado?.origen} → {servicioSeleccionado?.destino}
-            </Text>
+                  <Text style={styles.modalTitle}>Tu oferta</Text>
+                  <Text style={styles.modalSubtitle} numberOfLines={2}>
+                    {servicioSeleccionado?.clienteNombre} — {servicioSeleccionado?.origen} → {servicioSeleccionado?.destino}
+                  </Text>
 
-            {servicioSeleccionado?.tarifaEstimada && (
-              <View style={styles.suggestedFareRow}>
-                <Feather name="info" size={14} color="#16A34A" />
-                <Text style={styles.suggestedFareText}>
-                  Sugerida: ${servicioSeleccionado.tarifaEstimada.tarifaEstimada?.toLocaleString('es-CO')}
-                </Text>
-              </View>
-            )}
+                  {servicioSeleccionado?.tarifaEstimada && (
+                    <View style={styles.suggestedFareRow}>
+                      <Feather name="info" size={14} color="#16A34A" />
+                      <Text style={styles.suggestedFareText}>
+                        Sugerida: ${servicioSeleccionado.tarifaEstimada.tarifaEstimada?.toLocaleString('es-CO')}
+                      </Text>
+                    </View>
+                  )}
 
-            <Text style={styles.modalLabel}>¿Cuánto cobras? (mínimo $8,000)</Text>
-            <TextInput
-              style={styles.modalInput}
-              value={montoOferta}
-              onChangeText={setMontoOferta}
-              keyboardType="numeric"
-              placeholder="8000"
-              placeholderTextColor="#94A3B8"
-            />
+                  {/* Precio grande y visible que verá el cliente */}
+                  <Text style={styles.precioPreviewLabel}>El cliente verá</Text>
+                  <Text style={styles.precioPreview}>
+                    ${parseInt(montoOferta || 0).toLocaleString('es-CO')}
+                  </Text>
 
-            <Text style={styles.modalLabel}>Mensaje al cliente (opcional)</Text>
-            <TextInput
-              style={[styles.modalInput, { height: 64, textAlignVertical: 'top' }]}
-              value={mensajeOferta}
-              onChangeText={setMensajeOferta}
-              placeholder="Ej: Estoy cerca, llego en 5 min"
-              placeholderTextColor="#94A3B8"
-              multiline
-            />
+                  <Text style={styles.modalLabel}>¿Cuánto cobras? (mínimo $8,000)</Text>
+                  <View style={styles.montoInputWrapper}>
+                    <Text style={styles.montoPrefix}>$</Text>
+                    <TextInput
+                      style={styles.montoInput}
+                      value={montoOferta}
+                      onChangeText={(t) => setMontoOferta(t.replace(/[^0-9]/g, ''))}
+                      keyboardType="number-pad"
+                      placeholder="8000"
+                      placeholderTextColor="#94A3B8"
+                      maxLength={7}
+                      selectTextOnFocus
+                    />
+                  </View>
 
-            <TouchableOpacity
-              style={styles.modalSubmitBtn}
-              onPress={enviarOferta}
-              disabled={enviandoOferta}
-              activeOpacity={0.8}
-            >
-              {enviandoOferta
-                ? <ActivityIndicator color="#fff" />
-                : <Text style={styles.modalSubmitText}>ENVIAR OFERTA ${parseInt(montoOferta || 0).toLocaleString('es-CO')}</Text>
-              }
-            </TouchableOpacity>
+                  {/* Botones rápidos de ajuste de precio */}
+                  <View style={styles.ajusteRow}>
+                    {[-1000, -500, 500, 1000].map((delta) => (
+                      <TouchableOpacity
+                        key={delta}
+                        style={styles.ajusteBtn}
+                        onPress={() => {
+                          const base = parseInt(montoOferta || 0) + delta;
+                          setMontoOferta(String(base < 0 ? 0 : base));
+                        }}
+                        activeOpacity={0.7}
+                      >
+                        <Text style={styles.ajusteBtnText}>{delta > 0 ? `+${delta}` : `${delta}`}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
 
-            <TouchableOpacity style={styles.modalCancelBtn} onPress={() => setModalVisible(false)}>
-              <Text style={styles.modalCancelText}>Cancelar</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
+                  <Text style={styles.modalLabel}>Mensaje al cliente (opcional)</Text>
+                  <TextInput
+                    style={[styles.modalInput, { height: 64, textAlignVertical: 'top' }]}
+                    value={mensajeOferta}
+                    onChangeText={setMensajeOferta}
+                    placeholder="Ej: Estoy cerca, llego en 5 min"
+                    placeholderTextColor="#94A3B8"
+                    multiline
+                  />
+
+                  <TouchableOpacity
+                    style={styles.modalSubmitBtn}
+                    onPress={enviarOferta}
+                    disabled={enviandoOferta}
+                    activeOpacity={0.8}
+                  >
+                    {enviandoOferta
+                      ? <ActivityIndicator color="#fff" />
+                      : <Text style={styles.modalSubmitText}>ENVIAR OFERTA ${parseInt(montoOferta || 0).toLocaleString('es-CO')}</Text>
+                    }
+                  </TouchableOpacity>
+
+                  <TouchableOpacity style={styles.modalCancelBtn} onPress={() => setModalVisible(false)}>
+                    <Text style={styles.modalCancelText}>Cancelar</Text>
+                  </TouchableOpacity>
+                </View>
+              </ScrollView>
+            </View>
+          </TouchableWithoutFeedback>
+        </KeyboardAvoidingView>
       </Modal>
     </View>
   );
@@ -753,6 +795,64 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: 'rgba(15, 23, 42, 0.5)',
     justifyContent: 'flex-end',
+  },
+  modalOverlayInner: {
+    flex: 1,
+    justifyContent: 'flex-end',
+  },
+  precioPreviewLabel: {
+    fontSize: 12,
+    color: '#64748B',
+    textAlign: 'center',
+    marginTop: 4,
+  },
+  precioPreview: {
+    fontSize: 38,
+    fontWeight: 'bold',
+    color: '#16A34A',
+    textAlign: 'center',
+    marginBottom: 14,
+  },
+  montoInputWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#F97316',
+    borderRadius: 12,
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 14,
+    marginBottom: 12,
+  },
+  montoPrefix: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#1E293B',
+    marginRight: 6,
+  },
+  montoInput: {
+    flex: 1,
+    fontSize: 26,
+    fontWeight: 'bold',
+    color: '#1E293B',
+    paddingVertical: 12,
+  },
+  ajusteRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 8,
+    marginBottom: 16,
+  },
+  ajusteBtn: {
+    flex: 1,
+    backgroundColor: '#F1F5F9',
+    borderRadius: 10,
+    paddingVertical: 10,
+    alignItems: 'center',
+  },
+  ajusteBtnText: {
+    fontSize: 13,
+    fontWeight: 'bold',
+    color: '#1E293B',
   },
   modalCard: {
     backgroundColor: '#FFFFFF',
