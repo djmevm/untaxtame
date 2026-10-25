@@ -574,6 +574,20 @@ async function procesarMensaje(telefono, texto) {
       '📱 WhatsApp: +57 322 7487094\n' +
       '📱 WhatsApp: +57 322 3221058\n\n' +
       'Servicio de atención 24/7. 💛🖤';
+  } else if (textoLower === '5' || textoLower.includes('encendido') || textoLower.includes('bater') || textoLower.includes('carga elect')) {
+    respuesta = '🔋 *Encendidos y carga eléctrica*\n\n' +
+      'Servicio de encendidos o carga eléctrica para *vehículos y motos* (baterías).\n\n' +
+      '👨‍🔧 *Jhon Jairo*\n' +
+      '📱 WhatsApp: +57 318 3023984\n' +
+      '👉 https://wa.me/573183023984\n\n' +
+      'Escríbele directamente para coordinar el servicio. 💛🖤';
+  } else if (textoLower === '6' || textoLower.includes('producto') || textoLower.includes('accesorio') || textoLower.includes('repuesto')) {
+    respuesta = '🛒 *Productos para carro y moto*\n\n' +
+      'Venta de productos y accesorios para *carro y moto*.\n\n' +
+      '👩‍💼 *Gisella*\n' +
+      '📱 WhatsApp: +57 313 3234242\n' +
+      '👉 https://wa.me/573133234242\n\n' +
+      'Escríbele directamente para ver el catálogo y precios. 💛🖤';
   } else {
     respuesta = mostrarMenuPrincipal();
   }
@@ -594,7 +608,9 @@ function mostrarMenuPrincipal() {
     '1️⃣ *Necesito un taxi ahora* 🚕\n' +
     '2️⃣ *Programar un viaje* (a cualquier hora) ⏰\n' +
     '3️⃣ Descargar la app 📲\n' +
-    '4️⃣ Soporte / Quejas 📋\n\n' +
+    '4️⃣ Soporte / Quejas 📋\n' +
+    '5️⃣ Encendidos / carga eléctrica (baterías) 🔋\n' +
+    '6️⃣ Productos para carro y moto 🛒\n\n' +
     '🌧️ _¡Aviso! Con lluvia seguimos activos 24/7, pero los tiempos pueden ser más lentos por seguridad vial. ¡Gracias por tu paciencia! 💛🖤_';
 }
 
