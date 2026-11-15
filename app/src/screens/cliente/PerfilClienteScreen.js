@@ -1,14 +1,15 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity,
   ScrollView, Alert, Image, ActivityIndicator,
-  TextInput, Modal
+  TextInput, Modal, KeyboardAvoidingView, Platform
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { useAuth } from '../../context/AuthContext';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import apiInstance from '../../config/api';
 import MensajesAdmin from '../../components/MensajesAdmin';
+import ContactosConfianza from '../../components/ContactosConfianza';
 
 export default function PerfilClienteScreen() {
   const { perfil, setPerfil, cerrarSesion } = useAuth();
@@ -21,6 +22,34 @@ export default function PerfilClienteScreen() {
     direccion: perfil?.direccion || '',
     cedula: perfil?.cedula || '',
   });
+
+  // Refrescar el perfil del backend al abrir esta pantalla (refleja cambios
+  // hechos por el admin y mantiene los datos al día entre dispositivos).
+  useFocusEffect(
+    useCallback(() => {
+      let activo = true;
+      (async () => {
+        if (!perfil?.uid) return;
+        try {
+          const res = await apiInstance.get(`/auth/perfil/${perfil.uid}`);
+          if (!activo || !res.data) return;
+          if (setPerfil) setPerfil(res.data);
+          setEditando((edit) => {
+            if (!edit) {
+              setForm({
+                nombre: res.data.nombre || '',
+                telefono: res.data.telefono || '',
+                direccion: res.data.direccion || '',
+                cedula: res.data.cedula || '',
+              });
+            }
+            return edit;
+          });
+        } catch {}
+      })();
+      return () => { activo = false; };
+    }, [perfil?.uid])
+  );
 
   const handleCerrarSesion = () => {
     Alert.alert('Cerrar sesión', '¿Estás seguro?', [
@@ -104,7 +133,11 @@ export default function PerfilClienteScreen() {
   };
 
   return (
-    <ScrollView contentContainerStyle={styles.container}>
+    <KeyboardAvoidingView
+      style={{ flex: 1 }}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+    >
+    <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
 
       {/* Foto de perfil */}
       <TouchableOpacity style={styles.fotoWrapper} onPress={cambiarFoto} disabled={actualizando}>
@@ -195,6 +228,8 @@ export default function PerfilClienteScreen() {
         </View>
       )}
 
+      <ContactosConfianza />
+
       <TouchableOpacity style={styles.btnPedirTaxi} onPress={() => navigation.navigate('PedirTaxi')}>
         <Text style={styles.btnPedirTaxiTexto}>🚕 Pedir Taxi</Text>
       </TouchableOpacity>
@@ -206,6 +241,7 @@ export default function PerfilClienteScreen() {
       </TouchableOpacity>
 
     </ScrollView>
+    </KeyboardAvoidingView>
   );
 }
 

@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import {
-  View, Text, FlatList, TouchableOpacity,
+  View, Text, FlatList, TouchableOpacity, TextInput, Modal,
   StyleSheet, Alert, ActivityIndicator, RefreshControl, Linking,
 } from 'react-native';
 import { useAuth } from '../../context/AuthContext';
@@ -21,6 +21,8 @@ export default function ViajesProgramadosScreen() {
   const [cargando, setCargando] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [procesando, setProcesando] = useState(null);
+  const [pinModal, setPinModal] = useState({ visible: false, viaje: null });
+  const [pinInput, setPinInput] = useState('');
 
   const cargar = useCallback(async () => {
     if (!perfil?.uid) return;
@@ -90,7 +92,10 @@ export default function ViajesProgramadosScreen() {
             try {
               await api.put(`/programados/llegada/${viaje.id}`, { conductorUid: perfil.uid });
               reproducirSonido();
-              Alert.alert('📍 Llegada notificada', 'El cliente fue avisado de que ya llegaste.');
+              Alert.alert(
+                '📍 Llegada notificada',
+                'Pide al pasajero su PIN de 4 dígitos para iniciar el viaje.'
+              );
               cargar();
             } catch (err) {
               Alert.alert('Error', err.response?.data?.error || 'No se pudo notificar la llegada');
@@ -101,6 +106,31 @@ export default function ViajesProgramadosScreen() {
         },
       ]
     );
+  };
+
+  const abrirPin = (viaje) => {
+    setPinInput('');
+    setPinModal({ visible: true, viaje });
+  };
+
+  const confirmarPin = async () => {
+    const viaje = pinModal.viaje;
+    if (!viaje) return;
+    if (!/^\d{4}$/.test(pinInput.trim())) {
+      return Alert.alert('PIN inválido', 'Ingresa los 4 dígitos que te dicte el pasajero');
+    }
+    setProcesando(viaje.id);
+    try {
+      await api.put(`/programados/iniciar/${viaje.id}`, { pinEmbarque: pinInput.trim() });
+      reproducirSonido();
+      setPinModal({ visible: false, viaje: null });
+      Alert.alert('🛣️ Viaje iniciado', 'PIN correcto. ¡Buen viaje!');
+      cargar();
+    } catch (err) {
+      Alert.alert('Error', err.response?.data?.error || 'PIN incorrecto o no se pudo iniciar');
+    } finally {
+      setProcesando(null);
+    }
   };
 
   if (cargando) return <ActivityIndicator style={{ flex: 1 }} size="large" color="#FFC107" />;
@@ -150,10 +180,14 @@ export default function ViajesProgramadosScreen() {
       );
     }
 
-    // asignado
+    // asignado / en sitio / en curso
+    const enSitio = v.estado === 'conductor_en_sitio';
+    const enCurso = v.estado === 'en_curso';
     return (
-      <View style={[styles.card, styles.cardAsignado]}>
+      <View style={[styles.card, styles.cardAsignado, enSitio && styles.cardEnSitio, enCurso && styles.cardEnCurso]}>
         <Text style={styles.cardCodigo}>🎫 {v.codigoReserva || ''}</Text>
+        {enSitio && <Text style={styles.badgeSitio}>📍 EN SITIO — pide el PIN</Text>}
+        {enCurso && <Text style={styles.badgeCurso}>🛣️ EN VIAJE</Text>}
         <Text style={styles.cardHora}>⏰ {textoHora(v)}</Text>
         <Text style={styles.cardRuta}>📍 {v.puntoEncuentro || v.origen}</Text>
         <Text style={styles.cardFlecha}>↓</Text>
@@ -171,13 +205,24 @@ export default function ViajesProgramadosScreen() {
           >
             <Text style={styles.btnMapaTexto}>🗺️ Mapa</Text>
           </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.btnLlegue, procesando === v.id && styles.btnDisabled]}
-            disabled={procesando === v.id}
-            onPress={() => marcarLlegada(v)}
-          >
-            <Text style={styles.btnLlegueTexto}>📍 Llegué</Text>
-          </TouchableOpacity>
+          {!enSitio && !enCurso && (
+            <TouchableOpacity
+              style={[styles.btnLlegue, procesando === v.id && styles.btnDisabled]}
+              disabled={procesando === v.id}
+              onPress={() => marcarLlegada(v)}
+            >
+              <Text style={styles.btnLlegueTexto}>📍 Llegué</Text>
+            </TouchableOpacity>
+          )}
+          {enSitio && (
+            <TouchableOpacity
+              style={[styles.btnIniciar, procesando === v.id && styles.btnDisabled]}
+              disabled={procesando === v.id}
+              onPress={() => abrirPin(v)}
+            >
+              <Text style={styles.btnIniciarTexto}>🔐 Iniciar con PIN</Text>
+            </TouchableOpacity>
+          )}
         </View>
       </View>
     );
@@ -186,7 +231,7 @@ export default function ViajesProgramadosScreen() {
   return (
     <View style={styles.container}>
       <Text style={styles.titulo}>Viajes Programados 🕐</Text>
-      <Text style={styles.ayuda}>Cualquier fecha y hora · máx 3 por día</Text>
+      <Text style={styles.ayuda}>Cualquier fecha y hora · máx 3 por día · PIN de abordaje</Text>
       <FlatList
         data={data}
         keyExtractor={(item) => item.key}
@@ -194,6 +239,42 @@ export default function ViajesProgramadosScreen() {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); cargar(); }} />}
         contentContainerStyle={{ paddingBottom: 24 }}
       />
+
+      <Modal visible={pinModal.visible} transparent animationType="fade">
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitulo}>🔐 PIN de abordaje</Text>
+            <Text style={styles.modalSub}>
+              Pide al pasajero los 4 dígitos. Sin el PIN correcto no inicia el viaje.
+            </Text>
+            <TextInput
+              style={styles.pinInput}
+              value={pinInput}
+              onChangeText={setPinInput}
+              keyboardType="number-pad"
+              maxLength={4}
+              placeholder="••••"
+              placeholderTextColor="#bbb"
+              autoFocus
+            />
+            <TouchableOpacity
+              style={[styles.btnIniciar, { marginTop: 12 }, procesando && styles.btnDisabled]}
+              onPress={confirmarPin}
+              disabled={!!procesando}
+            >
+              <Text style={styles.btnIniciarTexto}>
+                {procesando ? 'Verificando…' : 'Confirmar e iniciar'}
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.btnCerrarModal}
+              onPress={() => setPinModal({ visible: false, viaje: null })}
+            >
+              <Text style={styles.btnCerrarModalTexto}>Cancelar</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -207,6 +288,10 @@ const styles = StyleSheet.create({
 
   card: { backgroundColor: '#fff', borderRadius: 12, padding: 14, marginBottom: 10, elevation: 2, borderLeftWidth: 5, borderLeftColor: '#5C6BC0' },
   cardAsignado: { borderLeftColor: '#2E7D32' },
+  cardEnSitio: { borderLeftColor: '#FF9800' },
+  cardEnCurso: { borderLeftColor: '#1565C0' },
+  badgeSitio: { color: '#E65100', fontWeight: 'bold', fontSize: 12, marginBottom: 4 },
+  badgeCurso: { color: '#1565C0', fontWeight: 'bold', fontSize: 12, marginBottom: 4 },
   cardCodigo: { fontSize: 13, fontWeight: 'bold', color: '#5C6BC0', marginBottom: 4 },
   cardHora: { fontSize: 15, fontWeight: 'bold', color: '#222', marginBottom: 6 },
   cardRuta: { fontSize: 14, color: '#333' },
@@ -226,4 +311,17 @@ const styles = StyleSheet.create({
   btnMapaTexto: { color: '#1565C0', fontWeight: '600', fontSize: 14 },
   btnLlegue: { flex: 1, backgroundColor: '#FF9800', borderRadius: 10, padding: 12, alignItems: 'center' },
   btnLlegueTexto: { color: '#fff', fontWeight: 'bold', fontSize: 14 },
+  btnIniciar: { flex: 1, backgroundColor: '#1A237E', borderRadius: 10, padding: 12, alignItems: 'center' },
+  btnIniciarTexto: { color: '#fff', fontWeight: 'bold', fontSize: 14 },
+
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.55)', justifyContent: 'center', padding: 24 },
+  modalCard: { backgroundColor: '#fff', borderRadius: 16, padding: 22 },
+  modalTitulo: { fontSize: 20, fontWeight: 'bold', textAlign: 'center', marginBottom: 8 },
+  modalSub: { fontSize: 13, color: '#666', textAlign: 'center', marginBottom: 16 },
+  pinInput: {
+    borderWidth: 2, borderColor: '#1A237E', borderRadius: 12, padding: 16,
+    fontSize: 28, letterSpacing: 12, textAlign: 'center', fontWeight: 'bold', color: '#111',
+  },
+  btnCerrarModal: { padding: 14, alignItems: 'center', marginTop: 4 },
+  btnCerrarModalTexto: { color: '#999', fontWeight: 'bold' },
 });

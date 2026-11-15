@@ -270,6 +270,37 @@ router.put('/notificaciones/:notifId/leer', verifyToken, async (req, res) => {
   }
 });
 
+// ═══ Contactos de confianza (cliente) ═══
+router.get('/contactos-confianza', verifyToken, async (req, res) => {
+  try {
+    const { obtenerContactos } = require('../services/contactosConfianza');
+    const contactos = await obtenerContactos(req.user.uid);
+    res.json({ contactos });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.put('/contactos-confianza', verifyToken, async (req, res) => {
+  try {
+    const { validarContactos } = require('../services/contactosConfianza');
+    const resultado = validarContactos(req.body?.contactos || []);
+    if (resultado.error) return res.status(400).json({ error: resultado.error });
+
+    await db.collection('usuarios').doc(req.user.uid).update({
+      contactosConfianza: resultado.contactos,
+      contactosConfianzaActualizadoEn: new Date().toISOString(),
+    });
+
+    res.json({
+      message: 'Contactos de confianza actualizados',
+      contactos: resultado.contactos,
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Conductor se re-postula después de ser rechazado
 router.put('/conductor/:uid/repostularse', verifyToken, async (req, res) => {
   const uid = req.params.uid;

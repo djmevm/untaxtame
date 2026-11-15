@@ -70,9 +70,45 @@ router.post('/sos', verifyToken, async (req, res) => {
       enviarPushAConductores({ titulo: 'EMERGENCIA SOS', cuerpo: (userData.nombre || 'Usuario') + ': ' + (mensaje || 'SOS'), datos: { tipo: 'emergencia', emergenciaId: docRef.id } });
     } catch (e) {}
 
+    // Si es cliente: avisar contactos de confianza + link de seguimiento
+    let contactosNotificados = 0;
+    if ((userData.rol || '') === 'cliente') {
+      try {
+        const { notificarContactosConfianza } = require('../services/contactosConfianza');
+        let link = '';
+        if (servicioId && servicioData) {
+          const base = process.env.PUBLIC_BASE_URL || 'https://untaxtame-production.up.railway.app';
+          let token = servicioData.shareToken;
+          if (!token) {
+            const { v4: uuidv4 } = require('uuid');
+            token = uuidv4().replace(/-/g, '').slice(0, 16);
+            await db.collection('servicios').doc(servicioId).update({
+              shareToken: token,
+              compartidoEn: new Date().toISOString(),
+            });
+          }
+          link = `${base.replace(/\/$/, '')}/seguimiento/${token}`;
+        }
+        const maps = emergencia.ubicacion
+          ? `https://www.google.com/maps?q=${emergencia.ubicacion.lat},${emergencia.ubicacion.lng}`
+          : '';
+        const msg =
+          `🚨 *SOS de ${(userData.nombre || 'un pasajero')}*\n\n` +
+          `${mensaje || 'Emergencia'}\n` +
+          (servicioData ? `🚕 Conductor: ${servicioData.conductorNombre || '—'}\n🚗 Placa: ${servicioData.conductorPlaca || '—'}\n📍 ${servicioData.origen || ''} → ${servicioData.destino || ''}\n` : '') +
+          (maps ? `\n📌 Ubicación: ${maps}\n` : '') +
+          (link ? `\n🔗 Seguir viaje: ${link}\n` : '') +
+          `\nSi no puedes contactarle, llama al 123.`;
+        contactosNotificados = await notificarContactosConfianza(uid, msg);
+      } catch (e) {
+        console.error('[sos] contactos:', e.message);
+      }
+    }
+
     res.status(201).json({
       message: 'Emergencia reportada. La plataforma y conductores han sido alertados.',
       emergenciaId: docRef.id,
+      contactosNotificados,
     });
   } catch (err) {
     res.status(500).json({ error: err.message });

@@ -27,6 +27,14 @@ const {
   MAX_VIAJES_POR_NOCHE,
   CANCELACION_LIBRE_MIN,
 } = require('../services/viajesProgramados');
+const { generarPinEmbarque } = require('../services/contactosConfianza');
+
+/** Quita el PIN de respuestas que ve el conductor (solo el pasajero debe conocerlo). */
+function sinPin(viaje) {
+  if (!viaje) return viaje;
+  const { pinEmbarque, ...resto } = viaje;
+  return { ...resto, requierePinEmbarque: Boolean(pinEmbarque) };
+}
 
 // ═══════════════════════════════════════════════════════════════════
 // Creador interno (no HTTP) — reutilizable desde el chatbot de WhatsApp
@@ -252,16 +260,23 @@ router.get('/disponibles', verifyToken, async (req, res) => {
 // ═══════════════════════════════════════════════════════════════════
 router.get('/asignados/:conductorUid', verifyToken, async (req, res) => {
   try {
+    // Incluye asignados + en sitio / en curso (flujo PIN de abordaje)
     const snap = await db
       .collection('servicios')
       .where('esProgramado', '==', true)
-      .where('estado', '==', 'programado_asignado')
       .where('conductorUid', '==', req.params.conductorUid)
       .get();
+
+    const estadosActivos = new Set([
+      'programado_asignado',
+      'conductor_en_sitio',
+      'en_curso',
+    ]);
 
     const viajes = snap.docs
       .map((doc) => {
         const d = doc.data();
+        if (!estadosActivos.has(d.estado)) return null;
         return {
           id: d.id,
           codigoReserva: d.codigoReserva,
@@ -273,8 +288,13 @@ router.get('/asignados/:conductorUid', verifyToken, async (req, res) => {
           puntoEncuentro: d.puntoEncuentro,
           contacto: d.contacto,
           cantidadPasajeros: d.cantidadPasajeros,
+          estado: d.estado,
+          tarifaMadrugada: d.tarifaMadrugada,
+          // Nunca exponer el PIN al conductor; solo indicar que lo necesita
+          requierePinEmbarque: Boolean(d.pinEmbarque) && d.estado === 'conductor_en_sitio',
         };
       })
+      .filter(Boolean)
       .sort((a, b) =>
         String(a.horaProgramada || '').localeCompare(String(b.horaProgramada || ''))
       );
@@ -356,6 +376,7 @@ router.put('/aceptar/:viajeId', verifyToken, async (req, res) => {
         e.codigo = 409;
         throw e;
       }
+      const pinEmbarque = generarPinEmbarque();
       tx.update(viajeRef, {
         estado: 'programado_asignado',
         conductorUid,
@@ -363,6 +384,8 @@ router.put('/aceptar/:viajeId', verifyToken, async (req, res) => {
         conductorPlaca,
         conductorCelular,
         conductorVehiculo,
+        pinEmbarque,
+        pinGeneradoEn: new Date().toISOString(),
         actualizadoEn: new Date().toISOString(),
       });
     });
@@ -382,7 +405,18 @@ router.put('/aceptar/:viajeId', verifyToken, async (req, res) => {
       console.error('[programados] Error notificando asignación al cliente:', e.message);
     }
 
-    res.json({ message: 'Viaje aceptado', viaje: viajeActualizado });
+    // Push con PIN solo al cliente
+    if (viajeActualizado.clienteUid && viajeActualizado.pinEmbarque) {
+      try {
+        enviarPushAUsuario(viajeActualizado.clienteUid, {
+          titulo: '🔐 PIN de abordaje',
+          cuerpo: `Tu PIN es ${viajeActualizado.pinEmbarque}. Dáselo solo al conductor al subir.`,
+          datos: { tipo: 'pin_embarque', viajeId: viajeActualizado.id || req.params.viajeId },
+        });
+      } catch (e) {}
+    }
+
+    res.json({ message: 'Viaje aceptado', viaje: sinPin(viajeActualizado) });
   } catch (err) {
     if (err && err.codigo === 404) {
       return res.status(404).json({ error: 'Viaje no encontrado' });
@@ -463,21 +497,127 @@ router.put('/llegada/:viajeId', verifyToken, async (req, res) => {
     if (!snap.exists) return res.status(404).json({ error: 'Viaje no encontrado' });
 
     const viaje = snap.data();
+    if (viaje.conductorUid !== req.user.uid) {
+      return res.status(403).json({ error: 'No eres el conductor de este viaje' });
+    }
+    if (!['programado_asignado', 'conductor_en_sitio'].includes(viaje.estado)) {
+      return res.status(400).json({ error: 'El viaje no está listo para marcar llegada' });
+    }
 
-    // Avisar al cliente "Tu taxi ha llegado" (require diferido + guarda:
-    // whatsapp.js expone esta función en una tarea posterior).
+    // Transición a conductor_en_sitio: habilita iniciar con PIN
+    await viajeRef.update({
+      estado: 'conductor_en_sitio',
+      conductorEnSitioEn: new Date().toISOString(),
+      actualizadoEn: new Date().toISOString(),
+    });
+
+    const actualizado = (await viajeRef.get()).data();
+
     try {
       const whatsapp = require('./whatsapp');
       if (whatsapp && typeof whatsapp.notificarLlegadaCliente === 'function') {
-        await whatsapp.notificarLlegadaCliente(viaje.clienteCelular, viaje);
+        await whatsapp.notificarLlegadaCliente(viaje.clienteCelular, actualizado);
       }
     } catch (e) {
       console.error('[programados] Error notificando llegada al cliente:', e.message);
     }
 
-    res.json({ message: 'Llegada notificada', viajeId: viaje.id });
+    if (viaje.clienteUid) {
+      try {
+        enviarPushAUsuario(viaje.clienteUid, {
+          titulo: '📍 ¡Tu taxi llegó!',
+          cuerpo: viaje.pinEmbarque
+            ? `Dicta tu PIN ${viaje.pinEmbarque} al conductor para abordar.`
+            : 'El conductor está en el punto de encuentro.',
+          datos: { tipo: 'conductor_en_sitio', viajeId: viaje.id || req.params.viajeId },
+        });
+      } catch (e) {}
+    }
+
+    res.json({ message: 'Llegada notificada', viaje: sinPin({ id: req.params.viajeId, ...actualizado }) });
   } catch (err) {
     console.error('[programados] Error en llegada:', err.message);
+    res.status(500).json({ error: 'Error interno del servidor' });
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════════
+// PUT /iniciar/:viajeId — Conductor inicia con PIN de abordaje
+// ═══════════════════════════════════════════════════════════════════
+router.put('/iniciar/:viajeId', verifyToken, async (req, res) => {
+  const viajeRef = db.collection('servicios').doc(req.params.viajeId);
+  const pinIngresado = req.body?.pinEmbarque != null ? String(req.body.pinEmbarque).trim() : '';
+
+  try {
+    const snap = await viajeRef.get();
+    if (!snap.exists) return res.status(404).json({ error: 'Viaje no encontrado' });
+
+    const viaje = snap.data();
+    if (viaje.conductorUid !== req.user.uid) {
+      return res.status(403).json({ error: 'No eres el conductor de este viaje' });
+    }
+    if (viaje.estado !== 'conductor_en_sitio') {
+      return res.status(400).json({
+        error: 'Primero marca llegada. Luego pide el PIN al pasajero para iniciar.',
+        requierePin: true,
+      });
+    }
+
+    if (!viaje.pinEmbarque) {
+      return res.status(400).json({ error: 'Este viaje no tiene PIN de abordaje' });
+    }
+    if (!pinIngresado) {
+      return res.status(400).json({ error: 'Ingresa el PIN de 4 dígitos del pasajero', requierePin: true });
+    }
+    if (pinIngresado !== String(viaje.pinEmbarque)) {
+      return res.status(403).json({ error: 'PIN de abordaje incorrecto', requierePin: true });
+    }
+
+    await viajeRef.update({
+      estado: 'en_curso',
+      iniciadoEn: new Date().toISOString(),
+      pinVerificadoEn: new Date().toISOString(),
+      actualizadoEn: new Date().toISOString(),
+    });
+
+    const actualizado = (await viajeRef.get()).data();
+
+    if (viaje.clienteUid) {
+      try {
+        enviarPushAUsuario(viaje.clienteUid, {
+          titulo: '🛣️ Viaje iniciado',
+          cuerpo: 'PIN verificado. Buen viaje. Tus contactos de confianza pueden seguirte.',
+          datos: { tipo: 'viaje_iniciado', viajeId: viaje.id || req.params.viajeId },
+        });
+      } catch (e) {}
+
+      // Aviso automático a contactos de confianza
+      try {
+        const { notificarContactosConfianza } = require('../services/contactosConfianza');
+        const base = process.env.PUBLIC_BASE_URL || 'https://untaxtame-production.up.railway.app';
+        let token = actualizado.shareToken;
+        if (!token) {
+          const { v4: uuidv4 } = require('uuid');
+          token = uuidv4().replace(/-/g, '').slice(0, 16);
+          await viajeRef.update({ shareToken: token, compartidoEn: new Date().toISOString() });
+        }
+        const link = `${base.replace(/\/$/, '')}/seguimiento/${token}`;
+        await notificarContactosConfianza(
+          viaje.clienteUid,
+          `🛣️ *Viaje de madrugada iniciado*\n\n` +
+            `Pasajero: *${viaje.clienteNombre || viaje.pasajeroNombre || 'Cliente'}*\n` +
+            `🚕 ${viaje.conductorNombre || 'Conductor'} · Placa ${viaje.conductorPlaca || '—'}\n` +
+            `📍 ${viaje.origen || ''} → ${viaje.destino || ''}\n\n` +
+            `🔗 Seguir en vivo: ${link}`
+        );
+      } catch (e) {
+        console.error('[programados] contactos al iniciar:', e.message);
+      }
+    }
+
+    res.json({ message: 'Viaje iniciado con PIN verificado', viaje: sinPin({ id: req.params.viajeId, ...actualizado }) });
+  } catch (err) {
+    console.error('[programados] Error en iniciar:', err.message);
     res.status(500).json({ error: 'Error interno del servidor' });
   }
 });

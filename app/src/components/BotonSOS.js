@@ -17,7 +17,15 @@ const TIPOS_EMERGENCIA = [
   { id: 'otro', icon: '⚠️', label: 'Otra emergencia', color: '#455A64' },
 ];
 
-export default function BotonSOS({ servicioId }) {
+const TIPOS_CLIENTE = [
+  { id: 'secuestro', icon: '🚨', label: 'Me siento en peligro', color: '#880E4F' },
+  { id: 'robo', icon: '🔫', label: 'Robo / amenaza', color: '#B71C1C' },
+  { id: 'accidente', icon: '🚗💥', label: 'Accidente', color: '#E53935' },
+  { id: 'otro', icon: '⚠️', label: 'Otra emergencia', color: '#455A64' },
+];
+
+export default function BotonSOS({ servicioId, variant = 'conductor' }) {
+  const tipos = variant === 'cliente' ? TIPOS_CLIENTE : TIPOS_EMERGENCIA;
   const [modalVisible, setModalVisible] = useState(false);
   const [enviando, setEnviando] = useState(false);
   const [misAlertas, setMisAlertas] = useState([]);
@@ -52,7 +60,7 @@ export default function BotonSOS({ servicioId }) {
         }
       } catch {}
 
-      await api.post('/emergencia/sos', {
+      const sosRes = await api.post('/emergencia/sos', {
         servicioId: servicioId || null,
         ubicacionLat: ubicacion?.lat || null,
         ubicacionLng: ubicacion?.lng || null,
@@ -67,13 +75,23 @@ export default function BotonSOS({ servicioId }) {
       setModalVisible(false);
       Vibration.vibrate(500);
 
+      const contactos = sosRes.data?.contactosNotificados || 0;
+      const extraContactos = contactos > 0
+        ? `\n\n🔐 ${contactos} contacto(s) de confianza avisados.`
+        : '';
+
       if (['robo', 'secuestro', 'accidente'].includes(tipo.id)) {
-        Alert.alert('🚨 Alerta enviada', `${tipo.label}\n\n¿Llamar al 123?`, [
+        Alert.alert('🚨 Alerta enviada', `${tipo.label}${extraContactos}\n\n¿Llamar al 123?`, [
           { text: 'OK' },
           { text: '📞 Llamar 123', onPress: () => Linking.openURL(`tel:${NUMERO_EMERGENCIA}`) },
         ]);
       } else {
-        Alert.alert('✅ Reporte enviado', `${tipo.label}\nLos conductores cercanos fueron notificados.`);
+        Alert.alert(
+          '✅ Reporte enviado',
+          variant === 'cliente'
+            ? `${tipo.label}\nCentral y contactos de confianza fueron alertados.${extraContactos}`
+            : `${tipo.label}\nLos conductores cercanos fueron notificados.`
+        );
       }
     } catch {
       Alert.alert('Error', 'No se pudo enviar. Llama al 123.');
@@ -139,7 +157,7 @@ export default function BotonSOS({ servicioId }) {
 
             <Text style={styles.modalSub}>Reportar nueva emergencia:</Text>
 
-            {TIPOS_EMERGENCIA.map((tipo) => (
+            {tipos.map((tipo) => (
               <TouchableOpacity
                 key={tipo.id}
                 style={[styles.tipoBtn, { borderLeftColor: tipo.color }]}

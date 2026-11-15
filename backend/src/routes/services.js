@@ -190,6 +190,7 @@ router.put('/aceptar/:servicioId', verifyToken, async (req, res) => {
 // Conductor inicia el viaje (pasajero subió al taxi)
 router.put('/iniciar/:servicioId', verifyToken, async (req, res) => {
   const conductorUid = req.user.uid;
+  const pinIngresado = req.body?.pinEmbarque != null ? String(req.body.pinEmbarque).trim() : '';
   try {
     const ref = db.collection('servicios').doc(req.params.servicioId);
     const doc = await ref.get();
@@ -199,9 +200,23 @@ router.put('/iniciar/:servicioId', verifyToken, async (req, res) => {
     if (data.conductorUid !== conductorUid) return res.status(403).json({ error: 'No eres el conductor de este servicio' });
     if (data.estado !== 'conductor_en_sitio') return res.status(400).json({ error: 'El servicio no está en estado "conductor_en_sitio"' });
 
+    // Viajes con pin de abordaje (madrugada / programados): el pasajero debe dictarlo
+    if (data.pinEmbarque) {
+      if (!pinIngresado) {
+        return res.status(400).json({
+          error: 'Este viaje requiere el PIN de abordaje del pasajero',
+          requierePin: true,
+        });
+      }
+      if (pinIngresado !== String(data.pinEmbarque)) {
+        return res.status(403).json({ error: 'PIN de abordaje incorrecto', requierePin: true });
+      }
+    }
+
     await ref.update({
       estado: 'en_curso',
       iniciadoEn: new Date().toISOString(),
+      pinVerificadoEn: data.pinEmbarque ? new Date().toISOString() : null,
       actualizadoEn: new Date().toISOString(),
     });
 
@@ -216,6 +231,26 @@ router.put('/iniciar/:servicioId', verifyToken, async (req, res) => {
           cuerpo: 'Ya van hacia el destino. Puedes seguir el taxi en vivo.',
           datos: { tipo: 'viaje_iniciado', servicioId: req.params.servicioId },
         });
+      } catch (e) {}
+
+      // Aviso a contactos de confianza (viaje seguro)
+      try {
+        const { notificarContactosConfianza } = require('../services/contactosConfianza');
+        const base = process.env.PUBLIC_BASE_URL || 'https://untaxtame-production.up.railway.app';
+        let token = data.shareToken;
+        if (!token) {
+          token = uuidv4().replace(/-/g, '').slice(0, 16);
+          await ref.update({ shareToken: token, compartidoEn: new Date().toISOString() });
+        }
+        const link = `${base.replace(/\/$/, '')}/seguimiento/${token}`;
+        await notificarContactosConfianza(
+          data.clienteUid,
+          `🛣️ *Viaje iniciado*\n\n` +
+            `Pasajero: *${data.clienteNombre || 'Cliente'}*\n` +
+            `🚕 ${data.conductorNombre || 'Conductor'} · Placa ${data.conductorPlaca || '—'}\n` +
+            `📍 ${data.origen || ''} → ${data.destino || ''}\n\n` +
+            `🔗 Seguir en vivo: ${link}`
+        );
       } catch (e) {}
     }
 
@@ -617,7 +652,18 @@ router.get('/historial/:uid/:rol', verifyToken, async (req, res) => {
       .orderBy('creadoEn', 'desc')
       .get();
 
-    const servicios = snapshot.docs.map(d => d.data());
+    const servicios = snapshot.docs.map((d) => {
+      const data = d.data();
+      // El PIN solo lo ve el cliente; al conductor solo flag
+      if (rol === 'conductor' && data.pinEmbarque) {
+        const { pinEmbarque, ...resto } = data;
+        return {
+          ...resto,
+          requierePinEmbarque: true,
+        };
+      }
+      return data;
+    });
     res.json(servicios);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -1022,6 +1068,69 @@ router.put('/admin-completar/:servicioId', verifyToken, verifyAdmin, async (req,
     }
 
     res.json({ message: 'Servicio completado por administrador' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Alerta de seguridad a contactos de confianza (GPS perdido / desvío / manual)
+router.post('/:servicioId/alerta-seguridad', verifyToken, async (req, res) => {
+  try {
+    const ref = db.collection('servicios').doc(req.params.servicioId);
+    const doc = await ref.get();
+    if (!doc.exists) return res.status(404).json({ error: 'Servicio no encontrado' });
+    const data = doc.data();
+
+    if (data.clienteUid !== req.user.uid && data.conductorUid !== req.user.uid) {
+      const admin = await esAdminUid(req.user.uid);
+      if (!admin) return res.status(403).json({ error: 'No autorizado' });
+    }
+
+    const tipo = req.body?.tipo || 'manual';
+    const tiposOk = ['gps_perdido', 'desvio', 'manual', 'viaje_iniciado'];
+    if (!tiposOk.includes(tipo)) return res.status(400).json({ error: 'Tipo de alerta inválido' });
+
+    // Evitar spam: una alerta del mismo tipo cada 10 min
+    const prev = data.ultimaAlertaSeguridad || {};
+    if (prev.tipo === tipo && prev.en) {
+      const ago = Date.now() - new Date(prev.en).getTime();
+      if (ago < 10 * 60 * 1000) {
+        return res.json({ message: 'Alerta reciente ya enviada', omitida: true, contactosNotificados: 0 });
+      }
+    }
+
+    const base = process.env.PUBLIC_BASE_URL || 'https://untaxtame-production.up.railway.app';
+    let token = data.shareToken;
+    if (!token) {
+      token = uuidv4().replace(/-/g, '').slice(0, 16);
+      await ref.update({ shareToken: token, compartidoEn: new Date().toISOString() });
+    }
+    const link = `${base.replace(/\/$/, '')}/seguimiento/${token}`;
+
+    const textos = {
+      gps_perdido: '📡 Se perdió la señal GPS del conductor durante el viaje.',
+      desvio: '⚠️ El recorrido se desvió de la ruta esperada.',
+      viaje_iniciado: '🛣️ El viaje acaba de iniciar. Puedes seguirlo en vivo.',
+      manual: '🔔 Alerta de seguridad del viaje.',
+    };
+
+    const msg =
+      `🔐 *Viaje seguro UntaXtame*\n\n` +
+      `Pasajero: *${data.clienteNombre || 'Cliente'}*\n` +
+      `${textos[tipo]}\n\n` +
+      `🚕 ${data.conductorNombre || 'Conductor'} · Placa ${data.conductorPlaca || '—'}\n` +
+      `📍 ${data.origen || ''} → ${data.destino || ''}\n` +
+      `\n🔗 Seguir: ${link}`;
+
+    const { notificarContactosConfianza } = require('../services/contactosConfianza');
+    const contactosNotificados = await notificarContactosConfianza(data.clienteUid, msg);
+
+    await ref.update({
+      ultimaAlertaSeguridad: { tipo, en: new Date().toISOString(), contactosNotificados },
+      actualizadoEn: new Date().toISOString(),
+    });
+
+    res.json({ message: 'Contactos notificados', contactosNotificados, url: link });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

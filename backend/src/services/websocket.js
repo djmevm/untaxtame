@@ -341,10 +341,20 @@ function notificarCodigoRadio(codigo) {
   });
 }
 
+function sanitizarServicioParaUid(uid, servicio) {
+  if (!servicio || !uid) return servicio;
+  // El PIN de abordaje solo lo ve el cliente
+  if (servicio.pinEmbarque && uid === servicio.conductorUid) {
+    const { pinEmbarque, ...resto } = servicio;
+    return { ...resto, requierePinEmbarque: true };
+  }
+  return servicio;
+}
+
 function notificarServicioActualizado(uid, servicio) {
   enviarAUsuario(uid, {
     tipo: 'servicio_actualizado',
-    servicio,
+    servicio: sanitizarServicioParaUid(uid, servicio),
   });
 
   // Limpiar tracking al finalizar

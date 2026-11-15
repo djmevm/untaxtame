@@ -14,8 +14,9 @@ import OfertasRecibidas from '../../components/OfertasRecibidas';
 import ConductoresCercanos from '../../components/ConductoresCercanos';
 import MapaServicioActivo from '../../components/MapaServicioActivo';
 import CompartirViaje from '../../components/CompartirViaje';
+import BotonSOS from '../../components/BotonSOS';
 import useChatNotificacion from '../../hooks/useChatNotificacion';
-import useWebSocket from '../../hooks/useWebSocket';
+import useWebSocket, { useTrackingViaje } from '../../hooks/useWebSocket';
 
 const { width } = Dimensions.get('window');
 
@@ -68,8 +69,33 @@ export default function PedirTaxiScreen() {
     mascotas: false,
   });
   const [ultimoViaje, setUltimoViaje] = useState(null);
+  const alertaSeguridadRef = useRef(false);
 
   useClienteServicioListener(perfil?.uid);
+
+  const viajeEnSeguimiento = servicioActivo &&
+    ['aceptado', 'conductor_en_sitio', 'en_curso'].includes(servicioActivo.estado);
+  const { ubicacionPeer } = useTrackingViaje(
+    perfil?.uid,
+    'cliente',
+    servicioActivo?.id,
+    Boolean(viajeEnSeguimiento)
+  );
+
+  // Si se pierde el GPS del conductor en viaje, avisar contactos (una vez)
+  useEffect(() => {
+    if (!servicioActivo?.id || servicioActivo.estado !== 'en_curso') {
+      alertaSeguridadRef.current = false;
+      return;
+    }
+    const ts = ubicacionPeer?.timestamp || ubicacionPeer?.actualizadoEn;
+    if (!ts) return;
+    const edad = Date.now() - new Date(ts).getTime();
+    if (Number.isNaN(edad) || edad < 45000) return;
+    if (alertaSeguridadRef.current) return;
+    alertaSeguridadRef.current = true;
+    api.post(`/services/${servicioActivo.id}/alerta-seguridad`, { tipo: 'gps_perdido' }).catch(() => {});
+  }, [ubicacionPeer, servicioActivo?.id, servicioActivo?.estado]);
 
   // GPS del cliente — solo se activa al solicitar servicio (no periódico)
   useEffect(() => {
@@ -748,12 +774,21 @@ export default function PedirTaxiScreen() {
         </View>
       )}
 
+      {/* PIN de abordaje (madrugada / programados) */}
+      {servicioActivo.pinEmbarque && ['aceptado', 'conductor_en_sitio', 'programado_asignado'].includes(servicioActivo.estado) && (
+        <View style={styles.pinBox}>
+          <Text style={styles.pinTitulo}>🔐 PIN de abordaje</Text>
+          <Text style={styles.pinCodigo}>{servicioActivo.pinEmbarque}</Text>
+          <Text style={styles.pinHint}>Dáselo solo al conductor al subir. Él no lo conoce.</Text>
+        </View>
+      )}
+
       {/* Compartir viaje con familiar */}
       {servicioActivo.conductorNombre && (
         <CompartirViaje servicioActivo={servicioActivo} />
       )}
 
-      {/* Chat y SOS — solo cuando hay conductor */}
+      {/* Chat — solo cuando hay conductor */}
       {servicioActivo.conductorNombre && ['aceptado', 'conductor_en_sitio', 'en_curso'].includes(servicioActivo.estado) && (
         <View style={styles.chatSOSRow}>
           <TouchableOpacity style={styles.btnChat} onPress={() => setMostrarChat(true)}>
@@ -812,6 +847,10 @@ export default function PedirTaxiScreen() {
       visible={mostrarChat}
       onCerrar={() => setMostrarChat(false)}
     />
+    {servicioActivo?.conductorNombre &&
+      ['aceptado', 'conductor_en_sitio', 'en_curso'].includes(servicioActivo.estado) && (
+        <BotonSOS servicioId={servicioActivo.id} variant="cliente" />
+      )}
     </>
   );
 }
@@ -1027,6 +1066,15 @@ const styles = StyleSheet.create({
   calificacionComentario: { fontSize: 13, color: '#888', fontStyle: 'italic', marginTop: 4 },
   acciones: { marginBottom: 24 },
   chatSOSRow: { flexDirection: 'row', gap: 10, marginBottom: 12 },
+  pinBox: {
+    backgroundColor: '#1A237E', borderRadius: 14, padding: 16, marginBottom: 12,
+    alignItems: 'center',
+  },
+  pinTitulo: { color: '#C5CAE9', fontSize: 13, fontWeight: '600', marginBottom: 4 },
+  pinCodigo: {
+    color: '#FFC107', fontSize: 36, fontWeight: 'bold', letterSpacing: 8, marginVertical: 4,
+  },
+  pinHint: { color: '#9FA8DA', fontSize: 12, textAlign: 'center' },
   btnChat: {
     flex: 1, backgroundColor: '#1565C0', borderRadius: 10,
     padding: 14, alignItems: 'center', elevation: 2,

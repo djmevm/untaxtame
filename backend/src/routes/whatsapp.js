@@ -855,12 +855,16 @@ async function confirmarReservaProgramada(telefono, datos) {
 // Un conductor aceptó: enviar código de reserva + datos del vehículo
 async function notificarAsignacionCliente(telefono, viaje) {
   if (!telefono) return;
+  const pinLine = viaje.pinEmbarque
+    ? `\n🔐 *PIN de abordaje: ${viaje.pinEmbarque}*\n_Dáselo solo al conductor al subir. Él no lo conoce._\n`
+    : '';
   const msg = '✅ *¡Viaje programado confirmado!* 🚖\n\n' +
     `🎫 Código de reserva: *${viaje.codigoReserva || ''}*\n` +
     `🚕 Taxista asignado: *${viaje.conductorNombre || 'Asignado'}*\n` +
     `🚖 Vehículo: ${viaje.conductorVehiculo || 'Por confirmar'} — Placa *${viaje.conductorPlaca || 'N/D'}*\n` +
-    `📞 Contacto: ${viaje.conductorCelular || 'N/D'}\n\n` +
-    `⏰ Te recogeremos el ${viaje.horaProgramadaTexto || ''}\n` +
+    `📞 Contacto: ${viaje.conductorCelular || 'N/D'}\n` +
+    pinLine +
+    `\n⏰ Te recogeremos el ${viaje.horaProgramadaTexto || ''}\n` +
     `📍 Punto de encuentro: ${viaje.puntoEncuentro || viaje.origen || ''}\n\n` +
     'Te enviaremos recordatorios:\n' +
     '🔔 30 minutos antes\n' +
@@ -885,11 +889,15 @@ async function notificarRecordatorioCliente(telefono, viaje, minutos) {
 // El conductor marcó llegada
 async function notificarLlegadaCliente(telefono, viaje) {
   if (!telefono) return;
+  const pinHint = viaje.pinEmbarque
+    ? `\n🔐 Dicta tu PIN *${viaje.pinEmbarque}* al conductor para abordar.\n`
+    : '';
   const msg = '📍 *¡Tu taxi ha llegado!* 🚖\n\n' +
     `Tu conductor *${viaje.conductorNombre || ''}* está en el punto de encuentro.\n` +
     `🚖 Placa: *${viaje.conductorPlaca || 'N/D'}*\n` +
-    `📍 ${viaje.puntoEncuentro || viaje.origen || ''}\n\n` +
-    '¡Buen viaje con UntaXtame! 💛🖤';
+    `📍 ${viaje.puntoEncuentro || viaje.origen || ''}\n` +
+    pinHint +
+    '\n¡Buen viaje con UntaXtame! 💛🖤';
   await enviarMensaje(telefono, msg);
 }
 

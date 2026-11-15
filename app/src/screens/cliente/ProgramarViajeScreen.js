@@ -13,8 +13,11 @@ const TARIFA_PROGRAMADA = 10000;
 const ESTADO_INFO = {
   programado_buscando: { label: '🔍 Buscando conductor', color: '#F57F17' },
   programado_asignado: { label: '✅ Conductor asignado', color: '#2E7D32' },
+  conductor_en_sitio: { label: '📍 Conductor en el punto', color: '#FF9800' },
+  en_curso: { label: '🛣️ Viaje en curso', color: '#1565C0' },
   cancelado: { label: '❌ Cancelado', color: '#B71C1C' },
   completado_auto: { label: '🏁 Completado', color: '#1565C0' },
+  completado: { label: '🏁 Completado', color: '#1565C0' },
 };
 
 export default function ProgramarViajeScreen() {
@@ -195,7 +198,7 @@ export default function ProgramarViajeScreen() {
                   <Text style={[styles.viajeEstado, { color: ei.color }]}>{ei.label}</Text>
                 </View>
                 <Text style={styles.viajeRuta}>📍 {v.origen} → 🎯 {v.destino}</Text>
-                {v.estado === 'programado_asignado' && v.conductorNombre && (
+                {['programado_asignado', 'conductor_en_sitio', 'en_curso'].includes(v.estado) && v.conductorNombre && (
                   <View style={styles.conductorBox}>
                     <Text style={styles.conductorTexto}>🚕 {v.conductorNombre} · Placa {v.conductorPlaca || 'N/D'}</Text>
                     {v.conductorCelular && (
@@ -203,6 +206,17 @@ export default function ProgramarViajeScreen() {
                         <Text style={styles.conductorTel}>📞 {v.conductorCelular}</Text>
                       </TouchableOpacity>
                     )}
+                  </View>
+                )}
+                {v.pinEmbarque && ['programado_asignado', 'conductor_en_sitio'].includes(v.estado) && (
+                  <View style={styles.pinBox}>
+                    <Text style={styles.pinLabel}>🔐 PIN de abordaje</Text>
+                    <Text style={styles.pinCodigo}>{v.pinEmbarque}</Text>
+                    <Text style={styles.pinHint}>
+                      {v.estado === 'conductor_en_sitio'
+                        ? 'Dictáselo ahora al conductor para subir'
+                        : 'Guárdalo. Solo tú lo ves; el conductor te lo pedirá al abordar'}
+                    </Text>
                   </View>
                 )}
                 {['programado_buscando', 'programado_asignado'].includes(v.estado) && (
@@ -250,4 +264,10 @@ const styles = StyleSheet.create({
     paddingVertical: 8, alignItems: 'center',
   },
   btnCancelarProgTexto: { color: '#E53935', fontWeight: 'bold', fontSize: 13 },
+  pinBox: {
+    marginTop: 10, backgroundColor: '#1A237E', borderRadius: 10, padding: 12, alignItems: 'center',
+  },
+  pinLabel: { color: '#C5CAE9', fontSize: 12, fontWeight: '600' },
+  pinCodigo: { color: '#FFC107', fontSize: 28, fontWeight: 'bold', letterSpacing: 6, marginVertical: 4 },
+  pinHint: { color: '#9FA8DA', fontSize: 11, textAlign: 'center' },
 });

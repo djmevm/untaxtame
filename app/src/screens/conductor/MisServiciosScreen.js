@@ -198,6 +198,8 @@ export default function MisServiciosScreen() {
 
   const [motivoCancelacion, setMotivoCancelacion] = useState('');
   const [modalCancelar, setModalCancelar] = useState(null);
+  const [modalPin, setModalPin] = useState(false);
+  const [pinInput, setPinInput] = useState('');
 
   const cancelar = (servicio) => {
     setMotivoCancelacion('');
@@ -285,24 +287,38 @@ export default function MisServiciosScreen() {
     }
   };
 
+  const enviarInicioViaje = async (pin = null) => {
+    try {
+      const body = { conductorUid: perfil.uid };
+      if (pin) body.pinEmbarque = pin;
+      await api.put(`/services/iniciar/${servicioActivo.id}`, body);
+      reproducirSonido();
+      setModalPin(false);
+      setPinInput('');
+      Alert.alert('🚗 Viaje iniciado', '¡Buen viaje! Completa el servicio al llegar al destino.');
+      cargar();
+    } catch (err) {
+      if (err.response?.data?.requierePin) {
+        setModalPin(true);
+        Alert.alert('PIN requerido', err.response?.data?.error || 'Pide el PIN de 4 dígitos al pasajero');
+      } else {
+        Alert.alert('Error', err.response?.data?.error || 'No se pudo iniciar el viaje');
+      }
+    }
+  };
+
   const iniciarViaje = async () => {
+    if (servicioActivo.requierePinEmbarque || servicioActivo.pinEmbarque || servicioActivo.esProgramado) {
+      setPinInput('');
+      setModalPin(true);
+      return;
+    }
     Alert.alert(
       '🚗 ¿Iniciar viaje?',
       `¿El pasajero ${servicioActivo.clienteNombre} ya subió al taxi?`,
       [
         { text: 'No', style: 'cancel' },
-        {
-          text: 'Sí, iniciamos', onPress: async () => {
-            try {
-              await api.put(`/services/iniciar/${servicioActivo.id}`, { conductorUid: perfil.uid });
-              reproducirSonido();
-              Alert.alert('🚗 Viaje iniciado', '¡Buen viaje! Completa el servicio al llegar al destino.');
-              cargar();
-            } catch (err) {
-              Alert.alert('Error', err.response?.data?.error || 'No se pudo iniciar el viaje');
-            }
-          }
-        },
+        { text: 'Sí, iniciamos', onPress: () => enviarInicioViaje() },
       ]
     );
   };
@@ -357,7 +373,11 @@ export default function MisServiciosScreen() {
           )}
           {servicioActivo.estado === 'conductor_en_sitio' && (
             <View style={styles.hintBanner}>
-              <Text style={styles.hintTexto}>👤 Esperando al pasajero. Cuando suba, pulsa Iniciar viaje.</Text>
+              <Text style={styles.hintTexto}>
+                {(servicioActivo.requierePinEmbarque || servicioActivo.esProgramado)
+                  ? '🔐 Pide el PIN de 4 dígitos al pasajero y pulsa Iniciar viaje.'
+                  : '👤 Esperando al pasajero. Cuando suba, pulsa Iniciar viaje.'}
+              </Text>
             </View>
           )}
           {servicioActivo.estado === 'en_curso' && (
@@ -468,6 +488,41 @@ export default function MisServiciosScreen() {
 
       {/* Reconocimiento de voz H1/H2 y códigos 20-X */}
       <ReconocimientoVozSOS servicioId={servicioActivo?.id} usuarioUid={perfil?.uid} />
+
+      {/* Modal PIN de abordaje */}
+      <Modal visible={modalPin} transparent animationType="fade">
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitulo}>🔐 PIN de abordaje</Text>
+            <Text style={styles.modalSub}>
+              Pide al pasajero los 4 dígitos. Sin el PIN correcto no inicia el viaje.
+            </Text>
+            <TextInput
+              style={[styles.modalInput, { fontSize: 28, letterSpacing: 10, textAlign: 'center', fontWeight: 'bold' }]}
+              value={pinInput}
+              onChangeText={setPinInput}
+              keyboardType="number-pad"
+              maxLength={4}
+              placeholder="••••"
+              autoFocus
+            />
+            <TouchableOpacity
+              style={[styles.btnIniciar, { marginTop: 12 }]}
+              onPress={() => {
+                if (!/^\d{4}$/.test(pinInput.trim())) {
+                  return Alert.alert('PIN inválido', 'Ingresa 4 dígitos');
+                }
+                enviarInicioViaje(pinInput.trim());
+              }}
+            >
+              <Text style={styles.btnIniciarTexto}>Confirmar e iniciar</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.btnVolverModal} onPress={() => setModalPin(false)}>
+              <Text style={styles.btnVolverTexto}>Cancelar</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
 
       {/* Modal de cancelación con motivo */}
       <Modal visible={!!modalCancelar} transparent animationType="slide">
