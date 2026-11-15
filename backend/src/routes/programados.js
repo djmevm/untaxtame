@@ -473,6 +473,167 @@ router.put('/llegada/:viajeId', verifyToken, async (req, res) => {
 });
 
 // ═══════════════════════════════════════════════════════════════════
+// PUT /admin-cancelar/:viajeId — Cancelar desde panel admin (sin límite 30 min)
+// ═══════════════════════════════════════════════════════════════════
+router.put('/admin-cancelar/:viajeId', verifyToken, verifyAdmin, async (req, res) => {
+  const viajeRef = db.collection('servicios').doc(req.params.viajeId);
+  const motivo = (req.body && req.body.motivo) || 'Cancelado por la central';
+
+  try {
+    const snap = await viajeRef.get();
+    if (!snap.exists) return res.status(404).json({ error: 'Viaje no encontrado' });
+
+    const viaje = snap.data();
+    if (!viaje.esProgramado) {
+      return res.status(400).json({ error: 'Este servicio no es un viaje programado' });
+    }
+    if (['cancelado', 'completado', 'completado_auto'].includes(viaje.estado)) {
+      return res.status(400).json({ error: 'El viaje ya está finalizado' });
+    }
+
+    await viajeRef.update({
+      estado: 'cancelado',
+      canceladoPor: 'admin',
+      motivoCancelacion: motivo,
+      canceladoPorUid: req.user.uid,
+      actualizadoEn: new Date().toISOString(),
+    });
+
+    if (viaje.conductorUid) {
+      try {
+        enviarPushAUsuario(viaje.conductorUid, {
+          titulo: 'Viaje programado cancelado',
+          cuerpo: `La central canceló ${viaje.codigoReserva || 'el viaje'} (${viaje.origen} → ${viaje.destino}).`,
+          datos: { tipo: 'programado_cancelado', viajeId: viaje.id },
+        });
+      } catch (e) {}
+    }
+
+    if (viaje.clienteUid) {
+      try {
+        enviarPushAUsuario(viaje.clienteUid, {
+          titulo: 'Viaje programado cancelado',
+          cuerpo: `Tu reserva ${viaje.codigoReserva || ''} fue cancelada por la central.`,
+          datos: { tipo: 'programado_cancelado', viajeId: viaje.id },
+        });
+      } catch (e) {}
+    }
+
+    res.json({ message: 'Viaje cancelado por admin', viajeId: viaje.id });
+  } catch (err) {
+    console.error('[programados] Error admin-cancelar:', err.message);
+    res.status(500).json({ error: 'Error interno del servidor' });
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════════
+// PUT /reasignar/:viajeId — Liberar o asignar conductor (admin)
+// Body: { conductorUid?: string|null, motivo? }
+// Sin conductorUid → vuelve a "programado_buscando" y notifica flota
+// Con conductorUid → asigna ese conductor (programado_asignado)
+// ═══════════════════════════════════════════════════════════════════
+router.put('/reasignar/:viajeId', verifyToken, verifyAdmin, async (req, res) => {
+  const viajeRef = db.collection('servicios').doc(req.params.viajeId);
+  const { conductorUid, motivo } = req.body || {};
+
+  try {
+    const snap = await viajeRef.get();
+    if (!snap.exists) return res.status(404).json({ error: 'Viaje no encontrado' });
+
+    const viaje = snap.data();
+    if (!viaje.esProgramado) {
+      return res.status(400).json({ error: 'Este servicio no es un viaje programado' });
+    }
+    if (['cancelado', 'completado', 'completado_auto'].includes(viaje.estado)) {
+      return res.status(400).json({ error: 'No se puede reasignar un viaje finalizado' });
+    }
+
+    const conductorAnterior = viaje.conductorUid || null;
+
+    // Liberar: volver a buscar
+    if (!conductorUid) {
+      await viajeRef.update({
+        estado: 'programado_buscando',
+        conductorUid: null,
+        conductorNombre: null,
+        conductorPlaca: null,
+        conductorCelular: null,
+        reasignadoEn: new Date().toISOString(),
+        reasignadoPor: req.user.uid,
+        motivoReasignacion: motivo || 'Liberado por central',
+        actualizadoEn: new Date().toISOString(),
+      });
+
+      if (conductorAnterior) {
+        try {
+          enviarPushAUsuario(conductorAnterior, {
+            titulo: 'Viaje reasignado',
+            cuerpo: `La central liberó el viaje ${viaje.codigoReserva || ''}. Ya no está a tu cargo.`,
+            datos: { tipo: 'programado_reasignado', viajeId: viaje.id },
+          });
+        } catch (e) {}
+      }
+
+      try {
+        enviarPushAConductores({
+          titulo: '⏰ Viaje programado disponible',
+          cuerpo: `${viaje.origen} → ${viaje.destino} · ${viaje.horaProgramadaTexto || ''}`,
+          datos: { tipo: 'programado_disponible', viajeId: viaje.id },
+        });
+      } catch (e) {}
+
+      return res.json({ message: 'Viaje liberado — buscando conductor', viajeId: viaje.id });
+    }
+
+    // Asignar conductor específico
+    const condDoc = await db.collection('usuarios').doc(conductorUid).get();
+    if (!condDoc.exists || condDoc.data().rol !== 'conductor') {
+      return res.status(404).json({ error: 'Conductor no encontrado' });
+    }
+    const cond = condDoc.data();
+
+    await viajeRef.update({
+      estado: 'programado_asignado',
+      conductorUid,
+      conductorNombre: cond.nombre || 'Conductor',
+      conductorPlaca: cond.placa || null,
+      conductorCelular: cond.telefono || null,
+      reasignadoEn: new Date().toISOString(),
+      reasignadoPor: req.user.uid,
+      motivoReasignacion: motivo || 'Asignado manualmente por central',
+      actualizadoEn: new Date().toISOString(),
+    });
+
+    if (conductorAnterior && conductorAnterior !== conductorUid) {
+      try {
+        enviarPushAUsuario(conductorAnterior, {
+          titulo: 'Viaje reasignado',
+          cuerpo: `La central reasignó el viaje ${viaje.codigoReserva || ''} a otro conductor.`,
+          datos: { tipo: 'programado_reasignado', viajeId: viaje.id },
+        });
+      } catch (e) {}
+    }
+
+    try {
+      enviarPushAUsuario(conductorUid, {
+        titulo: '⏰ Viaje programado asignado',
+        cuerpo: `${viaje.origen} → ${viaje.destino} · ${viaje.horaProgramadaTexto || ''}`,
+        datos: { tipo: 'programado_asignado', viajeId: viaje.id },
+      });
+    } catch (e) {}
+
+    res.json({
+      message: 'Conductor asignado',
+      viajeId: viaje.id,
+      conductor: { uid: conductorUid, nombre: cond.nombre, placa: cond.placa },
+    });
+  } catch (err) {
+    console.error('[programados] Error reasignar:', err.message);
+    res.status(500).json({ error: 'Error interno del servidor' });
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════════
 // DELETE /:viajeId — Eliminar definitivamente un viaje programado (admin)
 // ═══════════════════════════════════════════════════════════════════
 router.delete('/:viajeId', verifyToken, verifyAdmin, async (req, res) => {

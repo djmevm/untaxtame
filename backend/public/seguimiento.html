@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Seguimiento UntaXtame</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: system-ui, sans-serif; background: #111; color: #fff; }
+    .header { background: #FFC107; color: #111; padding: 14px 16px; font-weight: 800; }
+    .card { padding: 16px; }
+    .estado { display: inline-block; padding: 6px 12px; border-radius: 999px; background: #1565C0; font-weight: 700; font-size: 13px; }
+    .dato { margin: 8px 0; color: #ddd; font-size: 14px; }
+    #mapa { height: 55vh; width: 100%; background: #222; }
+    .aviso { color: #FFC107; font-size: 13px; margin-top: 12px; }
+    .err { padding: 40px 16px; text-align: center; color: #ef9a9a; }
+  </style>
+</head>
+<body>
+  <div class="header">🚕 UntaXtame — Seguimiento del viaje</div>
+  <div id="app" class="card">Cargando...</div>
+  <div id="mapa"></div>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script>
+    const token = location.pathname.split('/').pop();
+    const API = '/api/services/seguimiento/' + token;
+    let map, markerTaxi, markerOrigen;
+
+    const ESTADOS = {
+      aceptado: 'Conductor en camino',
+      conductor_en_sitio: 'Conductor en el punto',
+      en_curso: 'Viaje en curso',
+    };
+
+    function render(data) {
+      const app = document.getElementById('app');
+      if (!data.activo) {
+        app.innerHTML = '<div class="err"><h2>' + (data.mensaje || 'Viaje no activo') + '</h2></div>';
+        return;
+      }
+      app.innerHTML =
+        '<span class="estado">' + (ESTADOS[data.estado] || data.estado) + '</span>' +
+        '<div class="dato">🧑‍✈️ ' + (data.conductorNombre || '—') + ' · ' + (data.conductorPlaca || '') + '</div>' +
+        '<div class="dato">📍 ' + (data.origen || '—') + '</div>' +
+        '<div class="dato">🏁 ' + (data.destino || '—') + '</div>' +
+        '<p class="aviso">Se actualiza cada 10 segundos. Solo comparte este enlace con personas de confianza.</p>';
+
+      const lat = data.ubicacionConductor?.lat || data.ubicacionRecogida?.lat;
+      const lng = data.ubicacionConductor?.lng || data.ubicacionRecogida?.lng;
+      if (lat && lng) {
+        if (!map) {
+          map = L.map('mapa').setView([lat, lng], 15);
+          L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '© OpenStreetMap',
+          }).addTo(map);
+        }
+        if (data.ubicacionConductor?.lat) {
+          const pos = [data.ubicacionConductor.lat, data.ubicacionConductor.lng];
+          if (!markerTaxi) markerTaxi = L.marker(pos).addTo(map).bindPopup('Taxi');
+          else markerTaxi.setLatLng(pos);
+          map.panTo(pos);
+        }
+        if (data.ubicacionRecogida?.lat && !markerOrigen) {
+          markerOrigen = L.marker([data.ubicacionRecogida.lat, data.ubicacionRecogida.lng])
+            .addTo(map).bindPopup('Recogida');
+        }
+      }
+    }
+
+    async function cargar() {
+      try {
+        const res = await fetch(API);
+        const data = await res.json();
+        if (!res.ok) {
+          document.getElementById('app').innerHTML = '<div class="err"><h2>' + (data.error || 'Enlace inválido') + '</h2></div>';
+          return;
+        }
+        render(data);
+      } catch (e) {
+        document.getElementById('app').innerHTML = '<div class="err"><h2>Sin conexión</h2></div>';
+      }
+    }
+
+    cargar();
+    setInterval(cargar, 10000);
+  </script>
+</body>
+</html>

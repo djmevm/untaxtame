@@ -10,8 +10,10 @@ import ChatServicio from '../../components/ChatServicio';
 import BotonSOS from '../../components/BotonSOS';
 import AlertasConductores from '../../components/AlertasConductores';
 import ReconocimientoVozSOS from '../../components/ReconocimientoVozSOS';
+import MapaViajeConductor from '../../components/MapaViajeConductor';
 import { reproducirSonido } from '../../services/sonido';
 import useChatNotificacion from '../../hooks/useChatNotificacion';
+import useWebSocket from '../../hooks/useWebSocket';
 
 export default function MisServiciosScreen() {
   const { perfil } = useAuth();
@@ -49,9 +51,16 @@ export default function MisServiciosScreen() {
     finally { setCargando(false); setRefreshing(false); }
   };
 
+  const { onMensaje, conectado: wsConectado } = useWebSocket(perfil?.uid, 'conductor');
+
+  useEffect(() => {
+    if (!wsConectado) return;
+    return onMensaje('servicio_actualizado', () => { cargar(); });
+  }, [wsConectado, onMensaje]);
+
   useEffect(() => {
     cargar();
-    const intervalo = setInterval(cargar, 60000);
+    const intervalo = setInterval(cargar, 30000);
 
     // Verificar notificaciones de calificación
     const verificarNotificaciones = async () => {
@@ -62,7 +71,6 @@ export default function MisServiciosScreen() {
         for (const notif of calificaciones) {
           reproducirSonido();
           Alert.alert(notif.titulo, notif.mensaje);
-          // Marcar como leída
           try { await api.put(`/users/notificaciones/${notif.id}/leer`); } catch {}
         }
       } catch {}
@@ -72,7 +80,6 @@ export default function MisServiciosScreen() {
     const intervaloNotif = setInterval(verificarNotificaciones, 60000);
 
     return () => { clearInterval(intervalo); clearInterval(intervaloNotif); };
-    return () => clearInterval(intervalo);
   }, []);
 
   const completar = async (servicio) => {
@@ -230,19 +237,18 @@ export default function MisServiciosScreen() {
     );
   };
 
-  return (
-    <View style={styles.container}>
+  const headerActivo = (
+    <>
       <Text style={styles.titulo}>Mis Servicios</Text>
-
       <AlertasConductores />
-
-      {/* Servicio activo / en proceso */}
       {servicioActivo ? (
         <View style={styles.activoCard}>
           <View style={styles.activoHeader}>
             <Text style={styles.activoTitulo}>🚕 Servicio en proceso</Text>
             <View style={styles.enProcesoBadge}>
-              <Text style={styles.enProcesoTexto}>EN PROCESO</Text>
+              <Text style={styles.enProcesoTexto}>
+                {servicioActivo.estado === 'en_curso' ? 'EN VIAJE' : servicioActivo.estado === 'conductor_en_sitio' ? 'EN SITIO' : 'EN CAMINO'}
+              </Text>
             </View>
           </View>
 
@@ -268,7 +274,8 @@ export default function MisServiciosScreen() {
             )}
           </View>
 
-          {/* Botón de navegación GPS al cliente */}
+          <MapaViajeConductor servicioActivo={servicioActivo} />
+
           {servicioActivo.ubicacionGPS ? (
             <TouchableOpacity style={[styles.btnMapa, { backgroundColor: '#1565C0' }]}
               onPress={() => Linking.openURL(`google.navigation:q=${servicioActivo.ubicacionGPS.lat},${servicioActivo.ubicacionGPS.lng}`)}>
@@ -281,7 +288,6 @@ export default function MisServiciosScreen() {
             </TouchableOpacity>
           )}
 
-          {/* Acciones */}
           <View style={styles.activoAcciones}>
             <TouchableOpacity style={styles.btnChat} onPress={() => setChatServicioId(servicioActivo.id)}>
               <Text style={styles.btnChatTexto}>💬 Chat</Text>
@@ -314,12 +320,16 @@ export default function MisServiciosScreen() {
           <Text style={styles.sinServicioSub}>Ve a "Disponibles" para aceptar un servicio</Text>
         </View>
       )}
-
-      {/* Historial */}
       <Text style={styles.subtitulo}>Historial ({historial.length})</Text>
+    </>
+  );
+
+  return (
+    <View style={styles.container}>
       <FlatList
         data={historial}
         keyExtractor={item => item.id}
+        ListHeaderComponent={headerActivo}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); cargar(); }} />}
         ListEmptyComponent={<Text style={styles.vacio}>Sin servicios anteriores</Text>}
         renderItem={({ item }) => (

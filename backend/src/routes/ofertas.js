@@ -3,13 +3,28 @@ const router = express.Router();
 const { db } = require('../firebase');
 const verifyToken = require('../middleware/verifyToken');
 
+async function esAdminUid(uid) {
+  const userDoc = await db.collection('usuarios').doc(uid).get();
+  return userDoc.exists && userDoc.data().rol === 'admin';
+}
+
+async function notificarCambioServicio(servicio) {
+  if (!servicio) return;
+  try {
+    const { notificarServicioActualizado } = require('../services/websocket');
+    if (servicio.clienteUid) notificarServicioActualizado(servicio.clienteUid, servicio);
+    if (servicio.conductorUid) notificarServicioActualizado(servicio.conductorUid, servicio);
+  } catch (e) {}
+}
+
 // Conductor hace una oferta para un servicio
 router.post('/:servicioId', verifyToken, async (req, res) => {
   const { servicioId } = req.params;
-  const { conductorUid, conductorNombre, monto, mensaje } = req.body;
+  const conductorUid = req.user.uid;
+  let { conductorNombre, monto, mensaje } = req.body;
 
-  if (!conductorUid || !conductorNombre || !monto) {
-    return res.status(400).json({ error: 'Se requiere conductorUid, conductorNombre y monto' });
+  if (!monto) {
+    return res.status(400).json({ error: 'Se requiere monto' });
   }
 
   if (monto < 8000) {
@@ -20,7 +35,7 @@ router.post('/:servicioId', verifyToken, async (req, res) => {
     // Verificar que el conductor no tenga un servicio activo
     const activoSnap = await db.collection('servicios')
       .where('conductorUid', '==', conductorUid)
-      .where('estado', 'in', ['aceptado', 'en_curso'])
+      .where('estado', 'in', ['aceptado', 'conductor_en_sitio', 'en_curso'])
       .limit(1)
       .get();
 
@@ -91,6 +106,7 @@ router.post('/:servicioId', verifyToken, async (req, res) => {
     // Obtener datos del conductor
     const conductorDoc = await db.collection('usuarios').doc(conductorUid).get();
     const conductorData = conductorDoc.exists ? conductorDoc.data() : {};
+    if (!conductorNombre) conductorNombre = conductorData.nombre || 'Conductor';
 
     const oferta = {
       conductorUid,
@@ -172,6 +188,27 @@ router.get('/:servicioId', verifyToken, async (req, res) => {
   const { servicioId } = req.params;
 
   try {
+    const servicioDoc = await db.collection('servicios').doc(servicioId).get();
+    if (!servicioDoc.exists) {
+      return res.status(404).json({ error: 'Servicio no encontrado' });
+    }
+    const servicio = servicioDoc.data();
+    const esAdmin = await esAdminUid(req.user.uid);
+    const esCliente = servicio.clienteUid === req.user.uid;
+    const esConductorAsignado = servicio.conductorUid === req.user.uid;
+    let esConductorOfertante = false;
+    if (!esAdmin && !esCliente && !esConductorAsignado) {
+      const ofertaSnap = await db.collection('servicios').doc(servicioId)
+        .collection('ofertas')
+        .where('conductorUid', '==', req.user.uid)
+        .limit(1)
+        .get();
+      esConductorOfertante = !ofertaSnap.empty;
+    }
+    if (!esAdmin && !esCliente && !esConductorAsignado && !esConductorOfertante) {
+      return res.status(403).json({ error: 'Acceso denegado' });
+    }
+
     const snapshot = await db.collection('servicios').doc(servicioId)
       .collection('ofertas')
       .orderBy('monto', 'asc')
@@ -210,7 +247,11 @@ router.put('/:servicioId/aceptar/:ofertaId', verifyToken, async (req, res) => {
     if (!servicioDoc.exists) {
       return res.status(404).json({ error: 'Servicio no encontrado' });
     }
-    if (servicioDoc.data().estado !== 'pendiente') {
+    const servicioData = servicioDoc.data();
+    if (servicioData.clienteUid !== req.user.uid) {
+      return res.status(403).json({ error: 'Solo el cliente puede aceptar ofertas' });
+    }
+    if (servicioData.estado !== 'pendiente') {
       return res.status(400).json({ error: 'El servicio ya no está disponible' });
     }
 
@@ -260,12 +301,14 @@ router.put('/:servicioId/aceptar/:ofertaId', verifyToken, async (req, res) => {
     } catch (e) {}
 
     // Si el servicio fue solicitado por WhatsApp, notificar al cliente por WhatsApp
-    const servicioData = servicioDoc.data();
-    if (servicioData.fuenteSolicitud === 'whatsapp' && servicioData.clienteCelular) {
+    const servicioDataPost = servicioDoc.data();
+    await notificarCambioServicio((await servicioRef.get()).data());
+
+    if (servicioDataPost.fuenteSolicitud === 'whatsapp' && servicioDataPost.clienteCelular) {
       try {
         const { notificarClienteWhatsApp } = require('./whatsapp');
         await notificarClienteWhatsApp(
-          servicioData.clienteCelular,
+          servicioDataPost.clienteCelular,
           oferta.conductorNombre,
           oferta.conductorPlaca,
           oferta.conductorCelular

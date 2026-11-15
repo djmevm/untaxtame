@@ -1,11 +1,12 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { Text, ActivityIndicator, View } from 'react-native';
+import { ActivityIndicator, View, Text, StyleSheet } from 'react-native';
 import { useAuth } from '../context/AuthContext';
 import CustomTabBar from '../components/CustomTabBar';
 import { useEnviarUbicacion } from '../hooks/useWebSocket';
+import api from '../config/api';
 
 // Bienvenida
 import BienvenidaScreen from '../screens/auth/BienvenidaScreen';
@@ -29,6 +30,7 @@ import ServiciosPendientesScreen from '../screens/conductor/ServiciosPendientesS
 import MisServiciosScreen from '../screens/conductor/MisServiciosScreen';
 import ViajesProgramadosScreen from '../screens/conductor/ViajesProgramadosScreen';
 import PerfilConductorScreen from '../screens/conductor/PerfilConductorScreen';
+import MiTaxiScreen from '../screens/conductor/MiTaxiScreen';
 
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -51,24 +53,66 @@ function ClienteTabs() {
 
 function ConductorTabs() {
   const { perfil } = useAuth();
-  // Transmitir la ubicación del conductor por WebSocket (rastreo en tiempo
-  // real del panel admin). Activo mientras el conductor esté disponible o
-  // en servicio. Corre a nivel de las tabs, sin importar la pestaña abierta.
-  const activo = !!(perfil && (perfil.disponible || perfil.enServicio));
-  useEnviarUbicacion(perfil?.uid, perfil?.nombre, perfil?.placa, activo);
+  const [servicioActivoId, setServicioActivoId] = useState(null);
+
+  // Detectar servicio activo para tracking por viaje
+  useEffect(() => {
+    if (!perfil?.uid) return;
+    let cancelled = false;
+
+    const cargar = async () => {
+      try {
+        const res = await api.get(`/services/activo/${perfil.uid}`);
+        if (!cancelled) {
+          setServicioActivoId(res.data?.tieneActivo ? res.data.servicio?.id : null);
+        }
+      } catch {
+        if (!cancelled) setServicioActivoId(null);
+      }
+    };
+
+    cargar();
+    const intervalo = setInterval(cargar, 20000);
+    return () => {
+      cancelled = true;
+      clearInterval(intervalo);
+    };
+  }, [perfil?.uid]);
+
+  // Transmitir GPS: panel admin + cliente del viaje activo
+  const activo = !!(perfil && (perfil.disponible || perfil.enServicio || servicioActivoId));
+  const { gpsPerdido } = useEnviarUbicacion(perfil?.uid, perfil?.nombre, perfil?.placa, activo, servicioActivoId);
 
   return (
-    <Tab.Navigator
-      tabBar={(props) => <CustomTabBar {...props} />}
-      screenOptions={{ headerShown: false }}
-    >
-      <Tab.Screen name="Pendientes" component={ServiciosPendientesScreen} />
-      <Tab.Screen name="MisServicios" component={MisServiciosScreen} />
-      <Tab.Screen name="Programados" component={ViajesProgramadosScreen} />
-      <Tab.Screen name="PerfilConductor" component={PerfilConductorScreen} />
-    </Tab.Navigator>
+    <View style={{ flex: 1 }}>
+      {gpsPerdido && servicioActivoId ? (
+        <View style={gpsBannerStyles.banner}>
+          <Text style={gpsBannerStyles.texto}>📡 Sin señal GPS — activa ubicación para el rastreo en vivo</Text>
+        </View>
+      ) : null}
+      <Tab.Navigator
+        tabBar={(props) => <CustomTabBar {...props} />}
+        screenOptions={{ headerShown: false }}
+      >
+        <Tab.Screen name="Pendientes" component={ServiciosPendientesScreen} />
+        <Tab.Screen name="MisServicios" component={MisServiciosScreen} />
+        <Tab.Screen name="Programados" component={ViajesProgramadosScreen} />
+        <Tab.Screen name="MiTaxi" component={MiTaxiScreen} />
+        <Tab.Screen name="PerfilConductor" component={PerfilConductorScreen} />
+      </Tab.Navigator>
+    </View>
   );
 }
+
+const gpsBannerStyles = StyleSheet.create({
+  banner: {
+    backgroundColor: '#B71C1C',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    paddingTop: 40,
+  },
+  texto: { color: '#fff', fontWeight: 'bold', fontSize: 13, textAlign: 'center' },
+});
 
 function AuthStack() {
   return (

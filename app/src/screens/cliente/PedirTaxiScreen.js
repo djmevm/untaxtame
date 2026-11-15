@@ -13,7 +13,9 @@ import ChatServicio from '../../components/ChatServicio';
 import OfertasRecibidas from '../../components/OfertasRecibidas';
 import ConductoresCercanos from '../../components/ConductoresCercanos';
 import MapaServicioActivo from '../../components/MapaServicioActivo';
+import CompartirViaje from '../../components/CompartirViaje';
 import useChatNotificacion from '../../hooks/useChatNotificacion';
+import useWebSocket from '../../hooks/useWebSocket';
 
 const { width } = Dimensions.get('window');
 
@@ -21,12 +23,14 @@ const METODOS_PAGO = [
   { id: 'daviplata', label: 'Daviplata', color: '#E53935' },
   { id: 'nequi',     label: 'Nequi',     color: '#6A1B9A' },
   { id: 'efectivo',  label: 'Efectivo',  color: '#2E7D32' },
+  { id: 'pse',       label: 'PSE',       color: '#0D47A1' },
 ];
 
 const ESTADO_CONFIG = {
   pendiente:          { color: '#FFC107', textColor: '#000', label: 'Buscando conductor...', icon: '🔍' },
   aceptado:           { color: '#1565C0', textColor: '#fff', label: '¡Conductor en camino!', icon: '🚕' },
   conductor_en_sitio: { color: '#FF9800', textColor: '#fff', label: '¡Conductor en el punto!', icon: '📍' },
+  en_curso:           { color: '#2E7D32', textColor: '#fff', label: 'Viaje en curso',         icon: '🛣️' },
   completado:         { color: '#2E7D32', textColor: '#fff', label: 'Servicio completado',   icon: '✅' },
   cancelado:          { color: '#E53935', textColor: '#fff', label: 'Servicio cancelado',    icon: '❌' },
 };
@@ -93,7 +97,21 @@ export default function PedirTaxiScreen() {
   // Notificar mensajes de chat cuando el chat está cerrado
   useChatNotificacion(servicioActivo?.id, perfil?.uid, mostrarChat);
 
-  // Verificar estado del servicio activo periódicamente
+  // Actualizaciones en vivo del estado del servicio (WebSocket)
+  const { onMensaje, conectado: wsConectado } = useWebSocket(perfil?.uid, 'cliente');
+  useEffect(() => {
+    if (!wsConectado || !servicioActivo?.id) return;
+    return onMensaje('servicio_actualizado', (data) => {
+      if (data.servicio?.id === servicioActivo.id) {
+        setServicioActivo(data.servicio);
+        if (data.servicio.estado === 'completado') {
+          setTimeout(() => setMostrarCalificacion(true), 500);
+        }
+      }
+    });
+  }, [wsConectado, servicioActivo?.id, onMensaje]);
+
+  // Verificar estado del servicio activo periódicamente (respaldo HTTP)
   useEffect(() => {
     if (!servicioActivo?.id) return;
 
@@ -104,14 +122,13 @@ export default function PedirTaxiScreen() {
         if (actual && actual.estado !== servicioActivo.estado) {
           setServicioActivo(actual);
           if (actual.estado === 'completado') {
-            // Mostrar calificación automáticamente
             setTimeout(() => setMostrarCalificacion(true), 500);
           }
         }
       } catch {}
     };
 
-    const intervalo = setInterval(verificar, 60000);
+    const intervalo = setInterval(verificar, 30000);
     return () => clearInterval(intervalo);
   }, [servicioActivo?.id, servicioActivo?.estado]);
 
@@ -731,8 +748,13 @@ export default function PedirTaxiScreen() {
         </View>
       )}
 
+      {/* Compartir viaje con familiar */}
+      {servicioActivo.conductorNombre && (
+        <CompartirViaje servicioActivo={servicioActivo} />
+      )}
+
       {/* Chat y SOS — solo cuando hay conductor */}
-      {servicioActivo.conductorNombre && ['pendiente', 'aceptado', 'conductor_en_sitio'].includes(servicioActivo.estado) && (
+      {servicioActivo.conductorNombre && ['aceptado', 'conductor_en_sitio', 'en_curso'].includes(servicioActivo.estado) && (
         <View style={styles.chatSOSRow}>
           <TouchableOpacity style={styles.btnChat} onPress={() => setMostrarChat(true)}>
             <Text style={styles.btnChatTexto}>💬 Chat con conductor</Text>

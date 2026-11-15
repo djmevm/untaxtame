@@ -95,6 +95,11 @@ app.get('/', (req, res) => {
   res.json({ status: 'ok' });
 });
 
+// Página pública de seguimiento para familiares (token en URL)
+app.get('/seguimiento/:token', (req, res) => {
+  res.sendFile(path.join(__dirname, '../public/seguimiento.html'));
+});
+
 // ═══ SEGURIDAD — Capa 8: Manejo de errores global ═══
 app.use((err, req, res, next) => {
   // No exponer detalles del error en producción

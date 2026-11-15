@@ -62,6 +62,25 @@ export async function reproducirSonidoSOS() {
 }
 
 
+// Alerta pérdida de GPS (conductor en servicio)
+export async function reproducirSonidoGPS() {
+  try {
+    await inicializarAudio();
+    Vibration.vibrate([0, 400, 150, 400, 150, 400]);
+
+    const { sound } = await Audio.Sound.createAsync(
+      { uri: 'https://actions.google.com/sounds/v1/alarms/digital_watch_alarm_long.ogg' },
+      { shouldPlay: true, volume: 1.0 }
+    );
+
+    setTimeout(async () => {
+      try { await sound.stopAsync(); await sound.unloadAsync(); } catch {}
+    }, 2500);
+  } catch {
+    Vibration.vibrate([0, 400, 150, 400, 150, 400]);
+  }
+}
+
 // Sonido de mensaje de chat (corto y tipo notificación)
 export async function reproducirSonidoChat() {
   try {

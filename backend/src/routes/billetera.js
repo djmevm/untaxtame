@@ -4,6 +4,12 @@ const { db } = require('../firebase');
 const verifyToken = require('../middleware/verifyToken');
 const verifyAdmin = require('../middleware/verifyAdmin');
 
+async function puedeVerBilletera(req, uid) {
+  if (req.user.uid === uid) return true;
+  const userDoc = await db.collection('usuarios').doc(req.user.uid).get();
+  return userDoc.exists && userDoc.data().rol === 'admin';
+}
+
 // ═══ CONFIGURACIÓN ═══
 
 // Obtener configuración de comisión
@@ -41,6 +47,9 @@ router.put('/config', verifyToken, verifyAdmin, async (req, res) => {
 
 // Obtener saldo de un conductor
 router.get('/saldo/:uid', verifyToken, async (req, res) => {
+  if (!(await puedeVerBilletera(req, req.params.uid))) {
+    return res.status(403).json({ error: 'Acceso denegado' });
+  }
   try {
     const doc = await db.collection('billeteras').doc(req.params.uid).get();
     if (!doc.exists) {
@@ -150,6 +159,9 @@ async function descontarComision(conductorUid, servicioId, tarifaViaje) {
 
 // Historial de movimientos de un conductor
 router.get('/movimientos/:uid', verifyToken, async (req, res) => {
+  if (!(await puedeVerBilletera(req, req.params.uid))) {
+    return res.status(403).json({ error: 'Acceso denegado' });
+  }
   try {
     const snapshot = await db.collection('billeteras').doc(req.params.uid)
       .collection('movimientos').orderBy('creadoEn', 'desc').limit(50).get();
@@ -191,6 +203,9 @@ router.get('/reporte', verifyToken, verifyAdmin, async (req, res) => {
 // Reporte de un conductor específico con filtro de fechas
 router.get('/reporte/:uid', verifyToken, async (req, res) => {
   const { desde, hasta } = req.query;
+  if (!(await puedeVerBilletera(req, req.params.uid))) {
+    return res.status(403).json({ error: 'Acceso denegado' });
+  }
   try {
     let query = db.collection('billeteras').doc(req.params.uid)
       .collection('movimientos').orderBy('creadoEn', 'desc');

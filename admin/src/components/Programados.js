@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import api from '../api';
 
-// Estados de un viaje programado con color y etiqueta
 const ESTADO_INFO = {
   programado_buscando: { label: '🔍 Buscando conductor', color: '#F57F17', bg: '#FFF3E0' },
   programado_asignado: { label: '✅ Asignado', color: '#2E7D32', bg: '#E8F5E9' },
@@ -14,7 +13,6 @@ function estadoInfo(estado) {
   return ESTADO_INFO[estado] || { label: estado || '—', color: '#555', bg: '#f0f0f0' };
 }
 
-// Convierte "15/06 04:30 AM" o ISO a texto legible
 function textoHora(v) {
   if (v.horaProgramadaTexto) return v.horaProgramadaTexto;
   if (v.horaProgramada) {
@@ -27,11 +25,12 @@ function textoHora(v) {
 
 export default function Programados() {
   const [viajes, setViajes] = useState([]);
+  const [conductores, setConductores] = useState([]);
   const [cargando, setCargando] = useState(true);
   const [mostrarForm, setMostrarForm] = useState(false);
   const [filtro, setFiltro] = useState('todos');
-
-  const [eliminandoId, setEliminandoId] = useState(null);
+  const [accionId, setAccionId] = useState(null);
+  const [modalReasignar, setModalReasignar] = useState(null);
 
   const cargar = () => {
     api.get('/programados/todos')
@@ -40,23 +39,81 @@ export default function Programados() {
       .finally(() => setCargando(false));
   };
 
+  const cargarConductores = () => {
+    api.get('/users/todos')
+      .then((res) => {
+        const lista = (res.data || []).filter(
+          (u) => u.rol === 'conductor' && u.estadoVerificacion === 'aprobado' && !u.bloqueado
+        );
+        setConductores(lista);
+      })
+      .catch(() => {});
+  };
+
+  const cancelarAdmin = async (v) => {
+    const motivo = window.prompt(
+      `Cancelar ${v.codigoReserva || 'viaje'}?\n\nMotivo (opcional):`,
+      'Cancelado por la central'
+    );
+    if (motivo === null) return;
+    setAccionId(v.id);
+    try {
+      await api.put(`/programados/admin-cancelar/${v.id}`, { motivo: motivo || 'Cancelado por la central' });
+      cargar();
+    } catch (err) {
+      alert(err.response?.data?.error || 'No se pudo cancelar');
+    } finally {
+      setAccionId(null);
+    }
+  };
+
+  const liberar = async (v) => {
+    if (!window.confirm(`¿Liberar ${v.codigoReserva || 'viaje'} y volver a buscar conductor?`)) return;
+    setAccionId(v.id);
+    try {
+      await api.put(`/programados/reasignar/${v.id}`, { conductorUid: null, motivo: 'Liberado por central' });
+      cargar();
+    } catch (err) {
+      alert(err.response?.data?.error || 'No se pudo liberar');
+    } finally {
+      setAccionId(null);
+    }
+  };
+
+  const asignarConductor = async (viajeId, conductorUid) => {
+    setAccionId(viajeId);
+    try {
+      await api.put(`/programados/reasignar/${viajeId}`, {
+        conductorUid,
+        motivo: 'Asignado manualmente por central',
+      });
+      setModalReasignar(null);
+      cargar();
+    } catch (err) {
+      alert(err.response?.data?.error || 'No se pudo asignar');
+    } finally {
+      setAccionId(null);
+    }
+  };
+
   const eliminar = async (v) => {
     const codigo = v.codigoReserva || 'este viaje';
     if (!window.confirm(`¿Eliminar definitivamente ${codigo}?\n\nEsta acción no se puede deshacer.`)) return;
-    setEliminandoId(v.id);
+    setAccionId(v.id);
     try {
       await api.delete(`/programados/${v.id}`);
       setViajes((prev) => prev.filter((x) => x.id !== v.id));
     } catch (err) {
-      alert(err.response?.data?.error || 'No se pudo eliminar el viaje. Intenta de nuevo.');
+      alert(err.response?.data?.error || 'No se pudo eliminar el viaje.');
     } finally {
-      setEliminandoId(null);
+      setAccionId(null);
     }
   };
 
   useEffect(() => {
     cargar();
-    const intervalo = setInterval(cargar, 15000); // refrescar cada 15s
+    cargarConductores();
+    const intervalo = setInterval(cargar, 15000);
     return () => clearInterval(intervalo);
   }, []);
 
@@ -65,6 +122,7 @@ export default function Programados() {
     : viajes.filter((v) => v.estado === filtro);
 
   const contar = (estado) => viajes.filter((v) => v.estado === estado).length;
+  const activo = (v) => ['programado_buscando', 'programado_asignado'].includes(v.estado);
 
   if (cargando) return <p className="loading">Cargando viajes programados...</p>;
 
@@ -115,6 +173,7 @@ export default function Programados() {
           )}
           {filtrados.map((v) => {
             const ei = estadoInfo(v.estado);
+            const busy = accionId === v.id;
             return (
               <tr key={v.id}>
                 <td style={{ fontWeight: 'bold', fontSize: 12 }}>{v.codigoReserva || '—'}</td>
@@ -124,7 +183,7 @@ export default function Programados() {
                 <td>{v.contacto || v.clienteCelular || '—'}</td>
                 <td>
                   {v.conductorNombre
-                    ? <>{v.conductorNombre}<br /><span style={{ color: '#FFC107', fontWeight: 'bold' }}>{v.conductorPlaca || ''}</span></>
+                    ? <>{v.conductorNombre}<br /><span style={{ color: '#F97316', fontWeight: 'bold' }}>{v.conductorPlaca || ''}</span></>
                     : <span style={{ color: '#F57F17' }}>Sin asignar</span>}
                 </td>
                 <td>
@@ -133,14 +192,30 @@ export default function Programados() {
                   </span>
                 </td>
                 <td>
-                  <button
-                    onClick={() => eliminar(v)}
-                    disabled={eliminandoId === v.id}
-                    title="Eliminar viaje programado"
-                    style={styles.btnEliminar}
-                  >
-                    {eliminandoId === v.id ? '⏳' : '🗑️ Eliminar'}
-                  </button>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                    {activo(v) && (
+                      <>
+                        <button
+                          onClick={() => { setModalReasignar(v); cargarConductores(); }}
+                          disabled={busy}
+                          style={styles.btnAsignar}
+                        >
+                          {v.conductorUid ? '🔄 Reasignar' : '👤 Asignar'}
+                        </button>
+                        {v.conductorUid && (
+                          <button onClick={() => liberar(v)} disabled={busy} style={styles.btnLiberar}>
+                            🔓 Liberar
+                          </button>
+                        )}
+                        <button onClick={() => cancelarAdmin(v)} disabled={busy} style={styles.btnCancelarViaje}>
+                          ❌ Cancelar
+                        </button>
+                      </>
+                    )}
+                    <button onClick={() => eliminar(v)} disabled={busy} style={styles.btnEliminar}>
+                      {busy ? '⏳' : '🗑️ Eliminar'}
+                    </button>
+                  </div>
                 </td>
               </tr>
             );
@@ -154,15 +229,49 @@ export default function Programados() {
           onCreado={() => { setMostrarForm(false); cargar(); }}
         />
       )}
+
+      {modalReasignar && (
+        <div style={styles.overlay} onClick={() => setModalReasignar(null)}>
+          <div style={styles.modal} onClick={(e) => e.stopPropagation()}>
+            <h3 style={{ marginTop: 0 }}>👤 Asignar / reasignar conductor</h3>
+            <p style={{ color: '#666', fontSize: 13 }}>
+              Viaje <strong>{modalReasignar.codigoReserva || modalReasignar.id}</strong><br />
+              {modalReasignar.origen} → {modalReasignar.destino}
+            </p>
+            {conductores.length === 0 && (
+              <p style={{ color: '#999' }}>No hay conductores aprobados disponibles.</p>
+            )}
+            <div style={{ maxHeight: 320, overflowY: 'auto' }}>
+              {conductores.map((c) => (
+                <button
+                  key={c.uid}
+                  onClick={() => asignarConductor(modalReasignar.id, c.uid)}
+                  disabled={accionId === modalReasignar.id}
+                  style={{
+                    ...styles.conductorItem,
+                    background: c.uid === modalReasignar.conductorUid ? '#E8F5E9' : '#fff',
+                  }}
+                >
+                  <strong>{c.nombre}</strong>
+                  <span style={{ color: '#F97316', marginLeft: 8 }}>{c.placa || 'Sin placa'}</span>
+                  {c.telefono && <span style={{ color: '#888', marginLeft: 8 }}>📞 {c.telefono}</span>}
+                </button>
+              ))}
+            </div>
+            <button onClick={() => setModalReasignar(null)} style={{ ...styles.btnCancelar, marginTop: 12 }}>
+              Cerrar
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
 
-// ═══ FORMULARIO DE CREACIÓN (atención telefónica) ═══
 function FormularioProgramado({ onCerrar, onCreado }) {
   const [form, setForm] = useState({
-    fecha: '',        // YYYY-MM-DD (input date)
-    hora: '',         // HH:MM (input time, 24h)
+    fecha: '',
+    hora: '',
     origen: '',
     destino: '',
     pasajeroNombre: '',
@@ -181,14 +290,11 @@ function FormularioProgramado({ onCerrar, onCreado }) {
     if (!form.origen.trim() || !form.destino.trim()) return setError('Indica origen y destino.');
     if (!form.contacto.trim()) return setError('Indica el número de contacto del cliente.');
 
-    // Construir el instante en zona Bogotá (UTC-5) → ISO UTC
-    // fecha: YYYY-MM-DD, hora: HH:MM. Bogotá = UTC-5 fijo.
     const [anio, mes, dia] = form.fecha.split('-').map((n) => parseInt(n, 10));
     const [hh, mm] = form.hora.split(':').map((n) => parseInt(n, 10));
     const comoUTC = Date.UTC(anio, mes - 1, dia, hh, mm, 0, 0);
-    const horaProgramada = new Date(comoUTC + 5 * 60 * 60 * 1000); // sumar 5h → UTC real
+    const horaProgramada = new Date(comoUTC + 5 * 60 * 60 * 1000);
 
-    // Texto legible en Bogotá
     const horaProgramadaTexto = horaProgramada.toLocaleString('es-CO', {
       day: '2-digit', month: '2-digit', year: 'numeric',
       hour: '2-digit', minute: '2-digit', hour12: true, timeZone: 'America/Bogota',
@@ -211,7 +317,7 @@ function FormularioProgramado({ onCerrar, onCreado }) {
       });
       onCreado();
     } catch (err) {
-      setError(err.response?.data?.error || 'No se pudo crear el viaje. Intenta de nuevo.');
+      setError(err.response?.data?.error || 'No se pudo crear el viaje.');
     } finally {
       setGuardando(false);
     }
@@ -237,19 +343,19 @@ function FormularioProgramado({ onCerrar, onCreado }) {
         </div>
 
         <label style={styles.label}>📍 Origen (recogida)</label>
-        <input type="text" value={form.origen} onChange={(e) => set('origen', e.target.value)} placeholder="Ej: Cra 5 #12-34, Barrio Centro" style={styles.input} />
+        <input type="text" value={form.origen} onChange={(e) => set('origen', e.target.value)} placeholder="Ej: Cra 5 #12-34" style={styles.input} />
 
         <label style={styles.label}>🎯 Destino</label>
-        <input type="text" value={form.destino} onChange={(e) => set('destino', e.target.value)} placeholder="Ej: Hospital San Antonio" style={styles.input} />
+        <input type="text" value={form.destino} onChange={(e) => set('destino', e.target.value)} placeholder="Ej: Hospital" style={styles.input} />
 
         <div style={styles.grid}>
           <div>
             <label style={styles.label}>👤 Nombre del pasajero</label>
-            <input type="text" value={form.pasajeroNombre} onChange={(e) => set('pasajeroNombre', e.target.value)} placeholder="Ej: María Pérez" style={styles.input} />
+            <input type="text" value={form.pasajeroNombre} onChange={(e) => set('pasajeroNombre', e.target.value)} style={styles.input} />
           </div>
           <div>
             <label style={styles.label}>📞 Contacto (WhatsApp)</label>
-            <input type="text" value={form.contacto} onChange={(e) => set('contacto', e.target.value)} placeholder="Ej: 3001234567" style={styles.input} />
+            <input type="text" value={form.contacto} onChange={(e) => set('contacto', e.target.value)} style={styles.input} />
           </div>
         </div>
 
@@ -262,7 +368,7 @@ function FormularioProgramado({ onCerrar, onCreado }) {
           </div>
           <div>
             <label style={styles.label}>🧳 Equipaje / notas</label>
-            <input type="text" value={form.equipaje} onChange={(e) => set('equipaje', e.target.value)} placeholder="Opcional" style={styles.input} />
+            <input type="text" value={form.equipaje} onChange={(e) => set('equipaje', e.target.value)} style={styles.input} />
           </div>
         </div>
 
@@ -282,6 +388,13 @@ function FormularioProgramado({ onCerrar, onCreado }) {
 const styles = {
   btnCrear: { background: '#2E7D32', color: '#fff', border: 'none', borderRadius: 8, padding: '10px 18px', cursor: 'pointer', fontWeight: 'bold', fontSize: 14 },
   btnEliminar: { background: '#B71C1C', color: '#fff', border: 'none', borderRadius: 8, padding: '6px 12px', cursor: 'pointer', fontWeight: 'bold', fontSize: 12, whiteSpace: 'nowrap' },
+  btnCancelarViaje: { background: '#E65100', color: '#fff', border: 'none', borderRadius: 8, padding: '6px 12px', cursor: 'pointer', fontWeight: 'bold', fontSize: 12 },
+  btnAsignar: { background: '#1565C0', color: '#fff', border: 'none', borderRadius: 8, padding: '6px 12px', cursor: 'pointer', fontWeight: 'bold', fontSize: 12 },
+  btnLiberar: { background: '#F57F17', color: '#fff', border: 'none', borderRadius: 8, padding: '6px 12px', cursor: 'pointer', fontWeight: 'bold', fontSize: 12 },
+  conductorItem: {
+    display: 'block', width: '100%', textAlign: 'left', padding: '10px 12px', marginBottom: 6,
+    border: '1px solid #ddd', borderRadius: 8, cursor: 'pointer', fontSize: 14,
+  },
   overlay: { position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: 20 },
   modal: { background: '#fff', borderRadius: 16, padding: 24, width: '100%', maxWidth: 520, maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 8px 40px rgba(0,0,0,0.3)' },
   grid: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 },

@@ -7,6 +7,20 @@ const verifyAdmin = require('../middleware/verifyAdmin');
 const { TARIFA_MINIMA } = require('../utils/tarifa');
 const { descontarComision } = require('./billetera');
 
+async function esAdminUid(uid) {
+  const userDoc = await db.collection('usuarios').doc(uid).get();
+  return userDoc.exists && userDoc.data().rol === 'admin';
+}
+
+async function notificarCambioServicio(servicio) {
+  if (!servicio) return;
+  try {
+    const { notificarServicioActualizado } = require('../services/websocket');
+    if (servicio.clienteUid) notificarServicioActualizado(servicio.clienteUid, servicio);
+    if (servicio.conductorUid) notificarServicioActualizado(servicio.conductorUid, servicio);
+  } catch (e) {}
+}
+
 // Estados posibles: pendiente | aceptado | en_curso | conductor_en_sitio | completado | cancelado
 
 // Obtener tarifa mínima
@@ -16,13 +30,14 @@ router.get('/tarifas', (req, res) => {
 
 // Cliente solicita un taxi
 router.post('/solicitar', verifyToken, async (req, res) => {
-  const { clienteUid, clienteNombre, clienteCelular, clienteDireccion, origen, destino, metodoPago, ubicacionGPS, destinoLat, destinoLng } = req.body;
+  const { clienteNombre, clienteCelular, clienteDireccion, origen, destino, metodoPago, ubicacionGPS, destinoLat, destinoLng } = req.body;
+  const clienteUid = req.user.uid;
 
-  if (!clienteUid || !clienteNombre || !origen || !destino || !metodoPago) {
+  if (!clienteNombre || !origen || !destino || !metodoPago) {
     return res.status(400).json({ error: 'Faltan campos requeridos' });
   }
 
-  const metodosPagoValidos = ['daviplata', 'nequi', 'efectivo'];
+  const metodosPagoValidos = ['daviplata', 'nequi', 'efectivo', 'pse'];
   if (!metodosPagoValidos.includes(metodoPago.toLowerCase())) {
     return res.status(400).json({ error: 'Método de pago inválido: ' + metodoPago });
   }
@@ -101,17 +116,14 @@ router.post('/solicitar', verifyToken, async (req, res) => {
 
 // Conductor acepta un servicio
 router.put('/aceptar/:servicioId', verifyToken, async (req, res) => {
-  const { conductorUid, conductorNombre } = req.body;
-
-  if (!conductorUid || !conductorNombre) {
-    return res.status(400).json({ error: 'Faltan datos del conductor' });
-  }
+  const conductorUid = req.user.uid;
+  let { conductorNombre } = req.body;
 
   try {
     // Verificar si el conductor tiene un servicio activo
     const activoSnap = await db.collection('servicios')
       .where('conductorUid', '==', conductorUid)
-      .where('estado', 'in', ['aceptado', 'en_curso'])
+      .where('estado', 'in', ['aceptado', 'conductor_en_sitio', 'en_curso'])
       .limit(1)
       .get();
 
@@ -152,6 +164,7 @@ router.put('/aceptar/:servicioId', verifyToken, async (req, res) => {
     // Obtener datos completos del conductor
     const conductorDoc = await db.collection('usuarios').doc(conductorUid).get();
     const conductorData = conductorDoc.exists ? conductorDoc.data() : {};
+    if (!conductorNombre) conductorNombre = conductorData.nombre || 'Conductor';
 
     await ref.update({
       conductorUid,
@@ -165,6 +178,9 @@ router.put('/aceptar/:servicioId', verifyToken, async (req, res) => {
     // Marcar conductor como no disponible
     await db.collection('usuarios').doc(conductorUid).update({ disponible: false });
 
+    const servicioActualizado = (await ref.get()).data();
+    await notificarCambioServicio(servicioActualizado);
+
     res.json({ message: 'Servicio aceptado', servicioId: req.params.servicioId });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -173,7 +189,7 @@ router.put('/aceptar/:servicioId', verifyToken, async (req, res) => {
 
 // Conductor inicia el viaje (pasajero subió al taxi)
 router.put('/iniciar/:servicioId', verifyToken, async (req, res) => {
-  const { conductorUid } = req.body;
+  const conductorUid = req.user.uid;
   try {
     const ref = db.collection('servicios').doc(req.params.servicioId);
     const doc = await ref.get();
@@ -189,13 +205,16 @@ router.put('/iniciar/:servicioId', verifyToken, async (req, res) => {
       actualizadoEn: new Date().toISOString(),
     });
 
+    await notificarCambioServicio((await ref.get()).data());
+
     res.json({ message: 'Viaje iniciado' });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 // Conductor confirma llegada al punto de recogida
 router.put('/llegada/:servicioId', verifyToken, async (req, res) => {
-  const { conductorUid, ubicacionConductor } = req.body;
+  const conductorUid = req.user.uid;
+  const { ubicacionConductor } = req.body;
   try {
     const ref = db.collection('servicios').doc(req.params.servicioId);
     const doc = await ref.get();
@@ -222,6 +241,8 @@ router.put('/llegada/:servicioId', verifyToken, async (req, res) => {
       ubicacionConductorLlegada: ubicacionConductor || null,
       actualizadoEn: new Date().toISOString(),
     });
+
+    await notificarCambioServicio((await ref.get()).data());
 
     res.json({ message: 'Llegada confirmada', gpsValidado });
   } catch (err) { res.status(500).json({ error: err.message }); }
@@ -297,6 +318,9 @@ router.put('/completar/:servicioId', verifyToken, async (req, res) => {
     if (!doc.exists) return res.status(404).json({ error: 'Servicio no encontrado' });
 
     const data = doc.data();
+    if (data.conductorUid !== req.user.uid) {
+      return res.status(403).json({ error: 'Solo el conductor del servicio puede completarlo' });
+    }
     await ref.update({
       estado: 'completado',
       completadoEn: new Date().toISOString(),
@@ -332,6 +356,8 @@ router.put('/completar/:servicioId', verifyToken, async (req, res) => {
         console.error('[SERVICES] Error notificando WhatsApp completado:', e.message);
       }
     }
+
+    await notificarCambioServicio((await ref.get()).data());
 
     res.json({ message: 'Servicio completado', comision: comisionResult, clientePago });
   } catch (err) {
@@ -462,6 +488,8 @@ router.put('/cancelar/:servicioId', verifyToken, async (req, res) => {
       await db.collection('usuarios').doc(data.conductorUid).update({ disponible: true });
     }
 
+    await notificarCambioServicio((await ref.get()).data());
+
     // Si el conductor canceló, verificar penalización al conductor
     if (esConductor && data.conductorUid) {
       const hace30dias = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
@@ -516,6 +544,10 @@ router.get('/historial/:uid/:rol', verifyToken, async (req, res) => {
   const { uid, rol } = req.params;
   const campo = rol === 'conductor' ? 'conductorUid' : 'clienteUid';
 
+  if (req.user.uid !== uid && !(await esAdminUid(req.user.uid))) {
+    return res.status(403).json({ error: 'Acceso denegado' });
+  }
+
   try {
     const snapshot = await db.collection('servicios')
       .where(campo, '==', uid)
@@ -540,7 +572,11 @@ router.put('/calificar/:servicioId', verifyToken, async (req, res) => {
     const ref = db.collection('servicios').doc(req.params.servicioId);
     const doc = await ref.get();
     if (!doc.exists) return res.status(404).json({ error: 'Servicio no encontrado' });
-    if (doc.data().estado !== 'completado') {
+    const servicioPre = doc.data();
+    if (servicioPre.clienteUid !== req.user.uid) {
+      return res.status(403).json({ error: 'Solo el cliente puede calificar este servicio' });
+    }
+    if (servicioPre.estado !== 'completado') {
       return res.status(400).json({ error: 'Solo se pueden calificar servicios completados' });
     }
     await ref.update({
@@ -628,6 +664,9 @@ router.put('/calificar-cliente/:servicioId', verifyToken, async (req, res) => {
     const doc = await ref.get();
     if (!doc.exists) return res.status(404).json({ error: 'Servicio no encontrado' });
     const servicio = doc.data();
+    if (servicio.conductorUid !== req.user.uid) {
+      return res.status(403).json({ error: 'Solo el conductor puede calificar al cliente' });
+    }
     if (servicio.estado !== 'completado') {
       return res.status(400).json({ error: 'Solo se pueden calificar servicios completados' });
     }
@@ -699,7 +738,7 @@ router.put('/calificar-cliente/:servicioId', verifyToken, async (req, res) => {
 });
 
 // Ranking: mejor taxista y mejor cliente (admin) — para premiación
-router.get('/ranking', verifyToken, async (req, res) => {
+router.get('/ranking', verifyToken, verifyAdmin, async (req, res) => {
   try {
     // Rango de fechas opcional (?desde=ISO&hasta=ISO). Por defecto, año en curso.
     const ahora = new Date();
@@ -816,10 +855,13 @@ router.put('/penalizaciones/:penId/revertir', verifyToken, verifyAdmin, async (r
 
 // Verificar si el conductor tiene un servicio activo
 router.get('/activo/:uid', verifyToken, async (req, res) => {
+  if (req.user.uid !== req.params.uid) {
+    return res.status(403).json({ error: 'Acceso denegado' });
+  }
   try {
     const snapshot = await db.collection('servicios')
       .where('conductorUid', '==', req.params.uid)
-      .where('estado', 'in', ['aceptado', 'en_curso'])
+      .where('estado', 'in', ['aceptado', 'conductor_en_sitio', 'en_curso'])
       .limit(1)
       .get();
 
@@ -917,6 +959,86 @@ router.put('/admin-completar/:servicioId', verifyToken, verifyAdmin, async (req,
     }
 
     res.json({ message: 'Servicio completado por administrador' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Generar link de seguimiento para compartir con un familiar
+router.post('/:servicioId/compartir', verifyToken, async (req, res) => {
+  try {
+    const ref = db.collection('servicios').doc(req.params.servicioId);
+    const doc = await ref.get();
+    if (!doc.exists) return res.status(404).json({ error: 'Servicio no encontrado' });
+
+    const data = doc.data();
+    if (data.clienteUid !== req.user.uid && data.conductorUid !== req.user.uid) {
+      const admin = await esAdminUid(req.user.uid);
+      if (!admin) return res.status(403).json({ error: 'No autorizado' });
+    }
+    if (!['aceptado', 'conductor_en_sitio', 'en_curso'].includes(data.estado)) {
+      return res.status(400).json({ error: 'El viaje no está activo' });
+    }
+
+    let token = data.shareToken;
+    if (!token) {
+      token = uuidv4().replace(/-/g, '').slice(0, 16);
+      await ref.update({
+        shareToken: token,
+        compartidoEn: new Date().toISOString(),
+      });
+    }
+
+    const base = process.env.PUBLIC_BASE_URL || 'https://untaxtame-production.up.railway.app';
+    res.json({
+      token,
+      url: `${base.replace(/\/$/, '')}/seguimiento/${token}`,
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Seguimiento público (sin auth) — datos sanitizados para familiares
+router.get('/seguimiento/:token', async (req, res) => {
+  try {
+    const snap = await db.collection('servicios')
+      .where('shareToken', '==', req.params.token)
+      .limit(1)
+      .get();
+
+    if (snap.empty) return res.status(404).json({ error: 'Enlace no válido o expirado' });
+
+    const data = snap.docs[0].data();
+    if (['completado', 'cancelado'].includes(data.estado)) {
+      return res.json({
+        activo: false,
+        estado: data.estado,
+        mensaje: data.estado === 'completado' ? 'El viaje ya terminó' : 'El viaje fue cancelado',
+        origen: data.origen,
+        destino: data.destino,
+      });
+    }
+
+    let ubicacionConductor = null;
+    if (data.conductorUid) {
+      const cond = await db.collection('usuarios').doc(data.conductorUid).get();
+      if (cond.exists && cond.data().ubicacionActual) {
+        ubicacionConductor = cond.data().ubicacionActual;
+      }
+    }
+
+    res.json({
+      activo: true,
+      estado: data.estado,
+      origen: data.origen,
+      destino: data.destino,
+      conductorNombre: data.conductorNombre || null,
+      conductorPlaca: data.conductorPlaca || null,
+      ubicacionConductor,
+      ubicacionRecogida: data.ubicacionGPS || null,
+      actualizadoEn: new Date().toISOString(),
+    });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

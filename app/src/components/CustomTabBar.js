@@ -12,6 +12,7 @@ const TAB_ICONS = {
   Pendientes: '📡',
   MisServicios: '📋',
   Programados: '🕐',
+  MiTaxi: '🚗',
   PerfilConductor: '👤',
 };
 
@@ -25,6 +26,7 @@ const TAB_LABELS = {
   Pendientes: 'Disponibles',
   MisServicios: 'Mis Servicios',
   Programados: 'Programar',
+  MiTaxi: 'Mi Taxi',
   PerfilConductor: 'Mi Perfil',
 };
 

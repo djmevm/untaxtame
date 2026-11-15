@@ -8,15 +8,15 @@ const verifyAdmin = require('../middleware/verifyAdmin');
 const adminsPresencia = new Map(); // uid → { nombre, timestamp }
 
 // Registrar presencia (cada admin llama esto cada 30 seg)
-router.post('/presencia', async (req, res) => {
-  const { uid, nombre } = req.body;
-  if (!uid) return res.status(400).json({ error: 'Se requiere uid' });
+router.post('/presencia', verifyToken, verifyAdmin, async (req, res) => {
+  const { nombre } = req.body;
+  const uid = req.user.uid;
   adminsPresencia.set(uid, { uid, nombre: nombre || 'Admin', timestamp: Date.now() });
   res.json({ ok: true });
 });
 
 // Consultar quién está en línea (activo en los últimos 60 seg)
-router.get('/en-linea', (req, res) => {
+router.get('/en-linea', verifyToken, verifyAdmin, (req, res) => {
   const ahora = Date.now();
   const enLinea = [];
   adminsPresencia.forEach((val, key) => {
@@ -36,8 +36,12 @@ router.get('/en-linea', (req, res) => {
 router.post('/crear', async (req, res) => {
   const { email, password, nombre, claveSecreta } = req.body;
 
-  // Verificar clave secreta del .env
-  const claveValida = process.env.ADMIN_SECRET_KEY || 'untaxtame-admin-2024';
+  const claveValida = process.env.NODE_ENV === 'production'
+    ? process.env.ADMIN_SECRET_KEY
+    : (process.env.ADMIN_SECRET_KEY || 'untaxtame-admin-2024');
+  if (!claveValida) {
+    return res.status(500).json({ error: 'ADMIN_SECRET_KEY no configurada' });
+  }
   if (claveSecreta !== claveValida) {
     return res.status(403).json({ error: 'Clave secreta inválida' });
   }
@@ -107,7 +111,7 @@ router.post('/test-push/:uid', verifyToken, verifyAdmin, async (req, res) => {
 });
 
 // Actualizar servicios ofrecidos de un conductor (admin)
-router.put('/conductor/:uid/servicios', async (req, res) => {
+router.put('/conductor/:uid/servicios', verifyToken, verifyAdmin, async (req, res) => {
   const { uid } = req.params;
   const { serviciosOfrecidos } = req.body;
 
@@ -127,7 +131,7 @@ router.put('/conductor/:uid/servicios', async (req, res) => {
 });
 
 // Enviar alerta push a todos los conductores disponibles (admin)
-router.post('/alerta-conductores', async (req, res) => {
+router.post('/alerta-conductores', verifyToken, verifyAdmin, async (req, res) => {
   const { titulo, mensaje, servicioId } = req.body;
   if (!mensaje) return res.status(400).json({ error: 'Se requiere un mensaje' });
 
@@ -154,7 +158,7 @@ router.post('/alerta-conductores', async (req, res) => {
 });
 
 // Forzar cancelación de servicios pendientes expirados (admin)
-router.post('/cancelar-expirados', async (req, res) => {
+router.post('/cancelar-expirados', verifyToken, verifyAdmin, async (req, res) => {
   try {
     const { cancelarServiciosPendientesExpirados } = require('../services/autoCancelacion');
     await cancelarServiciosPendientesExpirados();
@@ -165,7 +169,7 @@ router.post('/cancelar-expirados', async (req, res) => {
 });
 
 // Push directo al cliente de un servicio
-router.post('/push-cliente/:uid', async (req, res) => {
+router.post('/push-cliente/:uid', verifyToken, verifyAdmin, async (req, res) => {
   const { titulo, mensaje, servicioId } = req.body;
   if (!mensaje) return res.status(400).json({ error: 'Se requiere mensaje' });
   try {

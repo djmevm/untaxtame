@@ -3,6 +3,7 @@ const router = express.Router();
 const multer = require('multer');
 const admin = require('firebase-admin');
 const verifyToken = require('../middleware/verifyToken');
+const verifyAdmin = require('../middleware/verifyAdmin');
 const { db } = require('../firebase');
 
 // Usar memoria para multer (no disco) — subimos directo a Firebase Storage
@@ -123,7 +124,7 @@ router.post('/documentos', verifyToken, upload.fields(camposDocumentos), async (
 });
 
 // Subir foto de perfil desde admin
-router.post('/foto-perfil-admin', verifyToken, upload.single('foto'), async (req, res) => {
+router.post('/foto-perfil-admin', verifyToken, verifyAdmin, upload.single('foto'), async (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'No se envió imagen' });
 
   const uid = req.body.uid;
@@ -149,7 +150,7 @@ router.post('/foto-perfil-admin', verifyToken, upload.single('foto'), async (req
 });
 
 // Subir foto del vehículo (desde admin)
-router.post('/foto-vehiculo', verifyToken, upload.single('foto'), async (req, res) => {
+router.post('/foto-vehiculo', verifyToken, verifyAdmin, upload.single('foto'), async (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'No se envió imagen' });
 
   const uid = req.body.uid;
@@ -179,6 +180,16 @@ router.post('/foto-vehiculo', verifyToken, upload.single('foto'), async (req, re
 router.get('/proxy', verifyToken, async (req, res) => {
   const { url } = req.query;
   if (!url) return res.status(400).json({ error: 'URL requerida' });
+
+  let parsedUrl;
+  try {
+    parsedUrl = new URL(url);
+  } catch {
+    return res.status(400).json({ error: 'URL inválida' });
+  }
+  if (parsedUrl.protocol !== 'https:' || parsedUrl.hostname !== 'storage.googleapis.com') {
+    return res.status(400).json({ error: 'URL no permitida' });
+  }
 
   try {
     const fetch = require('node-fetch');

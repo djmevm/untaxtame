@@ -3,6 +3,20 @@ const router = express.Router();
 const { db, auth } = require('../firebase');
 const verifyToken = require('../middleware/verifyToken');
 
+function getFirebaseApiKey(res) {
+  const apiKey = process.env.FIREBASE_API_KEY;
+  if (!apiKey) {
+    res.status(500).json({ error: 'FIREBASE_API_KEY no configurada' });
+    return null;
+  }
+  return apiKey;
+}
+
+async function esAdminUid(uid) {
+  const userDoc = await db.collection('usuarios').doc(uid).get();
+  return userDoc.exists && userDoc.data().rol === 'admin';
+}
+
 // Login - verificar credenciales y devolver custom token
 router.post('/login', async (req, res) => {
   const { email, password } = req.body;
@@ -26,7 +40,8 @@ router.post('/login', async (req, res) => {
   try {
     // Usar Firebase Auth REST API para verificar credenciales
     const fetch = require('node-fetch');
-    const apiKey = process.env.FIREBASE_API_KEY || 'AIzaSyCRZz6X7bWXTOsOYDyehKXGcqGRuWbzl9E';
+    const apiKey = getFirebaseApiKey(res);
+    if (!apiKey) return;
     const response = await fetch(
       `https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${apiKey}`,
       {
@@ -100,7 +115,8 @@ router.post('/register-full', async (req, res) => {
 
     // Hacer login automático para obtener token
     const fetch = require('node-fetch');
-    const apiKey = process.env.FIREBASE_API_KEY || 'AIzaSyCRZz6X7bWXTOsOYDyehKXGcqGRuWbzl9E';
+    const apiKey = getFirebaseApiKey(res);
+    if (!apiKey) return;
     const loginRes = await fetch(
       `https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${apiKey}`,
       {
@@ -133,7 +149,8 @@ router.post('/refresh-token', async (req, res) => {
 
   try {
     const fetch = require('node-fetch');
-    const apiKey = process.env.FIREBASE_API_KEY || 'AIzaSyCRZz6X7bWXTOsOYDyehKXGcqGRuWbzl9E';
+    const apiKey = getFirebaseApiKey(res);
+    if (!apiKey) return;
     const response = await fetch(
       `https://securetoken.googleapis.com/v1/token?key=${apiKey}`,
       {
@@ -155,8 +172,12 @@ router.post('/refresh-token', async (req, res) => {
 });
 
 // Registrar usuario (cliente o conductor) - legacy endpoint
-router.post('/register', async (req, res) => {
+router.post('/register', verifyToken, async (req, res) => {
   const { uid, nombre, cedula, telefono, direccion, rol, placa, documentos, estadoVerificacion, fotoPerfil } = req.body;
+
+  if (uid !== req.user.uid) {
+    return res.status(403).json({ error: 'No puedes registrar otro usuario' });
+  }
 
   if (!uid || !nombre || !telefono || !rol) {
     return res.status(400).json({ error: 'Campos requeridos: uid, nombre, telefono, rol' });
@@ -202,6 +223,9 @@ router.post('/register', async (req, res) => {
 // Obtener perfil (protegido)
 router.get('/perfil/:uid', verifyToken, async (req, res) => {
   try {
+    if (req.user.uid !== req.params.uid && !(await esAdminUid(req.user.uid))) {
+      return res.status(403).json({ error: 'Acceso denegado' });
+    }
     const doc = await db.collection('usuarios').doc(req.params.uid).get();
     if (!doc.exists) return res.status(404).json({ error: 'Usuario no encontrado' });
     res.json(doc.data());
@@ -244,9 +268,10 @@ router.put('/perfil/:uid', verifyToken, async (req, res) => {
 });
 
 // Guardar push token
-router.post('/push-token', async (req, res) => {
-  const { pushToken, uid } = req.body;
-  if (!pushToken || !uid) return res.status(400).json({ error: 'Se requiere pushToken y uid' });
+router.post('/push-token', verifyToken, async (req, res) => {
+  const { pushToken } = req.body;
+  const uid = req.user.uid;
+  if (!pushToken) return res.status(400).json({ error: 'Se requiere pushToken' });
   try {
     await db.collection('usuarios').doc(uid).update({ pushToken, pushTokenActualizado: new Date().toISOString() });
     res.json({ message: 'Token guardado' });

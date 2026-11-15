@@ -1,29 +1,56 @@
 const { WebSocketServer } = require('ws');
 const url = require('url');
-const { db } = require('../firebase');
+const { db, auth } = require('../firebase');
 
 // ═══ SERVIDOR WEBSOCKET — Tiempo Real ═══
-// Canales: ubicacion, chat, alertas, servicios
+// Canales: ubicacion, tracking por viaje, chat, alertas, servicios
 
 const clientes = new Map(); // uid → Set<ws>
 const conductoresActivos = new Map(); // uid → { lat, lng, nombre, placa, timestamp }
-const ultimaPersistencia = new Map(); // uid → timestamp (throttle de escrituras a Firestore)
-const INTERVALO_PERSISTIR_MS = 15000; // persistir en Firestore máx 1 vez cada 15s por conductor
+const trackingViajes = new Map(); // servicioId → { conductor, cliente, actualizadoEn }
+const ultimaPersistencia = new Map(); // uid → timestamp
+const INTERVALO_PERSISTIR_MS = 15000;
+const ESTADOS_TRACKING = new Set(['aceptado', 'conductor_en_sitio', 'en_curso']);
 
 function inicializarWebSocket(server) {
   const wss = new WebSocketServer({ server, path: '/ws' });
 
-  wss.on('connection', (ws, req) => {
+  wss.on('connection', async (ws, req) => {
     const params = url.parse(req.url, true).query;
-    const uid = params.uid;
-    const rol = params.rol || 'cliente';
+    const token = params.token || '';
 
-    if (!uid) {
-      ws.close(4001, 'UID requerido');
+    if (!token) {
+      ws.close(4001, 'Token requerido');
       return;
     }
 
-    // Registrar cliente
+    let decoded;
+    try {
+      decoded = await auth.verifyIdToken(token);
+    } catch (err) {
+      ws.close(4003, 'Token inválido');
+      return;
+    }
+
+    const uid = decoded.uid;
+    let rol = 'cliente';
+    try {
+      const userDoc = await db.collection('usuarios').doc(uid).get();
+      if (!userDoc.exists) {
+        ws.close(4004, 'Usuario no encontrado');
+        return;
+      }
+      const userData = userDoc.data();
+      if (userData.bloqueado) {
+        ws.close(4005, 'Cuenta bloqueada');
+        return;
+      }
+      rol = userData.rol || params.rol || 'cliente';
+    } catch (err) {
+      ws.close(4002, 'Error de autenticación');
+      return;
+    }
+
     if (!clientes.has(uid)) clientes.set(uid, new Set());
     clientes.get(uid).add(ws);
 
@@ -32,6 +59,7 @@ function inicializarWebSocket(server) {
     ws.isAlive = true;
     ws.uid = uid;
     ws.rol = rol;
+    ws.autenticado = true;
 
     ws.on('pong', () => { ws.isAlive = true; });
 
@@ -60,11 +88,9 @@ function inicializarWebSocket(server) {
       ws.terminate();
     });
 
-    // Enviar estado inicial
-    ws.send(JSON.stringify({ tipo: 'conectado', uid, timestamp: Date.now() }));
+    ws.send(JSON.stringify({ tipo: 'conectado', uid, rol, timestamp: Date.now() }));
   });
 
-  // Ping/pong para detectar conexiones muertas
   const intervalo = setInterval(() => {
     wss.clients.forEach((ws) => {
       if (!ws.isAlive) return ws.terminate();
@@ -75,7 +101,7 @@ function inicializarWebSocket(server) {
 
   wss.on('close', () => clearInterval(intervalo));
 
-  // Broadcast ubicaciones de conductores cada 3 segundos
+  // Broadcast ubicaciones globales a clientes/admins (mapa general)
   setInterval(() => {
     if (conductoresActivos.size === 0) return;
     const ubicaciones = Array.from(conductoresActivos.entries()).map(([uid, data]) => ({
@@ -85,14 +111,39 @@ function inicializarWebSocket(server) {
     broadcastARol('admin', { tipo: 'ubicaciones_conductores', conductores: ubicaciones });
   }, 3000);
 
-  console.log('[WS] WebSocket server inicializado en /ws');
+  console.log('[WS] WebSocket server inicializado en /ws (JWT requerido)');
   return wss;
+}
+
+async function validarParticipanteServicio(uid, servicioId) {
+  if (!servicioId) return null;
+  try {
+    const doc = await db.collection('servicios').doc(servicioId).get();
+    if (!doc.exists) return null;
+    const data = doc.data();
+    if (data.clienteUid !== uid && data.conductorUid !== uid) return null;
+    if (!ESTADOS_TRACKING.has(data.estado)) return null;
+    return data;
+  } catch {
+    return null;
+  }
+}
+
+function actualizarTracking(servicioId, rol, lat, lng) {
+  const actual = trackingViajes.get(servicioId) || {};
+  if (rol === 'conductor') {
+    actual.conductor = { lat, lng, timestamp: Date.now() };
+  } else {
+    actual.cliente = { lat, lng, timestamp: Date.now() };
+  }
+  actual.actualizadoEn = Date.now();
+  trackingViajes.set(servicioId, actual);
+  return actual;
 }
 
 function manejarMensaje(ws, uid, rol, msg) {
   switch (msg.tipo) {
     case 'ubicacion':
-      // Conductor envía su ubicación
       if (rol === 'conductor' && msg.lat && msg.lng) {
         conductoresActivos.set(uid, {
           lat: msg.lat,
@@ -102,8 +153,6 @@ function manejarMensaje(ws, uid, rol, msg) {
           timestamp: Date.now(),
         });
 
-        // Persistir en Firestore (con throttle) para que el panel admin
-        // (pestaña Mapa, que lee por HTTP) también vea los GPS activos.
         const ahora = Date.now();
         const ultima = ultimaPersistencia.get(uid) || 0;
         if (ahora - ultima >= INTERVALO_PERSISTIR_MS) {
@@ -114,11 +163,25 @@ function manejarMensaje(ws, uid, rol, msg) {
             ultimaActividadEn: iso,
           }).catch(() => {});
         }
+
+        // Si va en un viaje, reenviar al cliente del servicio
+        if (msg.servicioId) {
+          reenviarUbicacionViaje(ws, uid, rol, {
+            tipo: 'ubicacion_viaje',
+            rolEmisor: 'conductor',
+            servicioId: msg.servicioId,
+            lat: msg.lat,
+            lng: msg.lng,
+          });
+        }
       }
       break;
 
+    case 'ubicacion_viaje':
+      reenviarUbicacionViaje(ws, uid, rol, msg);
+      break;
+
     case 'chat_mensaje':
-      // Reenviar mensaje al destinatario
       if (msg.destinoUid && msg.texto) {
         enviarAUsuario(msg.destinoUid, {
           tipo: 'chat_mensaje',
@@ -133,7 +196,6 @@ function manejarMensaje(ws, uid, rol, msg) {
       break;
 
     case 'chat_directo':
-      // Chat directo admin ↔ usuario (instantáneo)
       if (msg.destinoUid && msg.texto) {
         enviarAUsuario(msg.destinoUid, {
           tipo: 'chat_directo',
@@ -143,7 +205,6 @@ function manejarMensaje(ws, uid, rol, msg) {
           senderRol: rol,
           timestamp: Date.now(),
         });
-        // Confirmar al remitente que se envió
         enviarAUsuario(uid, {
           tipo: 'chat_directo_confirmado',
           destinoUid: msg.destinoUid,
@@ -154,8 +215,14 @@ function manejarMensaje(ws, uid, rol, msg) {
       break;
 
     case 'suscribir_servicio':
-      // Cliente se suscribe a actualizaciones de un servicio
-      ws.servicioId = msg.servicioId;
+      ws.servicioId = msg.servicioId || null;
+      if (msg.servicioId && trackingViajes.has(msg.servicioId)) {
+        ws.send(JSON.stringify({
+          tipo: 'ubicacion_viaje_snapshot',
+          servicioId: msg.servicioId,
+          ...trackingViajes.get(msg.servicioId),
+        }));
+      }
       break;
 
     case 'ping':
@@ -167,11 +234,53 @@ function manejarMensaje(ws, uid, rol, msg) {
   }
 }
 
-// ═══ FUNCIONES DE BROADCAST ═══
+function reenviarUbicacionViaje(ws, uid, rol, msg) {
+  const { servicioId, lat, lng } = msg;
+  if (!servicioId || lat == null || lng == null) return;
 
-/**
- * Enviar mensaje a un usuario específico (todas sus conexiones)
- */
+  // Validación async; no bloquear el event loop del WS
+  validarParticipanteServicio(uid, servicioId).then((servicio) => {
+    if (!servicio) return;
+
+    const rolEmisor = servicio.conductorUid === uid ? 'conductor' : 'cliente';
+    const destinoUid = rolEmisor === 'conductor' ? servicio.clienteUid : servicio.conductorUid;
+    if (!destinoUid) return;
+
+    actualizarTracking(servicioId, rolEmisor, lat, lng);
+
+    // Persistencia ligera para respaldo HTTP
+    if (rolEmisor === 'conductor') {
+      const ahora = Date.now();
+      const ultima = ultimaPersistencia.get(uid) || 0;
+      if (ahora - ultima >= INTERVALO_PERSISTIR_MS) {
+        ultimaPersistencia.set(uid, ahora);
+        const iso = new Date(ahora).toISOString();
+        db.collection('usuarios').doc(uid).update({
+          ubicacionActual: { lat, lng, actualizadoEn: iso },
+          ultimaActividadEn: iso,
+        }).catch(() => {});
+      }
+      conductoresActivos.set(uid, {
+        lat,
+        lng,
+        nombre: servicio.conductorNombre || '',
+        placa: servicio.conductorPlaca || '',
+        timestamp: Date.now(),
+        servicioId,
+      });
+    }
+
+    enviarAUsuario(destinoUid, {
+      tipo: 'ubicacion_viaje',
+      servicioId,
+      rolEmisor,
+      lat,
+      lng,
+      timestamp: Date.now(),
+    });
+  }).catch(() => {});
+}
+
 function enviarAUsuario(uid, data) {
   const conexiones = clientes.get(uid);
   if (!conexiones) return false;
@@ -182,12 +291,9 @@ function enviarAUsuario(uid, data) {
   return true;
 }
 
-/**
- * Broadcast a todos los usuarios de un rol
- */
 function broadcastARol(rol, data) {
   const mensaje = JSON.stringify(data);
-  clientes.forEach((conexiones, uid) => {
+  clientes.forEach((conexiones) => {
     conexiones.forEach(ws => {
       if (ws.readyState === 1 && ws.rol === rol) {
         ws.send(mensaje);
@@ -196,9 +302,6 @@ function broadcastARol(rol, data) {
   });
 }
 
-/**
- * Broadcast a todos los conectados
- */
 function broadcastATodos(data) {
   const mensaje = JSON.stringify(data);
   clientes.forEach((conexiones) => {
@@ -208,9 +311,6 @@ function broadcastATodos(data) {
   });
 }
 
-/**
- * Notificar nuevo servicio a conductores conectados
- */
 function notificarNuevoServicio(servicio) {
   broadcastARol('conductor', {
     tipo: 'nuevo_servicio',
@@ -227,9 +327,6 @@ function notificarNuevoServicio(servicio) {
   });
 }
 
-/**
- * Notificar alerta de emergencia a todos los conductores
- */
 function notificarEmergencia(alerta) {
   broadcastARol('conductor', {
     tipo: 'emergencia',
@@ -237,9 +334,6 @@ function notificarEmergencia(alerta) {
   });
 }
 
-/**
- * Notificar código de radio a todos los conductores
- */
 function notificarCodigoRadio(codigo) {
   broadcastARol('conductor', {
     tipo: 'codigo_radio',
@@ -247,32 +341,35 @@ function notificarCodigoRadio(codigo) {
   });
 }
 
-/**
- * Notificar actualización de servicio a un usuario
- */
 function notificarServicioActualizado(uid, servicio) {
   enviarAUsuario(uid, {
     tipo: 'servicio_actualizado',
     servicio,
   });
+
+  // Limpiar tracking al finalizar
+  if (servicio?.id && (servicio.estado === 'completado' || servicio.estado === 'cancelado')) {
+    trackingViajes.delete(servicio.id);
+  }
 }
 
-/**
- * Obtener ubicaciones de conductores activos
- */
+function notificarParticipantesServicio(servicio) {
+  if (!servicio) return;
+  if (servicio.clienteUid) notificarServicioActualizado(servicio.clienteUid, servicio);
+  if (servicio.conductorUid) notificarServicioActualizado(servicio.conductorUid, servicio);
+}
+
 function obtenerUbicacionesConductores() {
   return Array.from(conductoresActivos.entries()).map(([uid, data]) => ({
     uid, ...data,
   }));
 }
 
-/**
- * Estadísticas de conexiones
- */
 function obtenerEstadisticas() {
   return {
     totalConexiones: clientes.size,
     conductoresActivos: conductoresActivos.size,
+    trackingViajes: trackingViajes.size,
     timestamp: Date.now(),
   };
 }
@@ -286,6 +383,7 @@ module.exports = {
   notificarEmergencia,
   notificarCodigoRadio,
   notificarServicioActualizado,
+  notificarParticipantesServicio,
   obtenerUbicacionesConductores,
   obtenerEstadisticas,
 };

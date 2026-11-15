@@ -28,6 +28,9 @@ export default function Dashboard() {
     try { return JSON.parse(sessionStorage.getItem('dash_usuarios')) || []; } catch { return []; }
   });
   const [emergencias, setEmergencias] = useState([]);
+  const [penalizaciones, setPenalizaciones] = useState(null);
+  const [billeteraTotales, setBilleteraTotales] = useState(null);
+  const [rangoDias, setRangoDias] = useState(30); // 7 | 30 | 0=todo
   const [cargando, setCargando] = useState(() => {
     return !sessionStorage.getItem('dash_servicios');
   });
@@ -36,9 +39,7 @@ export default function Dashboard() {
 
   const cargarDatos = () => {
     const timeout = new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 12000));
-    const tiempoInicio = Date.now();
 
-    // Si tarda más de 4s, mostrar mensaje de "servidor despertando"
     const timerDespertar = setTimeout(() => setServidorDespertando(true), 4000);
 
     Promise.race([
@@ -46,10 +47,12 @@ export default function Dashboard() {
         api.get('/services/todos'),
         api.get('/users/todos'),
         api.get('/emergencia/activas').catch(() => ({ data: [] })),
+        api.get('/services/penalizaciones/reporte').catch(() => ({ data: null })),
+        api.get('/billetera/reporte').catch(() => ({ data: null })),
       ]),
       timeout
     ])
-      .then(([sRes, uRes, eRes]) => {
+      .then(([sRes, uRes, eRes, pRes, bRes]) => {
         clearTimeout(timerDespertar);
         setServidorDespertando(false);
         const nuevosPendientes = sRes.data.filter(s => s.estado === 'pendiente').length;
@@ -60,7 +63,8 @@ export default function Dashboard() {
         setServicios(sRes.data);
         setUsuarios(uRes.data);
         setEmergencias(eRes.data);
-        // Cachear en sessionStorage
+        setPenalizaciones(pRes.data);
+        setBilleteraTotales(bRes.data?.totales || null);
         try {
           sessionStorage.setItem('dash_servicios', JSON.stringify(sRes.data));
           sessionStorage.setItem('dash_usuarios', JSON.stringify(uRes.data));
@@ -69,7 +73,6 @@ export default function Dashboard() {
       .catch((err) => {
         clearTimeout(timerDespertar);
         setServidorDespertando(false);
-        // Si hay timeout, reintentar una vez
         if (err.message === 'timeout' && cargando) {
           console.warn('Backend lento, reintentando...');
           setTimeout(cargarDatos, 2000);
@@ -111,15 +114,28 @@ export default function Dashboard() {
     </div>
   );
 
+  // Filtro temporal
+  const serviciosFiltrados = (() => {
+    if (!rangoDias) return servicios;
+    const desde = new Date();
+    desde.setDate(desde.getDate() - rangoDias);
+    return servicios.filter((s) => s.creadoEn && new Date(s.creadoEn) >= desde);
+  })();
+
   // Alertas pendientes
   const emergenciasActivas = emergencias.filter(e => e.estado === 'activa');
   const serviciosPendientes = servicios.filter(s => s.estado === 'pendiente');
 
   // ── MÉTRICAS AVANZADAS ──
+  const programados = serviciosFiltrados.filter(s => s.esProgramado);
+  const programadosBuscando = programados.filter(s => s.estado === 'programado_buscando').length;
+  const programadosAsignados = programados.filter(s => s.estado === 'programado_asignado').length;
+  const enCurso = servicios.filter(s => ['aceptado', 'conductor_en_sitio', 'en_curso'].includes(s.estado)).length;
+  const fuenteWhatsApp = serviciosFiltrados.filter(s => s.fuenteSolicitud === 'whatsapp' || String(s.clienteUid || '').startsWith('whatsapp_')).length;
 
   // GMV (Gross Merchandise Value) - valor total de servicios completados
-  const serviciosCompletados = servicios.filter(s => s.estado === 'completado');
-  const gmv = serviciosCompletados.reduce((total, s) => total + (s.tarifaAcordada || 8000), 0);
+  const serviciosCompletados = serviciosFiltrados.filter(s => s.estado === 'completado');
+  const gmv = serviciosCompletados.reduce((total, s) => total + (s.tarifaAcordada || s.tarifaMinima || 8000), 0);
 
   // Ganancias por conductor
   const gananciasPorConductor = {};
@@ -135,12 +151,12 @@ export default function Dashboard() {
   const topGanancias = Object.values(gananciasPorConductor).sort((a, b) => b.total - a.total);
 
   // Asignados vs Perdidos
-  const asignados = servicios.filter(s => ['aceptado', 'completado'].includes(s.estado)).length;
-  const perdidos = servicios.filter(s => s.estado === 'cancelado').length;
-  const tasaAsignacion = servicios.length > 0 ? ((asignados / servicios.length) * 100).toFixed(1) : 0;
+  const asignados = serviciosFiltrados.filter(s => ['aceptado', 'completado', 'en_curso', 'conductor_en_sitio'].includes(s.estado)).length;
+  const perdidos = serviciosFiltrados.filter(s => s.estado === 'cancelado').length;
+  const tasaAsignacion = serviciosFiltrados.length > 0 ? ((asignados / serviciosFiltrados.length) * 100).toFixed(1) : 0;
 
   // Tiempo promedio de respuesta (desde creación hasta aceptación)
-  const tiemposRespuesta = servicios
+  const tiemposRespuesta = serviciosFiltrados
     .filter(s => s.estado !== 'pendiente' && s.creadoEn && s.actualizadoEn)
     .map(s => (new Date(s.actualizadoEn) - new Date(s.creadoEn)) / 1000 / 60);
   const tiempoPromedio = tiemposRespuesta.length > 0
@@ -148,18 +164,19 @@ export default function Dashboard() {
     : '—';
 
   // Cancelaciones por motivo
-  const cancelaciones = servicios.filter(s => s.estado === 'cancelado');
+  const cancelaciones = serviciosFiltrados.filter(s => s.estado === 'cancelado');
   const cancelacionesConductor = cancelaciones.filter(s => s.canceladoPor === 'conductor').length;
   const cancelacionesCliente = cancelaciones.filter(s => s.canceladoPor === 'cliente').length;
+  const cancelacionesAdmin = cancelaciones.filter(s => s.canceladoPor === 'admin').length;
 
   // ── Estadísticas generales ──
-  const totalServicios = servicios.length;
-  const completados = servicios.filter(s => s.estado === 'completado').length;
-  const cancelados = servicios.filter(s => s.estado === 'cancelado').length;
-  const pendientes = servicios.filter(s => s.estado === 'pendiente').length;
-  const aceptados = servicios.filter(s => s.estado === 'aceptado').length;
+  const totalServicios = serviciosFiltrados.length;
+  const completados = serviciosFiltrados.filter(s => s.estado === 'completado' || s.estado === 'completado_auto').length;
+  const cancelados = cancelaciones.length;
+  const pendientes = serviciosFiltrados.filter(s => s.estado === 'pendiente').length;
+  const aceptados = serviciosFiltrados.filter(s => s.estado === 'aceptado').length;
   const tasaCompletado = totalServicios > 0 ? ((completados / totalServicios) * 100).toFixed(1) : 0;
-  const calificados = servicios.filter(s => s.calificacion?.puntuacion || s.calificacion?.estrellas);
+  const calificados = serviciosFiltrados.filter(s => s.calificacion?.puntuacion || s.calificacion?.estrellas);
   const promedioCalificacion = calificados.length > 0
     ? (calificados.reduce((a, s) => a + (s.calificacion.puntuacion || s.calificacion.estrellas || 0), 0) / calificados.length).toFixed(1)
     : '—';
@@ -174,7 +191,7 @@ export default function Dashboard() {
   // Servicios por estado (Pie)
   const datosPorEstado = [
     { name: 'Pendientes', value: pendientes, color: COLORES_ESTADO.pendiente },
-    { name: 'Aceptados', value: servicios.filter(s => s.estado === 'aceptado').length, color: COLORES_ESTADO.aceptado },
+    { name: 'Aceptados', value: aceptados, color: COLORES_ESTADO.aceptado },
     { name: 'Completados', value: completados, color: COLORES_ESTADO.completado },
     { name: 'Cancelados', value: cancelados, color: COLORES_ESTADO.cancelado },
   ].filter(d => d.value > 0);
@@ -182,7 +199,7 @@ export default function Dashboard() {
   // Servicios por método de pago (Pie)
   const datosPorPago = Object.entries(COLORES_PAGO).map(([key, color]) => ({
     name: key.charAt(0).toUpperCase() + key.slice(1),
-    value: servicios.filter(s => s.metodoPago === key).length,
+    value: serviciosFiltrados.filter(s => s.metodoPago === key).length,
     color,
   })).filter(d => d.value > 0);
 
@@ -195,12 +212,13 @@ export default function Dashboard() {
     const fechaStr = fecha.toISOString().split('T')[0];
     const diaLabel = `${fecha.getDate()}/${fecha.getMonth() + 1}`;
 
-    const delDia = servicios.filter(s => s.creadoEn?.startsWith(fechaStr));
+    const delDia = serviciosFiltrados.filter(s => s.creadoEn?.startsWith(fechaStr));
     serviciosPorDia.push({
       dia: diaLabel,
       total: delDia.length,
-      completados: delDia.filter(s => s.estado === 'completado').length,
+      completados: delDia.filter(s => s.estado === 'completado' || s.estado === 'completado_auto').length,
       cancelados: delDia.filter(s => s.estado === 'cancelado').length,
+      programados: delDia.filter(s => s.esProgramado).length,
     });
   }
 
@@ -212,12 +230,13 @@ export default function Dashboard() {
 
   // Top conductores
   const conductoresMap = {};
-  servicios.filter(s => s.conductorNombre && s.estado === 'completado').forEach(s => {
+  serviciosFiltrados.filter(s => s.conductorNombre && (s.estado === 'completado' || s.estado === 'completado_auto')).forEach(s => {
     if (!conductoresMap[s.conductorNombre]) {
       conductoresMap[s.conductorNombre] = { nombre: s.conductorNombre, viajes: 0, estrellas: [], placa: s.conductorPlaca };
     }
     conductoresMap[s.conductorNombre].viajes++;
     if (s.calificacion?.estrellas) conductoresMap[s.conductorNombre].estrellas.push(s.calificacion.estrellas);
+    if (s.calificacion?.puntuacion) conductoresMap[s.conductorNombre].estrellas.push(s.calificacion.puntuacion / 2);
   });
   const topConductores = Object.values(conductoresMap)
     .map(c => ({
@@ -231,7 +250,28 @@ export default function Dashboard() {
 
   return (
     <div>
-      <h2 className="titulo">📊 Dashboard</h2>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
+        <h2 className="titulo" style={{ marginBottom: 0 }}>📊 Dashboard</h2>
+        <div style={{ display: 'flex', gap: 8 }}>
+          {[
+            { d: 7, l: '7 días' },
+            { d: 30, l: '30 días' },
+            { d: 0, l: 'Todo' },
+          ].map((r) => (
+            <button
+              key={r.d}
+              onClick={() => setRangoDias(r.d)}
+              style={{
+                padding: '8px 14px', borderRadius: 8, cursor: 'pointer', fontWeight: 'bold',
+                border: '2px solid #FFC107',
+                background: rangoDias === r.d ? '#FFC107' : '#fff',
+              }}
+            >
+              {r.l}
+            </button>
+          ))}
+        </div>
+      </div>
 
       {/* Alertas en tiempo real */}
       {(emergenciasActivas.length > 0 || serviciosPendientes.length > 0) && (
@@ -300,6 +340,58 @@ export default function Dashboard() {
         </div>
       </div>
 
+      {/* Operación en vivo + programados + fuente */}
+      <div className="stats">
+        <div className="stat-card">
+          <div className="num" style={{ color: '#1565C0' }}>{enCurso}</div>
+          <div className="label">🚕 Viajes en vivo ahora</div>
+        </div>
+        <div className="stat-card">
+          <div className="num" style={{ color: '#F57F17' }}>{programados.length}</div>
+          <div className="label">⏰ Programados (rango)</div>
+        </div>
+        <div className="stat-card">
+          <div className="num">{programadosBuscando}</div>
+          <div className="label">🔍 Prog. buscando</div>
+        </div>
+        <div className="stat-card">
+          <div className="num" style={{ color: '#2E7D32' }}>{programadosAsignados}</div>
+          <div className="label">✅ Prog. asignados</div>
+        </div>
+        <div className="stat-card">
+          <div className="num" style={{ color: '#25D366' }}>{fuenteWhatsApp}</div>
+          <div className="label">📱 Vía WhatsApp</div>
+        </div>
+      </div>
+
+      {/* Billetera + penalizaciones */}
+      <div className="stats">
+        <div className="stat-card">
+          <div className="num" style={{ color: '#2E7D32' }}>
+            ${(billeteraTotales?.totalComisiones || 0).toLocaleString('es-CO')}
+          </div>
+          <div className="label">💰 Comisiones cobradas</div>
+        </div>
+        <div className="stat-card">
+          <div className="num">
+            ${(billeteraTotales?.totalSaldos || 0).toLocaleString('es-CO')}
+          </div>
+          <div className="label">👛 Saldos conductores</div>
+        </div>
+        <div className="stat-card">
+          <div className="num" style={{ color: '#E53935' }}>
+            {penalizaciones?.total || 0}
+          </div>
+          <div className="label">⚠️ Penalizaciones</div>
+        </div>
+        <div className="stat-card">
+          <div className="num" style={{ color: '#F57F17' }}>
+            ${(penalizaciones?.totalIngresos || 0).toLocaleString('es-CO')}
+          </div>
+          <div className="label">💵 Ingresos penaliz.</div>
+        </div>
+      </div>
+
       {/* Cancelaciones */}
       {cancelaciones.length > 0 && (
         <div className="stats">
@@ -314,6 +406,10 @@ export default function Dashboard() {
           <div className="stat-card">
             <div className="num">{cancelacionesCliente}</div>
             <div className="label">Por cliente</div>
+          </div>
+          <div className="stat-card">
+            <div className="num">{cancelacionesAdmin}</div>
+            <div className="label">Por central</div>
           </div>
         </div>
       )}
@@ -377,6 +473,7 @@ export default function Dashboard() {
               <Line type="monotone" dataKey="total" stroke="#FFC107" strokeWidth={2} name="Total" />
               <Line type="monotone" dataKey="completados" stroke="#2E7D32" strokeWidth={2} name="Completados" />
               <Line type="monotone" dataKey="cancelados" stroke="#E53935" strokeWidth={2} name="Cancelados" />
+              <Line type="monotone" dataKey="programados" stroke="#F57F17" strokeWidth={2} name="Programados" />
             </LineChart>
           </ResponsiveContainer>
         </div>

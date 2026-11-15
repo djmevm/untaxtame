@@ -7,8 +7,7 @@
 
 const fetch = require('node-fetch');
 
-const GOOGLE_MAPS_KEY =
-  process.env.GOOGLE_MAPS_API_KEY || 'AIzaSyCz_s1BIBL0E9rJfQRXQ4lgnPb6GR9IiJE';
+const GOOGLE_MAPS_KEY = process.env.GOOGLE_MAPS_API_KEY || '';
 
 /**
  * Convierte lat/lng en una dirección legible.
@@ -16,6 +15,7 @@ const GOOGLE_MAPS_KEY =
  */
 async function direccionDesdeCoords(lat, lng) {
   if (lat == null || lng == null) return null;
+  if (!GOOGLE_MAPS_KEY) return null;
   try {
     const url =
       `https://maps.googleapis.com/maps/api/geocode/json?latlng=${lat},${lng}` +

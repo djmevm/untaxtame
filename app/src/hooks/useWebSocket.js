@@ -2,13 +2,9 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import { AppState } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-// ═══ HOOK DE WEBSOCKET — Conexión en tiempo real ═══
-// Reemplaza polling de 3-4 segundos para ubicación y chat
+// ═══ HOOK DE WEBSOCKET — Conexión en tiempo real con JWT ═══
 
 const WS_BASE_URL = 'wss://untaxtame-production.up.railway.app/ws';
-const WS_LOCAL_URL = 'ws://192.168.0.101:3000/ws';
-
-// Usar producción por defecto
 const WS_URL = WS_BASE_URL;
 
 const RECONEXION_DELAY_BASE = 2000;
@@ -25,19 +21,24 @@ export default function useWebSocket(uid, rol = 'cliente') {
   const listenersRef = useRef(new Map());
   const appStateRef = useRef(AppState.currentState);
 
-  const conectar = useCallback(() => {
+  const conectar = useCallback(async () => {
     if (!uid) return;
     if (wsRef.current?.readyState === WebSocket.OPEN) return;
 
     try {
-      const ws = new WebSocket(`${WS_URL}?uid=${uid}&rol=${rol}`);
+      const token = await AsyncStorage.getItem('authToken');
+      if (!token) {
+        console.warn('[WS] Sin token — no se conecta');
+        return;
+      }
+
+      const ws = new WebSocket(`${WS_URL}?token=${encodeURIComponent(token)}`);
 
       ws.onopen = () => {
         console.log('[WS] Conectado');
         setConectado(true);
         intentosRef.current = 0;
 
-        // Ping periódico para mantener conexión viva
         pingRef.current = setInterval(() => {
           if (ws.readyState === WebSocket.OPEN) {
             ws.send(JSON.stringify({ tipo: 'ping' }));
@@ -50,13 +51,11 @@ export default function useWebSocket(uid, rol = 'cliente') {
           const data = JSON.parse(event.data);
           setUltimoMensaje(data);
 
-          // Notificar a listeners registrados para este tipo
           const listeners = listenersRef.current.get(data.tipo);
           if (listeners) {
             listeners.forEach(cb => cb(data));
           }
 
-          // Listener global (todos los mensajes)
           const globalListeners = listenersRef.current.get('*');
           if (globalListeners) {
             globalListeners.forEach(cb => cb(data));
@@ -69,15 +68,12 @@ export default function useWebSocket(uid, rol = 'cliente') {
         setConectado(false);
         limpiarPing();
 
-        // Reconectar automáticamente si no fue cierre intencional
         if (event.code !== 4000 && appStateRef.current === 'active') {
           programarReconexion();
         }
       };
 
-      ws.onerror = () => {
-        // onclose se llamará después
-      };
+      ws.onerror = () => {};
 
       wsRef.current = ws;
     } catch (err) {
@@ -120,7 +116,6 @@ export default function useWebSocket(uid, rol = 'cliente') {
     setConectado(false);
   }, []);
 
-  // Enviar mensaje por WebSocket
   const enviar = useCallback((data) => {
     if (wsRef.current?.readyState === WebSocket.OPEN) {
       wsRef.current.send(JSON.stringify(data));
@@ -129,31 +124,25 @@ export default function useWebSocket(uid, rol = 'cliente') {
     return false;
   }, []);
 
-  // Registrar listener para un tipo de mensaje
   const onMensaje = useCallback((tipo, callback) => {
     if (!listenersRef.current.has(tipo)) {
       listenersRef.current.set(tipo, new Set());
     }
     listenersRef.current.get(tipo).add(callback);
 
-    // Retornar función de limpieza
     return () => {
       const set = listenersRef.current.get(tipo);
       if (set) set.delete(callback);
     };
   }, []);
 
-  // Manejar AppState (pausar/reanudar en background)
   useEffect(() => {
     const subscription = AppState.addEventListener('change', (nextState) => {
       if (appStateRef.current.match(/inactive|background/) && nextState === 'active') {
-        // App volvió al primer plano — reconectar
         if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
           conectar();
         }
       } else if (nextState.match(/inactive|background/)) {
-        // App fue al background — desconectar para ahorrar batería
-        // (las push notifications se encargan en background)
         desconectar();
       }
       appStateRef.current = nextState;
@@ -162,7 +151,6 @@ export default function useWebSocket(uid, rol = 'cliente') {
     return () => subscription.remove();
   }, [conectar, desconectar]);
 
-  // Conectar al montar
   useEffect(() => {
     if (uid) conectar();
     return () => desconectar();
@@ -178,9 +166,9 @@ export default function useWebSocket(uid, rol = 'cliente') {
   };
 }
 
-// ═══ HOOK ESPECÍFICO: Ubicaciones de conductores en tiempo real ═══
+// ═══ Ubicaciones globales de conductores ═══
 export function useUbicacionesConductores(uid, rol) {
-  const { conectado, onMensaje, enviar } = useWebSocket(uid, rol);
+  const { conectado, onMensaje } = useWebSocket(uid, rol);
   const [conductores, setConductores] = useState([]);
 
   useEffect(() => {
@@ -194,13 +182,121 @@ export function useUbicacionesConductores(uid, rol) {
   return { conductores, conectado };
 }
 
-// ═══ HOOK ESPECÍFICO: Enviar ubicación del conductor ═══
-export function useEnviarUbicacion(uid, nombre, placa, activo) {
+// ═══ Enviar ubicación del conductor (global + por viaje) ═══
+// Detecta pérdida de GPS y dispara alerta sonora si hay servicio activo.
+const GPS_TIMEOUT_MS = 20000; // sin fix válido en 20s → alerta
+
+export function useEnviarUbicacion(uid, nombre, placa, activo, servicioId = null) {
   const { conectado, enviar } = useWebSocket(uid, 'conductor');
   const intervaloRef = useRef(null);
+  const watchdogRef = useRef(null);
+  const ultimoFixRef = useRef(Date.now());
+  const alertaGPSRef = useRef(false);
+  const [gpsPerdido, setGpsPerdido] = useState(false);
 
   useEffect(() => {
     if (!conectado || !activo || !uid) {
+      if (intervaloRef.current) clearInterval(intervaloRef.current);
+      if (watchdogRef.current) clearInterval(watchdogRef.current);
+      setGpsPerdido(false);
+      alertaGPSRef.current = false;
+      return;
+    }
+
+    ultimoFixRef.current = Date.now();
+
+    const enviarUbicacion = async () => {
+      try {
+        const Location = require('expo-location');
+        const { status } = await Location.requestForegroundPermissionsAsync();
+        if (status !== 'granted') {
+          setGpsPerdido(true);
+          return;
+        }
+        const loc = await Location.getCurrentPositionAsync({
+          accuracy: Location.Accuracy.High,
+          maximumAge: 5000,
+          timeout: 10000,
+        });
+        ultimoFixRef.current = Date.now();
+        if (alertaGPSRef.current) {
+          alertaGPSRef.current = false;
+          setGpsPerdido(false);
+        }
+        const payload = {
+          tipo: 'ubicacion',
+          lat: loc.coords.latitude,
+          lng: loc.coords.longitude,
+          nombre,
+          placa,
+        };
+        if (servicioId) payload.servicioId = servicioId;
+        enviar(payload);
+      } catch {
+        // El watchdog se encarga de la alerta
+      }
+    };
+
+    enviarUbicacion();
+    intervaloRef.current = setInterval(enviarUbicacion, 5000);
+
+    // Watchdog: si no hay fix reciente y hay viaje activo, alertar
+    watchdogRef.current = setInterval(() => {
+      const edad = Date.now() - ultimoFixRef.current;
+      if (edad > GPS_TIMEOUT_MS) {
+        setGpsPerdido(true);
+        if (servicioId && !alertaGPSRef.current) {
+          alertaGPSRef.current = true;
+          try {
+            const { reproducirSonidoGPS } = require('../services/sonido');
+            reproducirSonidoGPS();
+          } catch {}
+        }
+      }
+    }, 5000);
+
+    return () => {
+      if (intervaloRef.current) clearInterval(intervaloRef.current);
+      if (watchdogRef.current) clearInterval(watchdogRef.current);
+    };
+  }, [conectado, activo, uid, nombre, placa, enviar, servicioId]);
+
+  return { conectado, gpsPerdido };
+}
+
+// ═══ Tracking bidireccional de un viaje activo ═══
+export function useTrackingViaje(uid, rol, servicioId, activo) {
+  const { conectado, enviar, onMensaje } = useWebSocket(uid, rol);
+  const [ubicacionPeer, setUbicacionPeer] = useState(null);
+  const intervaloRef = useRef(null);
+
+  useEffect(() => {
+    if (!conectado || !servicioId || !activo) return;
+
+    enviar({ tipo: 'suscribir_servicio', servicioId });
+
+    const cleanupViaje = onMensaje('ubicacion_viaje', (data) => {
+      if (data.servicioId !== servicioId) return;
+      // Solo guardar la ubicación de la otra parte
+      if (data.rolEmisor === rol) return;
+      setUbicacionPeer({ lat: data.lat, lng: data.lng, timestamp: data.timestamp });
+    });
+
+    const cleanupSnap = onMensaje('ubicacion_viaje_snapshot', (data) => {
+      if (data.servicioId !== servicioId) return;
+      const peer = rol === 'cliente' ? data.conductor : data.cliente;
+      if (peer?.lat) setUbicacionPeer(peer);
+    });
+
+    return () => {
+      cleanupViaje();
+      cleanupSnap();
+    };
+  }, [conectado, servicioId, activo, enviar, onMensaje, rol]);
+
+  // Cliente también envía su GPS durante el viaje (útil si se mueve del punto)
+  useEffect(() => {
+    if (!conectado || !servicioId || !activo || rol !== 'cliente') {
       if (intervaloRef.current) clearInterval(intervaloRef.current);
       return;
     }
@@ -212,27 +308,26 @@ export function useEnviarUbicacion(uid, nombre, placa, activo) {
         if (status !== 'granted') return;
         const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
         enviar({
-          tipo: 'ubicacion',
+          tipo: 'ubicacion_viaje',
+          servicioId,
           lat: loc.coords.latitude,
           lng: loc.coords.longitude,
-          nombre,
-          placa,
         });
       } catch {}
     };
 
     enviarUbicacion();
-    intervaloRef.current = setInterval(enviarUbicacion, 10000); // Cada 10s via WS (antes era 60s via HTTP)
+    intervaloRef.current = setInterval(enviarUbicacion, 8000);
 
     return () => {
       if (intervaloRef.current) clearInterval(intervaloRef.current);
     };
-  }, [conectado, activo, uid, nombre, placa, enviar]);
+  }, [conectado, servicioId, activo, rol, enviar]);
 
-  return { conectado };
+  return { ubicacionPeer, conectado };
 }
 
-// ═══ HOOK ESPECÍFICO: Chat en tiempo real ═══
+// ═══ Chat en tiempo real ═══
 export function useChatWebSocket(uid, servicioId) {
   const { conectado, onMensaje, enviar } = useWebSocket(uid, 'cliente');
   const [mensajesNuevos, setMensajesNuevos] = useState([]);
@@ -240,7 +335,6 @@ export function useChatWebSocket(uid, servicioId) {
   useEffect(() => {
     if (!conectado || !servicioId) return;
 
-    // Suscribirse al servicio
     enviar({ tipo: 'suscribir_servicio', servicioId });
 
     const cleanup = onMensaje('chat_mensaje', (data) => {
@@ -267,7 +361,7 @@ export function useChatWebSocket(uid, servicioId) {
   return { mensajesNuevos, enviarMensaje, limpiarNuevos, conectado };
 }
 
-// ═══ HOOK ESPECÍFICO: Alertas en tiempo real ═══
+// ═══ Alertas en tiempo real ═══
 export function useAlertasWebSocket(uid) {
   const { conectado, onMensaje } = useWebSocket(uid, 'conductor');
   const [alertas, setAlertas] = useState([]);

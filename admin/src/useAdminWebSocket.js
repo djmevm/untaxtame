@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
+import { auth } from './firebase';
 
-// ═══ WEBSOCKET PARA PANEL ADMIN ═══
-// Comunicación en tiempo real: chat directo, alertas, servicios
+// ═══ WEBSOCKET PARA PANEL ADMIN (JWT) ═══
 
 const WS_URL = 'wss://untaxtame-production.up.railway.app/ws';
 
@@ -12,12 +12,15 @@ export default function useAdminWebSocket(uid) {
   const [conectado, setConectado] = useState(false);
   const listenersRef = useRef(new Map());
 
-  const conectar = useCallback(() => {
+  const conectar = useCallback(async () => {
     if (!uid) return;
     if (wsRef.current?.readyState === WebSocket.OPEN) return;
 
     try {
-      const ws = new WebSocket(`${WS_URL}?uid=${uid}&rol=admin`);
+      const user = auth.currentUser;
+      if (!user) return;
+      const token = await user.getIdToken();
+      const ws = new WebSocket(`${WS_URL}?token=${encodeURIComponent(token)}`);
 
       ws.onopen = () => {
         console.log('[WS Admin] Conectado');
@@ -28,10 +31,8 @@ export default function useAdminWebSocket(uid) {
       ws.onmessage = (event) => {
         try {
           const data = JSON.parse(event.data);
-          // Notificar a listeners registrados
           const listeners = listenersRef.current.get(data.tipo);
           if (listeners) listeners.forEach(cb => cb(data));
-          // Listener global
           const global = listenersRef.current.get('*');
           if (global) global.forEach(cb => cb(data));
         } catch {}
@@ -39,7 +40,6 @@ export default function useAdminWebSocket(uid) {
 
       ws.onclose = () => {
         setConectado(false);
-        // Reconectar automáticamente
         intentosRef.current++;
         const delay = Math.min(2000 * Math.pow(1.5, intentosRef.current), 30000);
         reconexionRef.current = setTimeout(conectar, delay);

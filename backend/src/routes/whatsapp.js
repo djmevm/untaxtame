@@ -5,6 +5,7 @@ const path = require('path');
 const fs = require('fs');
 const { db } = require('../firebase');
 const verifyToken = require('../middleware/verifyToken');
+const verifyAdmin = require('../middleware/verifyAdmin');
 const {
   parsearFechaHora,
   validarCantidadPasajeros,
@@ -43,13 +44,12 @@ function limpiarEstado(telefono) {
   estadosConversacion.delete(telefono);
 }
 
-const VERIFY_TOKEN = 'untaxtame2026';
-const PHONE_NUMBER_ID = '1242386332287027';
-const WABA_ID = '225661571844047';
+const VERIFY_TOKEN = process.env.WHATSAPP_VERIFY_TOKEN || 'untaxtame2026';
+const PHONE_NUMBER_ID = process.env.WHATSAPP_PHONE_NUMBER_ID || '1242386332287027';
+const WABA_ID = process.env.WHATSAPP_WABA_ID || '225661571844047';
 
-// Token permanente de WhatsApp Business API (nunca expira)
 function getToken() {
-  return 'EAAOdCkPftXYBRwurCy3ZAX4vAtPuLK3X9zMmoWTga6zklGdmpELcXARG7vnaG9wnIBlIa6dIhgFXEaJZCujGYdes8axKUG8uPXDIyKOZBIhZAHuteXEj6FGKJ2xNusoJmsXvRbNBfo6bQ6mKXWpJZB0xw4voOkZCALUbzSg0tSgG159ZBELbZCNj7G3XAddKvkeIVgZDZD';
+  return process.env.WHATSAPP_TOKEN || '';
 }
 
 // Proxy para servir media de WhatsApp (audio, imagen, video, documentos)
@@ -366,7 +366,7 @@ async function procesarMensaje(telefono, texto) {
         const ubi = estadoConv.datos.ubicacionDirecta;
         let direccion = `${ubi.lat.toFixed(5)}, ${ubi.lng.toFixed(5)}`;
         try {
-          const geoRes = await fetch(`https://maps.googleapis.com/maps/api/geocode/json?latlng=${ubi.lat},${ubi.lng}&key=AIzaSyCz_s1BIBL0E9rJfQRXQ4lgnPb6GR9IiJE`);
+          const geoRes = await fetch(`https://maps.googleapis.com/maps/api/geocode/json?latlng=${ubi.lat},${ubi.lng}&key=${process.env.GOOGLE_MAPS_API_KEY || ''}`);
           const geoData = await geoRes.json();
           if (geoData.results && geoData.results[0]) direccion = geoData.results[0].formatted_address;
         } catch (e) {}
@@ -390,7 +390,7 @@ async function procesarMensaje(telefono, texto) {
         const ubi = estadoConv.datos.ubicacionDirecta;
         let direccion = `${ubi.lat.toFixed(5)}, ${ubi.lng.toFixed(5)}`;
         try {
-          const geoRes = await fetch(`https://maps.googleapis.com/maps/api/geocode/json?latlng=${ubi.lat},${ubi.lng}&key=AIzaSyCz_s1BIBL0E9rJfQRXQ4lgnPb6GR9IiJE`);
+          const geoRes = await fetch(`https://maps.googleapis.com/maps/api/geocode/json?latlng=${ubi.lat},${ubi.lng}&key=${process.env.GOOGLE_MAPS_API_KEY || ''}`);
           const geoData = await geoRes.json();
           if (geoData.results && geoData.results[0]) direccion = geoData.results[0].formatted_address;
         } catch (e) {}
@@ -911,7 +911,7 @@ async function procesarUbicacion(telefono, lat, lng, nombre) {
   // Reverse geocode para obtener dirección
   let direccion = `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
   try {
-    const geoRes = await fetch(`https://maps.googleapis.com/maps/api/geocode/json?latlng=${lat},${lng}&key=AIzaSyCz_s1BIBL0E9rJfQRXQ4lgnPb6GR9IiJE`);
+    const geoRes = await fetch(`https://maps.googleapis.com/maps/api/geocode/json?latlng=${lat},${lng}&key=${process.env.GOOGLE_MAPS_API_KEY || ''}`);
     const geoData = await geoRes.json();
     if (geoData.results && geoData.results[0]) {
       direccion = geoData.results[0].formatted_address;
@@ -940,7 +940,7 @@ async function procesarUbicacionDirecta(telefono, lat, lng, nombre) {
   // Reverse geocode
   let direccion = `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
   try {
-    const geoRes = await fetch(`https://maps.googleapis.com/maps/api/geocode/json?latlng=${lat},${lng}&key=AIzaSyCz_s1BIBL0E9rJfQRXQ4lgnPb6GR9IiJE`);
+    const geoRes = await fetch(`https://maps.googleapis.com/maps/api/geocode/json?latlng=${lat},${lng}&key=${process.env.GOOGLE_MAPS_API_KEY || ''}`);
     const geoData = await geoRes.json();
     if (geoData.results && geoData.results[0]) direccion = geoData.results[0].formatted_address;
   } catch (e) {}
@@ -1289,7 +1289,7 @@ async function enviarPlantilla(telefono, templateName, languageCode, parameters,
 // ═══ RUTAS DE BANDEJA DE ENTRADA (inbox) ═══
 
 // Obtener todas las conversaciones
-router.get('/conversaciones', verifyToken, async (req, res) => {
+router.get('/conversaciones', verifyToken, verifyAdmin, async (req, res) => {
   try {
     const snapshot = await db.collection('whatsapp_conversaciones')
       .orderBy('actualizadoEn', 'desc')
@@ -1305,7 +1305,7 @@ router.get('/conversaciones', verifyToken, async (req, res) => {
 });
 
 // Obtener mensajes de una conversación
-router.get('/conversaciones/:telefono/mensajes', verifyToken, async (req, res) => {
+router.get('/conversaciones/:telefono/mensajes', verifyToken, verifyAdmin, async (req, res) => {
   try {
     const snapshot = await db.collection('whatsapp_mensajes')
       .where('telefono', '==', req.params.telefono)
@@ -1347,7 +1347,7 @@ router.get('/conversaciones/:telefono/mensajes', verifyToken, async (req, res) =
 });
 
 // Responder manualmente a una conversación (admin)
-router.post('/conversaciones/:telefono/responder', verifyToken, async (req, res) => {
+router.post('/conversaciones/:telefono/responder', verifyToken, verifyAdmin, async (req, res) => {
   const { mensaje } = req.body;
   if (!mensaje) return res.status(400).json({ error: 'Se requiere mensaje' });
 
@@ -1389,7 +1389,7 @@ router.post('/conversaciones/:telefono/responder', verifyToken, async (req, res)
 const multer = require('multer');
 const uploadWA = multer({ dest: path.join(__dirname, '../../uploads/whatsapp/') });
 
-router.post('/enviar-archivo', verifyToken, uploadWA.single('archivo'), async (req, res) => {
+router.post('/enviar-archivo', verifyToken, verifyAdmin, uploadWA.single('archivo'), async (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'No se envió archivo' });
   const { telefono } = req.body;
   if (!telefono) return res.status(400).json({ error: 'Se requiere telefono' });
@@ -1471,7 +1471,7 @@ router.post('/enviar-archivo', verifyToken, uploadWA.single('archivo'), async (r
 });
 
 // Enviar mensaje de texto a un número específico (admin)
-router.post('/enviar', verifyToken, async (req, res) => {
+router.post('/enviar', verifyToken, verifyAdmin, async (req, res) => {
   const { telefono, mensaje } = req.body;
   if (!telefono || !mensaje) {
     return res.status(400).json({ error: 'Se requiere telefono y mensaje' });
@@ -1491,7 +1491,7 @@ router.post('/enviar', verifyToken, async (req, res) => {
 });
 
 // Enviar plantilla a un número específico (admin)
-router.post('/enviar-plantilla', verifyToken, async (req, res) => {
+router.post('/enviar-plantilla', verifyToken, verifyAdmin, async (req, res) => {
   const { telefono, plantilla, idioma, parametros } = req.body;
   if (!telefono || !plantilla) {
     return res.status(400).json({ error: 'Se requiere telefono y plantilla' });
@@ -1507,7 +1507,7 @@ router.post('/enviar-plantilla', verifyToken, async (req, res) => {
 });
 
 // Enviar plantilla masiva a todos los clientes (admin)
-router.post('/enviar-masivo', verifyToken, async (req, res) => {
+router.post('/enviar-masivo', verifyToken, verifyAdmin, async (req, res) => {
   const { plantilla, idioma, parametros, headerImageUrl } = req.body;
   if (!plantilla) {
     return res.status(400).json({ error: 'Se requiere nombre de plantilla' });
@@ -1583,7 +1583,7 @@ router.post('/enviar-masivo', verifyToken, async (req, res) => {
 });
 
 // Obtener historial de envíos masivos
-router.get('/historial-masivos', verifyToken, async (req, res) => {
+router.get('/historial-masivos', verifyToken, verifyAdmin, async (req, res) => {
   try {
     const snapshot = await db.collection('enviosMasivos')
       .orderBy('creadoEn', 'desc')
@@ -1599,7 +1599,7 @@ router.get('/historial-masivos', verifyToken, async (req, res) => {
 });
 
 // Obtener plantillas disponibles
-router.get('/plantillas', verifyToken, async (req, res) => {
+router.get('/plantillas', verifyToken, verifyAdmin, async (req, res) => {
   try {
     const response = await fetch(`https://graph.facebook.com/v25.0/${WABA_ID}/message_templates?limit=50`, {
       headers: { 'Authorization': 'Bearer ' + getToken() },

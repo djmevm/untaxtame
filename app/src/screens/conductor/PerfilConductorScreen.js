@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, Platform,
   ScrollView, Alert, TextInput, ActivityIndicator, Switch, Image, Vibration, Modal,
+  KeyboardAvoidingView,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import * as ImagePicker from 'expo-image-picker';
@@ -356,7 +357,9 @@ export default function PerfilConductorScreen() {
         const response = await fetch(`${api.defaults.baseURL}/upload/documentos`, { method: 'POST', headers: { 'Authorization': `Bearer ${token}` }, body: fd });
         const data = await response.json();
         if (response.ok && data.documentos?.[key]) {
-          const url = `http://192.168.0.101:3000${data.documentos[key]}`;
+          const docUrl = data.documentos[key];
+          const baseURL = api.defaults.baseURL.replace('/api', '');
+          const url = docUrl.startsWith('http') ? docUrl : `${baseURL}${docUrl}`;
           if (setPerfil) setPerfil(prev => ({ ...prev, documentos: { ...(prev?.documentos || {}), [key]: url } }));
         }
         Alert.alert('✅', `${label} actualizado`);
@@ -367,7 +370,11 @@ export default function PerfilConductorScreen() {
   if (!perfil) return <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}><ActivityIndicator size="large" color="#FFC107" /></View>;
 
   return (
-    <ScrollView contentContainerStyle={styles.container}>
+    <KeyboardAvoidingView
+      style={{ flex: 1 }}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+    >
+    <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
       <SelectorFecha visible={selectorVisible} fechaActual={docSeleccionado ? vencimientos[docSeleccionado] : null}
         onClose={() => setSelectorVisible(false)} onSelect={(fecha) => { if (docSeleccionado) guardarVencimiento(docSeleccionado, fecha); }} />
 
@@ -530,6 +537,7 @@ export default function PerfilConductorScreen() {
 
       <TouchableOpacity style={styles.btnSalir} onPress={handleCerrarSesion}><Text style={styles.btnSalirTexto}>Cerrar sesión</Text></TouchableOpacity>
     </ScrollView>
+    </KeyboardAvoidingView>
   );
 }
 

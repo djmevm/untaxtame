@@ -44,6 +44,9 @@ router.get('/todos', verifyToken, verifyAdmin, async (req, res) => {
 
 // Actualizar disponibilidad conductor
 router.put('/conductor/:uid/disponibilidad', verifyToken, async (req, res) => {
+  if (req.user.uid !== req.params.uid) {
+    return res.status(403).json({ error: 'No autorizado' });
+  }
   const { disponible, serviciosOfrecidos } = req.body;
   try {
     const update = { disponible };
@@ -115,6 +118,9 @@ router.put('/:uid/datos', verifyToken, verifyAdmin, async (req, res) => {
 
 // Actualizar ubicación y estado del conductor
 router.put('/conductor/:uid/ubicacion', verifyToken, async (req, res) => {
+  if (req.user.uid !== req.params.uid) {
+    return res.status(403).json({ error: 'No autorizado' });
+  }
   const { lat, lng, enServicio } = req.body;
   try {
     const ahora = new Date().toISOString();
@@ -223,6 +229,9 @@ router.put('/:uid/bloquear', verifyToken, verifyAdmin, async (req, res) => {
 
 // Obtener notificaciones no leídas
 router.get('/notificaciones/:uid', verifyToken, async (req, res) => {
+  if (req.user.uid !== req.params.uid) {
+    return res.status(403).json({ error: 'No autorizado' });
+  }
   try {
     const snapshot = await db.collection('notificaciones')
       .where('uid', '==', req.params.uid)
