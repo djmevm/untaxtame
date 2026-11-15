@@ -40,6 +40,34 @@ export default function ProgramarViajeScreen() {
 
   useFocusEffect(useCallback(() => { cargarMisViajes(); }, [cargarMisViajes]));
 
+  const cancelarViaje = (viaje) => {
+    if (!['programado_buscando', 'programado_asignado'].includes(viaje.estado)) {
+      return Alert.alert('No disponible', 'Este viaje ya no se puede cancelar.');
+    }
+    Alert.alert(
+      '¿Cancelar viaje programado?',
+      `Puedes cancelar gratis si faltan más de 30 minutos.\n\n${viaje.horaProgramadaTexto || ''}\n${viaje.origen} → ${viaje.destino}`,
+      [
+        { text: 'No', style: 'cancel' },
+        {
+          text: 'Sí, cancelar',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await api.put(`/programados/cancelar/${viaje.id}`, {
+                motivo: 'Cancelado por el cliente desde la app',
+              });
+              Alert.alert('✅ Cancelado', 'Tu viaje programado fue cancelado.');
+              cargarMisViajes();
+            } catch (err) {
+              Alert.alert('No se pudo cancelar', err.response?.data?.error || 'Intenta de nuevo o contacta a la central.');
+            }
+          },
+        },
+      ]
+    );
+  };
+
   const crear = async () => {
     if (!form.fecha.trim() || !form.hora.trim()) {
       return Alert.alert('Falta fecha u hora', 'Indica la fecha (DD/MM) y la hora (ej: 04:30 AM).');
@@ -177,6 +205,11 @@ export default function ProgramarViajeScreen() {
                     )}
                   </View>
                 )}
+                {['programado_buscando', 'programado_asignado'].includes(v.estado) && (
+                  <TouchableOpacity style={styles.btnCancelarProg} onPress={() => cancelarViaje(v)}>
+                    <Text style={styles.btnCancelarProgTexto}>❌ Cancelar viaje</Text>
+                  </TouchableOpacity>
+                )}
               </View>
             );
           })
@@ -212,4 +245,9 @@ const styles = StyleSheet.create({
   conductorBox: { marginTop: 8, paddingTop: 8, borderTopWidth: 1, borderTopColor: '#f0f0f0' },
   conductorTexto: { fontSize: 13, color: '#222', fontWeight: '600' },
   conductorTel: { fontSize: 13, color: '#1565C0', fontWeight: '600', marginTop: 2 },
+  btnCancelarProg: {
+    marginTop: 10, borderWidth: 1.5, borderColor: '#E53935', borderRadius: 8,
+    paddingVertical: 8, alignItems: 'center',
+  },
+  btnCancelarProgTexto: { color: '#E53935', fontWeight: 'bold', fontSize: 13 },
 });

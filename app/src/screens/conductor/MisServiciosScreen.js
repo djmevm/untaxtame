@@ -1,8 +1,9 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import {
   View, Text, FlatList, TouchableOpacity,
-  StyleSheet, Alert, ActivityIndicator, Linking, RefreshControl, Modal, TextInput
+  StyleSheet, Alert, ActivityIndicator, Linking, RefreshControl, Modal, TextInput, Share
 } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import { useAuth } from '../../context/AuthContext';
 import api from '../../config/api';
 import * as Location from 'expo-location';
@@ -15,48 +16,70 @@ import { reproducirSonido } from '../../services/sonido';
 import useChatNotificacion from '../../hooks/useChatNotificacion';
 import useWebSocket from '../../hooks/useWebSocket';
 
+function minutosDesde(iso) {
+  if (!iso) return 0;
+  return Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 60000));
+}
+
+function PasosViaje({ estado }) {
+  const pasos = [
+    { key: 'aceptado', label: 'En camino' },
+    { key: 'conductor_en_sitio', label: 'En sitio' },
+    { key: 'en_curso', label: 'En viaje' },
+  ];
+  const idx = Math.max(0, pasos.findIndex((p) => p.key === estado));
+  return (
+    <View style={styles.pasosRow}>
+      {pasos.map((p, i) => (
+        <View key={p.key} style={styles.pasoItem}>
+          <View style={[styles.pasoDot, i <= idx && styles.pasoDotActivo]} />
+          <Text style={[styles.pasoLabel, i <= idx && styles.pasoLabelActivo]}>{p.label}</Text>
+          {i < pasos.length - 1 ? <View style={[styles.pasoLinea, i < idx && styles.pasoLineaActiva]} /> : null}
+        </View>
+      ))}
+    </View>
+  );
+}
+
 export default function MisServiciosScreen() {
   const { perfil } = useAuth();
   const [servicios, setServicios] = useState([]);
   const [cargando, setCargando] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [chatServicioId, setChatServicioId] = useState(null);
+  const [ahoraTick, setAhoraTick] = useState(Date.now());
 
   const servicioActivoAnterior = React.useRef(null);
+  const recordatorioLlegueRef = React.useRef(null);
 
   // Notificar mensajes de chat cuando el chat está cerrado
   const servicioActivoParaChat = servicios.find(function(s) { return ['aceptado', 'conductor_en_sitio', 'en_curso'].includes(s.estado); });
   useChatNotificacion(servicioActivoParaChat?.id, perfil?.uid, !!chatServicioId);
 
-  const cargar = async () => {
+  const cargar = useCallback(async () => {
     try {
       const res = await api.get(`/services/historial/${perfil?.uid}/conductor`);
       const nuevos = res.data;
-      
-      // Detectar si hay un nuevo servicio aceptado
-      const activoNuevo = nuevos.find(s => s.estado === 'aceptado');
-      if (activoNuevo && !servicioActivoAnterior.current) {
-        // Nuevo servicio aceptado — el cliente aceptó la oferta
-        reproducirSonido();
-        Alert.alert(
-          '🎉 ¡Oferta aceptada!',
-          `${activoNuevo.clienteNombre} aceptó tu oferta.\n\n📍 ${activoNuevo.origen}\n🏁 ${activoNuevo.destino}${activoNuevo.tarifaAcordada ? `\n💰 $${activoNuevo.tarifaAcordada.toLocaleString('es-CO')}` : ''}`,
-          [{ text: '¡Vamos!' }]
-        );
-      }
+      const activoNuevo = nuevos.find(s => ['aceptado', 'conductor_en_sitio', 'en_curso'].includes(s.estado));
       servicioActivoAnterior.current = activoNuevo?.id || null;
-      
       setServicios(nuevos);
     } catch {}
     finally { setCargando(false); setRefreshing(false); }
-  };
+  }, [perfil?.uid]);
 
   const { onMensaje, conectado: wsConectado } = useWebSocket(perfil?.uid, 'conductor');
 
   useEffect(() => {
     if (!wsConectado) return;
     return onMensaje('servicio_actualizado', () => { cargar(); });
-  }, [wsConectado, onMensaje]);
+  }, [wsConectado, onMensaje, cargar]);
+
+  // Al entrar a la pestaña (p. ej. tras aceptar oferta) refrescar al instante
+  useFocusEffect(
+    useCallback(() => {
+      cargar();
+    }, [cargar])
+  );
 
   useEffect(() => {
     cargar();
@@ -133,20 +156,40 @@ export default function MisServiciosScreen() {
     }
   };
 
+  const compartirRecibo = async (servicio, recibo, clientePago) => {
+    const tarifa = recibo?.tarifa || servicio.tarifaAcordada || servicio.tarifaMinima || 8000;
+    const metodo = (recibo?.metodoPago || servicio.metodoPago || 'efectivo').toUpperCase();
+    const mensaje =
+      `🧾 *Recibo UntaXtame*\n\n` +
+      `📍 ${servicio.origen}\n🏁 ${servicio.destino}\n` +
+      `👤 ${servicio.clienteNombre || 'Cliente'}\n` +
+      `🚕 ${servicio.conductorNombre || perfil?.nombre || 'Conductor'} · ${servicio.conductorPlaca || perfil?.placa || ''}\n` +
+      `💰 $${Number(tarifa).toLocaleString('es-CO')} · ${metodo}\n` +
+      `💳 Pago: ${clientePago ? 'Confirmado' : 'No confirmado'}\n` +
+      `⏰ ${new Date().toLocaleString('es-CO')}`;
+    try {
+      await Share.share({ message: mensaje, title: 'Recibo UntaXtame' });
+    } catch {}
+  };
+
   const confirmarCompletado = async (servicio, clientePago) => {
     try {
-      await api.put(`/services/completar/${servicio.id}`, {
+      const res = await api.put(`/services/completar/${servicio.id}`, {
         clientePago,
         metodoPagoConfirmado: servicio.metodoPago,
       });
       reproducirSonido();
-      if (clientePago) {
-        Alert.alert('✅ Servicio completado', 'Pago confirmado. El cliente recibirá una notificación para calificar.');
-      } else {
-        Alert.alert('⚠️ Servicio completado', 'Se registró que el cliente NO pagó. Esto quedará en su historial.');
-      }
-      // Pedir al conductor que califique al pasajero (para el "mejor cliente")
-      setTimeout(() => calificarCliente(servicio), 600);
+      const recibo = res.data?.recibo;
+      Alert.alert(
+        clientePago ? '✅ Servicio completado' : '⚠️ Servicio completado',
+        clientePago
+          ? 'Pago confirmado. El cliente recibió el recibo y puede calificarte.'
+          : 'Se registró que el cliente NO pagó. Quedará en su historial.',
+        [
+          { text: 'Compartir recibo', onPress: () => compartirRecibo(servicio, recibo, clientePago) },
+          { text: 'OK', onPress: () => setTimeout(() => calificarCliente(servicio), 400) },
+        ]
+      );
       cargar();
     } catch {
       Alert.alert('Error', 'No se pudo completar el servicio');
@@ -196,7 +239,34 @@ export default function MisServiciosScreen() {
   const servicioActivo = servicios.find(s => ['aceptado', 'conductor_en_sitio', 'en_curso'].includes(s.estado));
   const historial = servicios.filter(s => !['aceptado', 'conductor_en_sitio', 'en_curso'].includes(s.estado));
 
+  // Reloj para minutos en camino / recordatorio Llegué
+  useEffect(() => {
+    const t = setInterval(() => setAhoraTick(Date.now()), 30000);
+    return () => clearInterval(t);
+  }, []);
+
+  useEffect(() => {
+    if (!servicioActivo || servicioActivo.estado !== 'aceptado') {
+      recordatorioLlegueRef.current = null;
+      return;
+    }
+    const mins = minutosDesde(servicioActivo.actualizadoEn || servicioActivo.creadoEn);
+    if (mins >= 8 && recordatorioLlegueRef.current !== servicioActivo.id) {
+      recordatorioLlegueRef.current = servicioActivo.id;
+      reproducirSonido();
+      Alert.alert(
+        '📍 ¿Ya llegaste al punto?',
+        'Llevas varios minutos en camino. Cuando estés con el cliente, marca “Llegué”.',
+        [{ text: 'Entendido' }]
+      );
+    }
+  }, [servicioActivo?.id, servicioActivo?.estado, ahoraTick]);
+
   if (cargando) return <ActivityIndicator style={{ flex: 1 }} size="large" color="#FFC107" />;
+
+  const minsEnCamino = servicioActivo
+    ? minutosDesde(servicioActivo.actualizadoEn || servicioActivo.creadoEn)
+    : 0;
 
   const confirmarLlegada = async () => {
     try {
@@ -267,6 +337,8 @@ export default function MisServiciosScreen() {
             <Text style={styles.rutaTexto}>🏁 {servicioActivo.destino}</Text>
           </View>
 
+          <PasosViaje estado={servicioActivo.estado} />
+
           <View style={styles.activoDetalles}>
             <Text style={styles.activoPago}>💳 {servicioActivo.metodoPago?.toUpperCase()}</Text>
             {servicioActivo.tarifaAcordada && (
@@ -274,9 +346,42 @@ export default function MisServiciosScreen() {
             )}
           </View>
 
+          {servicioActivo.estado === 'aceptado' && (
+            <View style={[styles.hintBanner, minsEnCamino >= 8 && styles.hintBannerUrgente]}>
+              <Text style={styles.hintTexto}>
+                {minsEnCamino >= 8
+                  ? `⚠️ Llevas ~${minsEnCamino} min en camino. Si ya estás en el punto, marca Llegué.`
+                  : `⏱️ En camino hace ~${minsEnCamino} min. Al llegar al cliente, marca Llegué.`}
+              </Text>
+            </View>
+          )}
+          {servicioActivo.estado === 'conductor_en_sitio' && (
+            <View style={styles.hintBanner}>
+              <Text style={styles.hintTexto}>👤 Esperando al pasajero. Cuando suba, pulsa Iniciar viaje.</Text>
+            </View>
+          )}
+          {servicioActivo.estado === 'en_curso' && (
+            <View style={[styles.hintBanner, { backgroundColor: '#E8F5E9' }]}>
+              <Text style={[styles.hintTexto, { color: '#1B5E20' }]}>🛣️ Viaje en curso. Al llegar al destino, Completar.</Text>
+            </View>
+          )}
+
           <MapaViajeConductor servicioActivo={servicioActivo} />
 
-          {servicioActivo.ubicacionGPS ? (
+          {servicioActivo.estado === 'en_curso' && (servicioActivo.destinoLat || servicioActivo.destino) ? (
+            <TouchableOpacity
+              style={[styles.btnMapa, { backgroundColor: '#2E7D32' }]}
+              onPress={() => {
+                if (servicioActivo.destinoLat && servicioActivo.destinoLng) {
+                  Linking.openURL(`google.navigation:q=${servicioActivo.destinoLat},${servicioActivo.destinoLng}`);
+                } else {
+                  Linking.openURL(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(servicioActivo.destino)}`);
+                }
+              }}
+            >
+              <Text style={[styles.btnMapaTexto, { color: '#fff' }]}>🗺️ Navegar al destino</Text>
+            </TouchableOpacity>
+          ) : servicioActivo.ubicacionGPS ? (
             <TouchableOpacity style={[styles.btnMapa, { backgroundColor: '#1565C0' }]}
               onPress={() => Linking.openURL(`google.navigation:q=${servicioActivo.ubicacionGPS.lat},${servicioActivo.ubicacionGPS.lng}`)}>
               <Text style={[styles.btnMapaTexto, { color: '#fff' }]}>🗺️ Navegar GPS hacia el cliente</Text>
@@ -420,6 +525,17 @@ const styles = StyleSheet.create({
   activoDetalles: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 10 },
   activoPago: { fontSize: 14, color: '#666' },
   activoTarifa: { fontSize: 16, fontWeight: 'bold', color: '#2E7D32' },
+  pasosRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 12, paddingHorizontal: 4 },
+  pasoItem: { flex: 1, flexDirection: 'row', alignItems: 'center' },
+  pasoDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: '#ddd' },
+  pasoDotActivo: { backgroundColor: '#FFC107' },
+  pasoLabel: { fontSize: 10, color: '#999', marginLeft: 4, fontWeight: '600' },
+  pasoLabelActivo: { color: '#333' },
+  pasoLinea: { flex: 1, height: 2, backgroundColor: '#eee', marginHorizontal: 4 },
+  pasoLineaActiva: { backgroundColor: '#FFC107' },
+  hintBanner: { backgroundColor: '#FFF8E1', borderRadius: 10, padding: 10, marginBottom: 10, borderWidth: 1, borderColor: '#FFE082' },
+  hintBannerUrgente: { backgroundColor: '#FFEBEE', borderColor: '#EF9A9A' },
+  hintTexto: { fontSize: 13, color: '#5D4037', fontWeight: '600' },
   btnMapa: { backgroundColor: '#E3F2FD', borderRadius: 8, padding: 10, alignItems: 'center', marginBottom: 12 },
   btnMapaTexto: { color: '#1565C0', fontWeight: '600', fontSize: 13 },
   activoAcciones: { flexDirection: 'row', gap: 10, marginBottom: 10 },

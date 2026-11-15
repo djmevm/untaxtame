@@ -91,7 +91,7 @@ function ConductorTabs() {
         </View>
       ) : null}
       <Tab.Navigator
-        tabBar={(props) => <CustomTabBar {...props} />}
+        tabBar={(props) => <CustomTabBar {...props} irAMisServiciosAlAceptar />}
         screenOptions={{ headerShown: false }}
       >
         <Tab.Screen name="Pendientes" component={ServiciosPendientesScreen} />

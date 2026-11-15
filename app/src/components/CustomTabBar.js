@@ -1,6 +1,8 @@
 import React, { useRef, useEffect } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Animated, Platform } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useAuth } from '../context/AuthContext';
+import { useConductorOfertaAceptada } from '../hooks/useServicioListener';
 
 const TAB_ICONS = {
   PedirTaxi: '🚕',
@@ -71,8 +73,15 @@ function TabItem({ label, icon, isFocused, onPress, onLongPress }) {
   );
 }
 
-export default function CustomTabBar({ state, descriptors, navigation }) {
+export default function CustomTabBar({ state, descriptors, navigation, irAMisServiciosAlAceptar }) {
   const insets = useSafeAreaInsets();
+  const { perfil } = useAuth();
+
+  // Si el cliente acepta la oferta → ir directo a Mis Servicios
+  useConductorOfertaAceptada(
+    irAMisServiciosAlAceptar ? perfil?.uid : null,
+    () => { navigation.navigate('MisServicios'); }
+  );
 
   return (
     <View style={[styles.container, { paddingBottom: Math.max(insets.bottom, 8) }]}>

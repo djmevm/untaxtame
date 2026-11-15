@@ -205,7 +205,19 @@ router.put('/iniciar/:servicioId', verifyToken, async (req, res) => {
       actualizadoEn: new Date().toISOString(),
     });
 
-    await notificarCambioServicio((await ref.get()).data());
+    const actualizado = (await ref.get()).data();
+    await notificarCambioServicio(actualizado);
+
+    if (data.clienteUid) {
+      try {
+        const { enviarPushAUsuario } = require('../services/pushNotifications');
+        enviarPushAUsuario(data.clienteUid, {
+          titulo: '🛣️ Viaje iniciado',
+          cuerpo: 'Ya van hacia el destino. Puedes seguir el taxi en vivo.',
+          datos: { tipo: 'viaje_iniciado', servicioId: req.params.servicioId },
+        });
+      } catch (e) {}
+    }
 
     res.json({ message: 'Viaje iniciado' });
   } catch (err) { res.status(500).json({ error: err.message }); }
@@ -242,7 +254,19 @@ router.put('/llegada/:servicioId', verifyToken, async (req, res) => {
       actualizadoEn: new Date().toISOString(),
     });
 
-    await notificarCambioServicio((await ref.get()).data());
+    const actualizado = (await ref.get()).data();
+    await notificarCambioServicio(actualizado);
+
+    if (data.clienteUid) {
+      try {
+        const { enviarPushAUsuario } = require('../services/pushNotifications');
+        enviarPushAUsuario(data.clienteUid, {
+          titulo: '📍 ¡Tu conductor llegó!',
+          cuerpo: `${data.conductorNombre || 'El conductor'} está en el punto de recogida. Sal al encuentro.`,
+          datos: { tipo: 'conductor_en_sitio', servicioId: req.params.servicioId },
+        });
+      } catch (e) {}
+    }
 
     res.json({ message: 'Llegada confirmada', gpsValidado });
   } catch (err) { res.status(500).json({ error: err.message }); }
@@ -342,6 +366,45 @@ router.put('/completar/:servicioId', verifyToken, async (req, res) => {
       await db.collection('usuarios').doc(data.conductorUid).update({ disponible: true });
     }
 
+    const tarifaFinal = data.tarifaAcordada || data.tarifaMinima || 8000;
+    const metodoFinal = metodoPagoConfirmado || data.metodoPago || 'efectivo';
+    const recibo = {
+      servicioId: req.params.servicioId,
+      origen: data.origen,
+      destino: data.destino,
+      tarifa: tarifaFinal,
+      metodoPago: metodoFinal,
+      clientePago: clientePago !== undefined ? clientePago : null,
+      conductorNombre: data.conductorNombre || null,
+      conductorPlaca: data.conductorPlaca || null,
+      completadoEn: new Date().toISOString(),
+    };
+    await ref.update({ recibo });
+
+    // Push + notificación interna al cliente (recibo)
+    if (data.clienteUid) {
+      try {
+        await db.collection('notificaciones').add({
+          uid: data.clienteUid,
+          tipo: 'recibo',
+          titulo: '✅ Viaje completado',
+          mensaje: `Tarifa $${tarifaFinal.toLocaleString('es-CO')} · ${String(metodoFinal).toUpperCase()}. Califica a tu conductor.`,
+          servicioId: req.params.servicioId,
+          recibo,
+          leida: false,
+          creadoEn: new Date().toISOString(),
+        });
+        const { enviarPushAUsuario } = require('../services/pushNotifications');
+        enviarPushAUsuario(data.clienteUid, {
+          titulo: '✅ Viaje completado — recibo',
+          cuerpo: `${data.origen} → ${data.destino} · $${tarifaFinal.toLocaleString('es-CO')} (${String(metodoFinal).toUpperCase()})`,
+          datos: { tipo: 'recibo', servicioId: req.params.servicioId },
+        });
+      } catch (e) {
+        console.error('[SERVICES] Error push recibo cliente:', e.message);
+      }
+    }
+
     // Notificar al cliente de WhatsApp que el servicio terminó y pedir calificación
     if (data.fuenteSolicitud === 'whatsapp' && data.clienteCelular) {
       try {
@@ -349,8 +412,8 @@ router.put('/completar/:servicioId', verifyToken, async (req, res) => {
         await notificarServicioCompletadoWhatsApp(data.clienteCelular, {
           servicioId: req.params.servicioId,
           conductorNombre: data.conductorNombre,
-          tarifa: data.tarifaAcordada || data.tarifaMinima || 8000,
-          metodoPago: data.metodoPago,
+          tarifa: tarifaFinal,
+          metodoPago: metodoFinal,
         });
       } catch (e) {
         console.error('[SERVICES] Error notificando WhatsApp completado:', e.message);
@@ -359,7 +422,7 @@ router.put('/completar/:servicioId', verifyToken, async (req, res) => {
 
     await notificarCambioServicio((await ref.get()).data());
 
-    res.json({ message: 'Servicio completado', comision: comisionResult, clientePago });
+    res.json({ message: 'Servicio completado', comision: comisionResult, clientePago, recibo });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

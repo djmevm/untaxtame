@@ -1,8 +1,9 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useCallback } from 'react';
 import { Alert } from 'react-native';
 import api from '../config/api';
 import { notificarLocal } from '../services/notificaciones';
 import { reproducirSonido, reproducirSonidoSOS } from '../services/sonido';
+import useWebSocket from './useWebSocket';
 
 export function useClienteServicioListener(clienteUid) {
   const estadoAnterior = useRef(null);
@@ -65,32 +66,88 @@ export function useConductorServiciosListener(conductorUid, onNuevoServicio) {
   }, [conductorUid]);
 }
 
-// Detectar cuando el cliente acepta la oferta del conductor
+/**
+ * Cuando el cliente acepta la oferta del conductor:
+ * - Suena alerta
+ * - Llama onOfertaAceptada (navegación a Mis Servicios)
+ * No dispara al abrir la app si ya había un servicio activo.
+ */
 export function useConductorOfertaAceptada(conductorUid, onOfertaAceptada) {
   const servicioAnterior = useRef(null);
+  const listo = useRef(false);
+  const onOfertaRef = useRef(onOfertaAceptada);
+  onOfertaRef.current = onOfertaAceptada;
 
+  const { conectado, onMensaje } = useWebSocket(conductorUid, 'conductor');
+
+  const manejarNuevo = useCallback((activo) => {
+    if (!activo?.id || !listo.current) return;
+    if (activo.conductorUid && activo.conductorUid !== conductorUid) return;
+    if (activo.estado !== 'aceptado') return;
+    if (activo.id === servicioAnterior.current) return;
+
+    servicioAnterior.current = activo.id;
+
+    reproducirSonidoSOS();
+    notificarLocal({
+      titulo: '🎉 ¡Oferta aceptada!',
+      cuerpo: `${activo.clienteNombre || 'Cliente'} aceptó tu oferta`,
+    });
+
+    // Ir directo a Mis Servicios
+    if (onOfertaRef.current) onOfertaRef.current(activo);
+
+    Alert.alert(
+      '🎉 ¡Oferta aceptada!',
+      `${activo.clienteNombre || 'El cliente'} aceptó tu oferta.\n\n📍 ${activo.origen || ''}\n🏁 ${activo.destino || ''}` +
+        (activo.tarifaAcordada ? `\n💰 $${Number(activo.tarifaAcordada).toLocaleString('es-CO')}` : ''),
+      [{ text: 'Ver servicio', onPress: () => onOfertaRef.current && onOfertaRef.current(activo) }]
+    );
+  }, [conductorUid]);
+
+  // Semilla inicial: recordar servicio activo sin alertar
+  useEffect(() => {
+    if (!conductorUid) return;
+    listo.current = false;
+    let cancelled = false;
+
+    (async () => {
+      try {
+        const res = await api.get(`/services/activo/${conductorUid}`);
+        if (!cancelled && res.data?.servicio?.id) {
+          servicioAnterior.current = res.data.servicio.id;
+        }
+      } catch {}
+      if (!cancelled) listo.current = true;
+    })();
+
+    return () => { cancelled = true; };
+  }, [conductorUid]);
+
+  // WebSocket (rápido)
+  useEffect(() => {
+    if (!conectado || !conductorUid) return;
+    return onMensaje('servicio_actualizado', (data) => {
+      const s = data.servicio;
+      if (s) manejarNuevo(s);
+    });
+  }, [conectado, conductorUid, onMensaje, manejarNuevo]);
+
+  // Polling de respaldo
   useEffect(() => {
     if (!conductorUid) return;
 
     const verificar = async () => {
+      if (!listo.current) return;
       try {
-        const res = await api.get(`/services/historial/${conductorUid}/conductor`);
-        const activo = res.data.find(s => s.estado === 'aceptado');
-
-        if (activo && activo.id !== servicioAnterior.current) {
-          servicioAnterior.current = activo.id;
-          reproducirSonidoSOS();
-          Alert.alert(
-            '🎉 ¡Oferta aceptada!',
-            `${activo.clienteNombre} aceptó tu oferta.\n\n📍 Origen: ${activo.origen}\n🏁 Destino: ${activo.destino}\n💰 Tarifa: $${activo.tarifaAcordada?.toLocaleString('es-CO') || '---'}`,
-            [{ text: 'Ir al servicio', onPress: () => onOfertaAceptada && onOfertaAceptada(activo) }]
-          );
+        const res = await api.get(`/services/activo/${conductorUid}`);
+        if (res.data?.tieneActivo && res.data.servicio) {
+          manejarNuevo(res.data.servicio);
         }
       } catch {}
     };
 
-    verificar();
-    const intervalo = setInterval(verificar, 10000);
+    const intervalo = setInterval(verificar, 8000);
     return () => clearInterval(intervalo);
-  }, [conductorUid]);
+  }, [conductorUid, manejarNuevo]);
 }

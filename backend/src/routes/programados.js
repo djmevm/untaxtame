@@ -400,13 +400,23 @@ router.put('/aceptar/:viajeId', verifyToken, async (req, res) => {
 // ═══════════════════════════════════════════════════════════════════
 router.put('/cancelar/:viajeId', verifyToken, async (req, res) => {
   const viajeRef = db.collection('servicios').doc(req.params.viajeId);
-  const motivo = (req.body && req.body.motivo) || null;
+  const motivo = (req.body && req.body.motivo) || 'Cancelado por el cliente';
 
   try {
     const snap = await viajeRef.get();
     if (!snap.exists) return res.status(404).json({ error: 'Viaje no encontrado' });
 
     const viaje = snap.data();
+    if (!viaje.esProgramado) {
+      return res.status(400).json({ error: 'Este servicio no es un viaje programado' });
+    }
+    if (viaje.clienteUid && viaje.clienteUid !== req.user.uid) {
+      return res.status(403).json({ error: 'Solo puedes cancelar tus propios viajes' });
+    }
+    if (['cancelado', 'completado', 'completado_auto'].includes(viaje.estado)) {
+      return res.status(400).json({ error: 'El viaje ya está finalizado' });
+    }
+
     const minutos = minutosHasta(new Date(), new Date(viaje.horaProgramada));
 
     if (minutos > CANCELACION_LIBRE_MIN) {
