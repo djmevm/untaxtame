@@ -37,7 +37,7 @@ router.post('/solicitar', verifyToken, async (req, res) => {
     return res.status(400).json({ error: 'Faltan campos requeridos' });
   }
 
-  const metodosPagoValidos = ['daviplata', 'nequi', 'efectivo', 'pse'];
+  const metodosPagoValidos = ['daviplata', 'nequi', 'efectivo'];
   if (!metodosPagoValidos.includes(metodoPago.toLowerCase())) {
     return res.status(400).json({ error: 'Método de pago inválido: ' + metodoPago });
   }

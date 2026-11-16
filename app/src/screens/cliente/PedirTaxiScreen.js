@@ -24,7 +24,6 @@ const METODOS_PAGO = [
   { id: 'daviplata', label: 'Daviplata', color: '#E53935' },
   { id: 'nequi',     label: 'Nequi',     color: '#6A1B9A' },
   { id: 'efectivo',  label: 'Efectivo',  color: '#2E7D32' },
-  { id: 'pse',       label: 'PSE',       color: '#0D47A1' },
 ];
 
 const ESTADO_CONFIG = {

@@ -9,11 +9,10 @@ import api from '../../config/api';
 const METODO_CONFIG = {
   daviplata: { color: '#E53935', icon: '🔴', label: 'Daviplata' },
   nequi:     { color: '#6A1B9A', icon: '🟣', label: 'Nequi' },
-  pse:       { color: '#1565C0', icon: '🔵', label: 'PSE' },
   efectivo:  { color: '#2E7D32', icon: '💵', label: 'Efectivo' },
 };
 
-const FILTROS = ['Todos', 'Daviplata', 'Nequi', 'PSE', 'Efectivo'];
+const FILTROS = ['Todos', 'Daviplata', 'Nequi', 'Efectivo'];
 
 export default function HistorialPagosScreen() {
   const { perfil } = useAuth();

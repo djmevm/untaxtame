@@ -103,7 +103,6 @@ Inicia sesión con las credenciales del administrador creado en el paso 2.
 ## Métodos de pago soportados
 - Daviplata
 - Nequi
-- PSE
 - Efectivo
 
 ## API Endpoints

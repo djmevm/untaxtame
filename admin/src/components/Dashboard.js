@@ -16,7 +16,6 @@ const COLORES_ESTADO = {
 const COLORES_PAGO = {
   daviplata: '#E53935',
   nequi: '#6A1B9A',
-  pse: '#1565C0',
   efectivo: '#2E7D32',
 };
 

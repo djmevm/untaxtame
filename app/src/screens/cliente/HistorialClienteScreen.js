@@ -17,7 +17,6 @@ const ESTADO_COLOR = {
 const PAGO_ICON = {
   daviplata: '🔴',
   nequi:     '🟣',
-  pse:       '🔵',
   efectivo:  '💵',
 };
 

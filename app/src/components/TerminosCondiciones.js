@@ -41,7 +41,7 @@ El uso de la Aplicación implica la aceptación total e irrevocable de estas dis
 
 6. TARIFAS Y FORMAS DE PAGO
 Tarifa mínima: $8,000 COP. El precio se negocia entre conductor y cliente por medio de ofertas.
-Formas de pago: Efectivo, Daviplata, Nequi, PSE.
+Formas de pago: Efectivo, Daviplata, Nequi.
 
 7. DATOS PERSONALES (Ley 1581 de 2012)
 La Aplicación recopila: ubicación GPS, historial de viajes, calificaciones.
@@ -102,7 +102,7 @@ Cero tolerancia. Suspensión definitiva inmediata.
 
 8. PAGOS Y TARIFAS
 Tarifa mínima: $8,000 COP. El precio se negocia por ofertas.
-Formas de pago: Efectivo, Daviplata, Nequi, PSE.
+Formas de pago: Efectivo, Daviplata, Nequi.
 
 9. CAUSALES DE SUSPENSIÓN Y EXPULSIÓN
 Suspensión: Conducción peligrosa, calificación baja, fraude GPS.
