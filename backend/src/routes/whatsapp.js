@@ -44,6 +44,94 @@ function limpiarEstado(telefono) {
   estadosConversacion.delete(telefono);
 }
 
+/** Normaliza a solo dígitos (ej. 573001234567). */
+function normalizarTelefonoWA(telefono) {
+  return String(telefono || '').replace(/\D/g, '');
+}
+
+/**
+ * ¿Este número está bloqueado del chatbot WhatsApp?
+ * Revisa colección dedicada + flag en conversación + usuarios.bloqueado por teléfono.
+ */
+async function estaBloqueadoWhatsApp(telefono) {
+  const id = normalizarTelefonoWA(telefono);
+  if (!id) return false;
+
+  try {
+    const bloqueoDoc = await db.collection('whatsapp_bloqueados').doc(id).get();
+    if (bloqueoDoc.exists && bloqueoDoc.data().bloqueado !== false) return true;
+  } catch (e) {}
+
+  try {
+    // Doc de conversación suele usar el wa_id tal cual (msg.from)
+    const conv = await db.collection('whatsapp_conversaciones').doc(telefono).get();
+    if (conv.exists && conv.data().bloqueado) return true;
+    if (telefono !== id) {
+      const conv2 = await db.collection('whatsapp_conversaciones').doc(id).get();
+      if (conv2.exists && conv2.data().bloqueado) return true;
+    }
+  } catch (e) {}
+
+  try {
+    // Variantes comunes CO: con/sin 57
+    const variantes = new Set([id]);
+    if (id.startsWith('57') && id.length > 10) variantes.add(id.slice(2));
+    else if (id.length === 10) variantes.add('57' + id);
+
+    for (const tel of variantes) {
+      const snap = await db.collection('usuarios')
+        .where('telefono', '==', tel)
+        .limit(5)
+        .get();
+      for (const d of snap.docs) {
+        if (d.data().bloqueado) return true;
+      }
+    }
+  } catch (e) {}
+
+  return false;
+}
+
+async function setBloqueoWhatsApp(telefono, bloqueado, { motivo, adminUid, nombre } = {}) {
+  const id = normalizarTelefonoWA(telefono);
+  if (!id) throw new Error('Teléfono inválido');
+
+  const ahora = new Date().toISOString();
+  const payload = {
+    telefono: id,
+    bloqueado: !!bloqueado,
+    motivo: motivo || null,
+    nombre: nombre || null,
+    actualizadoEn: ahora,
+    actualizadoPor: adminUid || null,
+  };
+  if (bloqueado) {
+    payload.bloqueadoEn = ahora;
+  } else {
+    payload.desbloqueadoEn = ahora;
+  }
+
+  await db.collection('whatsapp_bloqueados').doc(id).set(payload, { merge: true });
+
+  // Flag en conversación(es) posibles
+  const idsConv = new Set([telefono, id]);
+  for (const docId of idsConv) {
+    try {
+      await db.collection('whatsapp_conversaciones').doc(docId).set({
+        bloqueado: !!bloqueado,
+        motivoBloqueo: bloqueado ? (motivo || null) : null,
+        bloqueadoEn: bloqueado ? ahora : null,
+        actualizadoEn: ahora,
+      }, { merge: true });
+    } catch (e) {}
+  }
+
+  if (bloqueado) limpiarEstado(telefono);
+  if (bloqueado) limpiarEstado(id);
+
+  return payload;
+}
+
 const VERIFY_TOKEN = process.env.WHATSAPP_VERIFY_TOKEN || 'untaxtame2026';
 const PHONE_NUMBER_ID = process.env.WHATSAPP_PHONE_NUMBER_ID || '1242386332287027';
 const WABA_ID = process.env.WHATSAPP_WABA_ID || '225661571844047';
@@ -126,6 +214,7 @@ router.post('/webhook', async (req, res) => {
             for (const msg of messages) {
               const contacto = contacts.find(c => c.wa_id === msg.from) || {};
               const nombre = contacto.profile?.name || msg.from;
+              const bloqueadoWA = await estaBloqueadoWhatsApp(msg.from);
 
               // Obtener contenido según tipo de mensaje
               let texto = `[${msg.type}]`;
@@ -157,35 +246,37 @@ router.post('/webhook', async (req, res) => {
                 }
               } else if (msg.type === 'location') {
                 texto = `📍 Ubicación: ${msg.location.latitude}, ${msg.location.longitude}`;
-                
-                // Procesar ubicación para solicitud de taxi
-                const estadoConv = getEstado(msg.from);
-                if (estadoConv.estado === 'esperando_ubicacion') {
-                  const respuestaUbi = await procesarUbicacion(msg.from, msg.location.latitude, msg.location.longitude, nombre);
-                  if (respuestaUbi) {
-                    try {
-                      await db.collection('whatsapp_mensajes').add({
-                        telefono: msg.from, nombre: 'UntaXtame Bot', texto: respuestaUbi,
-                        tipo: 'enviado', tipoMensaje: 'text', enviadoPor: 'bot', creadoEn: new Date().toISOString(),
-                      });
-                      await db.collection('whatsapp_conversaciones').doc(msg.from).set({
-                        ultimoMensaje: respuestaUbi, ultimoTipo: 'enviado', actualizadoEn: new Date().toISOString(),
-                      }, { merge: true });
-                    } catch (e) {}
-                  }
-                } else {
-                  // Ubicación recibida sin contexto, ofrecer servicio
-                  const resp = await procesarUbicacionDirecta(msg.from, msg.location.latitude, msg.location.longitude, nombre);
-                  if (resp) {
-                    try {
-                      await db.collection('whatsapp_mensajes').add({
-                        telefono: msg.from, nombre: 'UntaXtame Bot', texto: resp,
-                        tipo: 'enviado', tipoMensaje: 'text', enviadoPor: 'bot', creadoEn: new Date().toISOString(),
-                      });
-                      await db.collection('whatsapp_conversaciones').doc(msg.from).set({
-                        ultimoMensaje: resp, ultimoTipo: 'enviado', actualizadoEn: new Date().toISOString(),
-                      }, { merge: true });
-                    } catch (e) {}
+
+                if (!bloqueadoWA) {
+                  // Procesar ubicación para solicitud de taxi
+                  const estadoConv = getEstado(msg.from);
+                  if (estadoConv.estado === 'esperando_ubicacion') {
+                    const respuestaUbi = await procesarUbicacion(msg.from, msg.location.latitude, msg.location.longitude, nombre);
+                    if (respuestaUbi) {
+                      try {
+                        await db.collection('whatsapp_mensajes').add({
+                          telefono: msg.from, nombre: 'UntaXtame Bot', texto: respuestaUbi,
+                          tipo: 'enviado', tipoMensaje: 'text', enviadoPor: 'bot', creadoEn: new Date().toISOString(),
+                        });
+                        await db.collection('whatsapp_conversaciones').doc(msg.from).set({
+                          ultimoMensaje: respuestaUbi, ultimoTipo: 'enviado', actualizadoEn: new Date().toISOString(),
+                        }, { merge: true });
+                      } catch (e) {}
+                    }
+                  } else {
+                    // Ubicación recibida sin contexto, ofrecer servicio
+                    const resp = await procesarUbicacionDirecta(msg.from, msg.location.latitude, msg.location.longitude, nombre);
+                    if (resp) {
+                      try {
+                        await db.collection('whatsapp_mensajes').add({
+                          telefono: msg.from, nombre: 'UntaXtame Bot', texto: resp,
+                          tipo: 'enviado', tipoMensaje: 'text', enviadoPor: 'bot', creadoEn: new Date().toISOString(),
+                        });
+                        await db.collection('whatsapp_conversaciones').doc(msg.from).set({
+                          ultimoMensaje: resp, ultimoTipo: 'enviado', actualizadoEn: new Date().toISOString(),
+                        }, { merge: true });
+                      } catch (e) {}
+                    }
                   }
                 }
               } else if (msg.type === 'contacts') {
@@ -242,8 +333,8 @@ router.post('/webhook', async (req, res) => {
                 setEstado(msg.from, est.estado, { nombrePerfilWA: nombre });
               }
 
-              // Bot automático responde
-              if (msg.type === 'text') {
+              // Bot automático responde (no si está bloqueado)
+              if (msg.type === 'text' && !bloqueadoWA) {
                 const respuesta = await procesarMensaje(msg.from, msg.text.body);
 
                 // Guardar respuesta del bot
@@ -266,6 +357,30 @@ router.post('/webhook', async (req, res) => {
                     }, { merge: true });
                   } catch (e) {}
                 }
+              } else if (msg.type === 'text' && bloqueadoWA) {
+                // Aviso único ocasional (máx 1 cada 6 h) — el bot no atiende
+                try {
+                  const bloqRef = db.collection('whatsapp_bloqueados').doc(normalizarTelefonoWA(msg.from));
+                  const bloqSnap = await bloqRef.get();
+                  const ultimoAviso = bloqSnap.exists ? bloqSnap.data().ultimoAvisoBloqueo : null;
+                  const haceMs = ultimoAviso ? Date.now() - new Date(ultimoAviso).getTime() : Infinity;
+                  if (haceMs > 6 * 60 * 60 * 1000) {
+                    const aviso =
+                      '🚫 Este número está bloqueado en UntaXtame y no puede solicitar servicios por WhatsApp.\n\n' +
+                      'Si crees que es un error, comunícate con la central.';
+                    await enviarMensaje(msg.from, aviso);
+                    await bloqRef.set({ ultimoAvisoBloqueo: new Date().toISOString() }, { merge: true });
+                    await db.collection('whatsapp_mensajes').add({
+                      telefono: msg.from,
+                      nombre: 'UntaXtame Bot',
+                      texto: aviso,
+                      tipo: 'enviado',
+                      tipoMensaje: 'text',
+                      enviadoPor: 'bot',
+                      creadoEn: new Date().toISOString(),
+                    });
+                  }
+                } catch (e) {}
               }
             }
           }
@@ -1296,6 +1411,63 @@ async function enviarPlantilla(telefono, templateName, languageCode, parameters,
 
 // ═══ RUTAS DE BANDEJA DE ENTRADA (inbox) ═══
 
+// Listar números bloqueados del chatbot
+router.get('/bloqueados', verifyToken, verifyAdmin, async (req, res) => {
+  try {
+    const snap = await db.collection('whatsapp_bloqueados')
+      .where('bloqueado', '==', true)
+      .get();
+    const lista = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+    lista.sort((a, b) => String(b.bloqueadoEn || '').localeCompare(String(a.bloqueadoEn || '')));
+    res.json(lista);
+  } catch (err) {
+    // Fallback sin índice compuesto
+    try {
+      const snap = await db.collection('whatsapp_bloqueados').get();
+      const lista = snap.docs
+        .map((d) => ({ id: d.id, ...d.data() }))
+        .filter((x) => x.bloqueado);
+      lista.sort((a, b) => String(b.bloqueadoEn || '').localeCompare(String(a.bloqueadoEn || '')));
+      res.json(lista);
+    } catch (err2) {
+      res.status(500).json({ error: err2.message });
+    }
+  }
+});
+
+// Bloquear / desbloquear cliente del chatbot WhatsApp
+router.put('/bloquear', verifyToken, verifyAdmin, async (req, res) => {
+  const { telefono, bloqueado, motivo, nombre } = req.body || {};
+  if (!telefono) return res.status(400).json({ error: 'Se requiere telefono' });
+  if (typeof bloqueado !== 'boolean') {
+    return res.status(400).json({ error: 'Se requiere bloqueado: true|false' });
+  }
+  try {
+    const data = await setBloqueoWhatsApp(telefono, bloqueado, {
+      motivo: motivo || (bloqueado ? 'Bloqueado por central' : null),
+      adminUid: req.user.uid,
+      nombre: nombre || null,
+    });
+
+    // Opcional: avisar al usuario al bloquear
+    if (bloqueado) {
+      try {
+        await enviarMensaje(
+          normalizarTelefonoWA(telefono),
+          '🚫 Tu número ha sido bloqueado en UntaXtame y ya no puedes solicitar servicios por WhatsApp.\n\nSi tienes dudas, contacta a la central.'
+        );
+      } catch (e) {}
+    }
+
+    res.json({
+      message: bloqueado ? 'Cliente bloqueado del chatbot' : 'Cliente desbloqueado',
+      bloqueo: data,
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Obtener todas las conversaciones
 router.get('/conversaciones', verifyToken, verifyAdmin, async (req, res) => {
   try {
@@ -1306,6 +1478,20 @@ router.get('/conversaciones', verifyToken, verifyAdmin, async (req, res) => {
 
     const conversaciones = [];
     snapshot.forEach(doc => conversaciones.push({ id: doc.id, ...doc.data() }));
+
+    // Enriquecer con estado de bloqueo de la colección dedicada
+    await Promise.all(conversaciones.map(async (c) => {
+      if (c.bloqueado) return;
+      try {
+        const id = normalizarTelefonoWA(c.telefono || c.id);
+        const b = await db.collection('whatsapp_bloqueados').doc(id).get();
+        if (b.exists && b.data().bloqueado) {
+          c.bloqueado = true;
+          c.motivoBloqueo = b.data().motivo || null;
+        }
+      } catch (e) {}
+    }));
+
     res.json(conversaciones);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -1527,14 +1713,31 @@ router.post('/enviar-masivo', verifyToken, verifyAdmin, async (req, res) => {
       .where('rol', '==', 'cliente')
       .get();
 
+    // Teléfonos bloqueados del chatbot — no recibir masivos
+    const bloqueadosSnap = await db.collection('whatsapp_bloqueados').get();
+    const bloqueadosSet = new Set();
+    bloqueadosSnap.forEach((d) => {
+      const b = d.data();
+      if (b.bloqueado !== false) {
+        const id = normalizarTelefonoWA(b.telefono || d.id);
+        if (id) {
+          bloqueadosSet.add(id);
+          if (id.startsWith('57') && id.length > 10) bloqueadosSet.add(id.slice(2));
+          else if (id.length === 10) bloqueadosSet.add('57' + id);
+        }
+      }
+    });
+
     const clientes = [];
     snapshot.forEach(doc => {
       const data = doc.data();
       if (data.telefono && !data.bloqueado) {
+        const tel = data.telefono.replace(/[^0-9]/g, '');
+        if (bloqueadosSet.has(tel)) return;
         clientes.push({
           uid: doc.id,
           nombre: data.nombre || 'Cliente',
-          telefono: data.telefono.replace(/[^0-9]/g, ''),
+          telefono: tel,
         });
       }
     });

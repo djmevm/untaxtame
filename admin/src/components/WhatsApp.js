@@ -15,7 +15,7 @@ export default function WhatsApp() {
 
   // Envío masivo
   const [plantillaSeleccionada, setPlantillaSeleccionada] = useState('');
-  const [tab, setTab] = useState('inbox'); // inbox | masivo | individual | historial
+  const [tab, setTab] = useState('inbox'); // inbox | masivo | individual | historial | bloqueados
 
   // Bandeja de entrada
   const [conversaciones, setConversaciones] = useState([]);
@@ -23,6 +23,10 @@ export default function WhatsApp() {
   const [mensajesChat, setMensajesChat] = useState([]);
   const [respuesta, setRespuesta] = useState('');
   const [enviandoRespuesta, setEnviandoRespuesta] = useState(false);
+  const [bloqueados, setBloqueados] = useState([]);
+  const [bloqueando, setBloqueando] = useState(false);
+  const [telBloqueoManual, setTelBloqueoManual] = useState('');
+  const [motivoBloqueoManual, setMotivoBloqueoManual] = useState('');
 
   useEffect(() => {
     cargarDatos();
@@ -31,23 +35,80 @@ export default function WhatsApp() {
   const cargarDatos = async () => {
     setCargando(true);
     try {
-      const [plantillasRes, historialRes, conversacionesRes] = await Promise.all([
+      const [plantillasRes, historialRes, conversacionesRes, bloqueadosRes] = await Promise.all([
         api.get('/whatsapp/plantillas').catch(() => ({ data: [] })),
         api.get('/whatsapp/historial-masivos').catch(() => ({ data: [] })),
         api.get('/whatsapp/conversaciones').catch(() => ({ data: [] })),
+        api.get('/whatsapp/bloqueados').catch(() => ({ data: [] })),
       ]);
       const plantillasData = Array.isArray(plantillasRes.data) ? plantillasRes.data : [];
       const historialData = Array.isArray(historialRes.data) ? historialRes.data : [];
       const conversacionesData = Array.isArray(conversacionesRes.data) ? conversacionesRes.data : [];
+      const bloqueadosData = Array.isArray(bloqueadosRes.data) ? bloqueadosRes.data : [];
       setPlantillas(plantillasData);
       setHistorial(historialData);
       setConversaciones(conversacionesData);
+      setBloqueados(bloqueadosData);
     } catch {
       setPlantillas([]);
       setHistorial([]);
       setConversaciones([]);
+      setBloqueados([]);
     } finally {
       setCargando(false);
+    }
+  };
+
+  const toggleBloqueo = async (telefono, actualmenteBloqueado, nombre) => {
+    const accion = actualmenteBloqueado ? 'desbloquear' : 'bloquear';
+    if (!window.confirm(`¿${accion === 'bloquear' ? 'Bloquear' : 'Desbloquear'} a ${nombre || telefono} del chatbot WhatsApp?`)) {
+      return;
+    }
+    let motivo = null;
+    if (!actualmenteBloqueado) {
+      motivo = window.prompt('Motivo del bloqueo:', 'Abuso / mala conducta') || 'Bloqueado por central';
+    }
+    setBloqueando(true);
+    try {
+      await api.put('/whatsapp/bloquear', {
+        telefono,
+        bloqueado: !actualmenteBloqueado,
+        motivo,
+        nombre: nombre || null,
+      });
+      await cargarDatos();
+      if (conversacionActiva?.telefono === telefono) {
+        setConversacionActiva((prev) => prev ? { ...prev, bloqueado: !actualmenteBloqueado, motivoBloqueo: motivo } : prev);
+      }
+    } catch (err) {
+      alert('Error: ' + (err.response?.data?.error || err.message));
+    } finally {
+      setBloqueando(false);
+    }
+  };
+
+  const bloquearManual = async () => {
+    const digitos = telBloqueoManual.replace(/\D/g, '');
+    if (digitos.length < 10) {
+      alert('Ingresa un número válido (mín. 10 dígitos)');
+      return;
+    }
+    const telefono = digitos.startsWith('57') ? digitos : `57${digitos}`;
+    setBloqueando(true);
+    try {
+      await api.put('/whatsapp/bloquear', {
+        telefono,
+        bloqueado: true,
+        motivo: motivoBloqueoManual.trim() || 'Bloqueado por central',
+      });
+      setTelBloqueoManual('');
+      setMotivoBloqueoManual('');
+      await cargarDatos();
+      alert('Número bloqueado');
+    } catch (err) {
+      alert('Error: ' + (err.response?.data?.error || err.message));
+    } finally {
+      setBloqueando(false);
     }
   };
 
@@ -222,6 +283,7 @@ export default function WhatsApp() {
       <div style={{ display: 'flex', gap: 8, marginBottom: 20, flexWrap: 'wrap' }}>
         {[
           { key: 'inbox', label: '📥 Bandeja de Entrada' },
+          { key: 'bloqueados', label: `🚫 Bloqueados (${bloqueados.length})` },
           { key: 'masivo', label: '📢 Envío Masivo' },
           { key: 'individual', label: '💬 Mensaje Individual' },
           { key: 'historial', label: '📋 Historial' },
@@ -264,7 +326,9 @@ export default function WhatsApp() {
                     background: conversacionActiva?.telefono === conv.telefono ? '#E8F5E9' : '#fff',
                   }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <strong style={{ fontSize: 14 }}>{conv.nombre || conv.telefono}</strong>
+                      <strong style={{ fontSize: 14 }}>
+                        {conv.bloqueado ? '🚫 ' : ''}{conv.nombre || conv.telefono}
+                      </strong>
                       {conv.noLeidos > 0 && (
                         <span style={{ background: '#25D366', color: '#fff', borderRadius: '50%', width: 22, height: 22, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 'bold' }}>
                           {conv.noLeidos}
@@ -293,13 +357,33 @@ export default function WhatsApp() {
               <>
                 {/* Header del chat */}
                 <div style={{ padding: '14px 20px', borderBottom: '1px solid #eee', display: 'flex', alignItems: 'center', gap: 12 }}>
-                  <div style={{ width: 40, height: 40, borderRadius: 20, background: '#25D366', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 'bold', fontSize: 16 }}>
+                  <div style={{ width: 40, height: 40, borderRadius: 20, background: conversacionActiva.bloqueado ? '#B71C1C' : '#25D366', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 'bold', fontSize: 16 }}>
                     {(conversacionActiva.nombre || '?').charAt(0).toUpperCase()}
                   </div>
-                  <div>
+                  <div style={{ flex: 1 }}>
                     <strong>{conversacionActiva.nombre || conversacionActiva.telefono}</strong>
                     <p style={{ margin: 0, fontSize: 12, color: '#888' }}>+{conversacionActiva.telefono}</p>
+                    {conversacionActiva.bloqueado && (
+                      <p style={{ margin: '2px 0 0', fontSize: 11, color: '#B71C1C', fontWeight: 'bold' }}>
+                        🚫 Bloqueado{conversacionActiva.motivoBloqueo ? `: ${conversacionActiva.motivoBloqueo}` : ''}
+                      </p>
+                    )}
                   </div>
+                  <button
+                    onClick={() => toggleBloqueo(
+                      conversacionActiva.telefono,
+                      !!conversacionActiva.bloqueado,
+                      conversacionActiva.nombre
+                    )}
+                    disabled={bloqueando}
+                    style={{
+                      background: conversacionActiva.bloqueado ? '#2E7D32' : '#B71C1C',
+                      color: '#fff', border: 'none', borderRadius: 8, padding: '8px 14px',
+                      cursor: 'pointer', fontWeight: 'bold', fontSize: 12, whiteSpace: 'nowrap',
+                    }}
+                  >
+                    {conversacionActiva.bloqueado ? '✅ Desbloquear' : '🚫 Bloquear chatbot'}
+                  </button>
                 </div>
 
                 {/* Input responder */}
@@ -387,6 +471,89 @@ export default function WhatsApp() {
               </>
             )}
           </div>
+        </div>
+      )}
+
+      {/* ═══ BLOQUEADOS WHATSAPP ═══ */}
+      {tab === 'bloqueados' && (
+        <div style={estilos.card}>
+          <h3 style={{ marginTop: 0 }}>🚫 Clientes bloqueados del chatbot</h3>
+          <p style={{ color: '#666', fontSize: 14 }}>
+            Estos números no pueden pedir taxi ni usar el flujo automático por WhatsApp. Los mensajes siguen llegando a la bandeja para que la central los vea.
+          </p>
+
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 20, alignItems: 'flex-end' }}>
+            <div>
+              <label style={estilos.label}>Número a bloquear</label>
+              <input
+                type="text"
+                value={telBloqueoManual}
+                onChange={(e) => setTelBloqueoManual(e.target.value)}
+                placeholder="3221234567 o 57322..."
+                style={estilos.input}
+              />
+            </div>
+            <div style={{ flex: 1, minWidth: 180 }}>
+              <label style={estilos.label}>Motivo</label>
+              <input
+                type="text"
+                value={motivoBloqueoManual}
+                onChange={(e) => setMotivoBloqueoManual(e.target.value)}
+                placeholder="Abuso, spam, amenazas…"
+                style={estilos.input}
+              />
+            </div>
+            <button
+              onClick={bloquearManual}
+              disabled={bloqueando}
+              style={{
+                background: '#B71C1C', color: '#fff', border: 'none', borderRadius: 8,
+                padding: '12px 18px', fontWeight: 'bold', cursor: 'pointer', height: 44,
+              }}
+            >
+              🚫 Bloquear
+            </button>
+          </div>
+
+          {bloqueados.length === 0 ? (
+            <p style={{ color: '#999' }}>No hay números bloqueados</p>
+          ) : (
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14 }}>
+              <thead>
+                <tr style={{ background: '#f5f5f5', textAlign: 'left' }}>
+                  <th style={{ padding: 10 }}>Teléfono</th>
+                  <th style={{ padding: 10 }}>Nombre</th>
+                  <th style={{ padding: 10 }}>Motivo</th>
+                  <th style={{ padding: 10 }}>Desde</th>
+                  <th style={{ padding: 10 }}></th>
+                </tr>
+              </thead>
+              <tbody>
+                {bloqueados.map((b) => (
+                  <tr key={b.id || b.telefono} style={{ borderBottom: '1px solid #eee' }}>
+                    <td style={{ padding: 10 }}>+{b.telefono}</td>
+                    <td style={{ padding: 10 }}>{b.nombre || '—'}</td>
+                    <td style={{ padding: 10 }}>{b.motivo || '—'}</td>
+                    <td style={{ padding: 10 }}>
+                      {b.bloqueadoEn ? new Date(b.bloqueadoEn).toLocaleString('es-CO') : '—'}
+                    </td>
+                    <td style={{ padding: 10 }}>
+                      <button
+                        onClick={() => toggleBloqueo(b.telefono, true, b.nombre)}
+                        disabled={bloqueando}
+                        style={{
+                          background: '#2E7D32', color: '#fff', border: 'none', borderRadius: 6,
+                          padding: '6px 12px', cursor: 'pointer', fontWeight: 'bold', fontSize: 12,
+                        }}
+                      >
+                        Desbloquear
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
         </div>
       )}
 
