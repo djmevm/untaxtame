@@ -12,11 +12,19 @@ export default function OfertasRecibidas({ servicioId, onAceptar }) {
   const cargarOfertas = async () => {
     try {
       const res = await api.get(`/ofertas/${servicioId}`);
-      if (res.data.length > cantidadAnterior.current && cantidadAnterior.current > 0) {
+      const nuevas = res.data || [];
+      if (nuevas.length > cantidadAnterior.current && cantidadAnterior.current > 0) {
         reproducirSonido();
       }
-      cantidadAnterior.current = res.data.length;
-      setOfertas(res.data);
+      cantidadAnterior.current = nuevas.length;
+      // Solo actualizar state si cambió (evita parpadeo cada 5s)
+      setOfertas((prev) => {
+        if (prev.length === nuevas.length &&
+          prev.every((o, i) => o.id === nuevas[i]?.id && o.monto === nuevas[i]?.monto)) {
+          return prev;
+        }
+        return nuevas;
+      });
     } catch {}
     finally { setCargando(false); }
   };

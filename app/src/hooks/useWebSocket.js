@@ -49,7 +49,17 @@ export default function useWebSocket(uid, rol = 'cliente') {
       ws.onmessage = (event) => {
         try {
           const data = JSON.parse(event.data);
-          setUltimoMensaje(data);
+
+          // No guardar en state mensajes de alta frecuencia (evita parpadeo de UI)
+          const esUbicacion =
+            data.tipo === 'ubicacion' ||
+            data.tipo === 'ubicacion_viaje' ||
+            data.tipo === 'ubicacion_viaje_snapshot' ||
+            data.tipo === 'pong' ||
+            data.tipo === 'ping';
+          if (!esUbicacion) {
+            setUltimoMensaje(data);
+          }
 
           const listeners = listenersRef.current.get(data.tipo);
           if (listeners) {
@@ -184,7 +194,8 @@ export function useUbicacionesConductores(uid, rol) {
 
 // ═══ Enviar ubicación del conductor (global + por viaje) ═══
 // Detecta pérdida de GPS y dispara alerta sonora si hay servicio activo.
-const GPS_TIMEOUT_MS = 20000; // sin fix válido en 20s → alerta
+const GPS_TIMEOUT_MS = 35000; // sin fix válido → alerta (histeresis más larga)
+const GPS_OK_STREAK = 2; // fixes seguidos antes de ocultar banner (evita parpadeo)
 
 export function useEnviarUbicacion(uid, nombre, placa, activo, servicioId = null) {
   const { conectado, enviar } = useWebSocket(uid, 'conductor');
@@ -192,6 +203,7 @@ export function useEnviarUbicacion(uid, nombre, placa, activo, servicioId = null
   const watchdogRef = useRef(null);
   const ultimoFixRef = useRef(Date.now());
   const alertaGPSRef = useRef(false);
+  const okStreakRef = useRef(0);
   const [gpsPerdido, setGpsPerdido] = useState(false);
 
   useEffect(() => {
@@ -200,6 +212,7 @@ export function useEnviarUbicacion(uid, nombre, placa, activo, servicioId = null
       if (watchdogRef.current) clearInterval(watchdogRef.current);
       setGpsPerdido(false);
       alertaGPSRef.current = false;
+      okStreakRef.current = 0;
       return;
     }
 
@@ -211,15 +224,17 @@ export function useEnviarUbicacion(uid, nombre, placa, activo, servicioId = null
         const { status } = await Location.requestForegroundPermissionsAsync();
         if (status !== 'granted') {
           setGpsPerdido(true);
+          okStreakRef.current = 0;
           return;
         }
         const loc = await Location.getCurrentPositionAsync({
-          accuracy: Location.Accuracy.High,
-          maximumAge: 5000,
-          timeout: 10000,
+          accuracy: Location.Accuracy.Balanced,
+          maximumAge: 8000,
+          timeout: 12000,
         });
         ultimoFixRef.current = Date.now();
-        if (alertaGPSRef.current) {
+        okStreakRef.current += 1;
+        if (alertaGPSRef.current && okStreakRef.current >= GPS_OK_STREAK) {
           alertaGPSRef.current = false;
           setGpsPerdido(false);
         }
@@ -238,13 +253,14 @@ export function useEnviarUbicacion(uid, nombre, placa, activo, servicioId = null
     };
 
     enviarUbicacion();
-    intervaloRef.current = setInterval(enviarUbicacion, 5000);
+    intervaloRef.current = setInterval(enviarUbicacion, 8000);
 
     // Watchdog: si no hay fix reciente y hay viaje activo, alertar
     watchdogRef.current = setInterval(() => {
       const edad = Date.now() - ultimoFixRef.current;
       if (edad > GPS_TIMEOUT_MS) {
-        setGpsPerdido(true);
+        okStreakRef.current = 0;
+        setGpsPerdido((prev) => (prev ? prev : true));
         if (servicioId && !alertaGPSRef.current) {
           alertaGPSRef.current = true;
           try {
@@ -253,7 +269,7 @@ export function useEnviarUbicacion(uid, nombre, placa, activo, servicioId = null
           } catch {}
         }
       }
-    }, 5000);
+    }, 8000);
 
     return () => {
       if (intervaloRef.current) clearInterval(intervaloRef.current);
@@ -279,13 +295,28 @@ export function useTrackingViaje(uid, rol, servicioId, activo) {
       if (data.servicioId !== servicioId) return;
       // Solo guardar la ubicación de la otra parte
       if (data.rolEmisor === rol) return;
-      setUbicacionPeer({ lat: data.lat, lng: data.lng, timestamp: data.timestamp });
+      setUbicacionPeer((prev) => {
+        if (prev?.lat && prev?.lng) {
+          const dLat = Math.abs(prev.lat - data.lat);
+          const dLng = Math.abs(prev.lng - data.lng);
+          // ~35m aprox en ecuador; ignora micro-movimientos que hacen parpadear
+          if (dLat < 0.0003 && dLng < 0.0003) return prev;
+        }
+        return { lat: data.lat, lng: data.lng, timestamp: data.timestamp };
+      });
     });
 
     const cleanupSnap = onMensaje('ubicacion_viaje_snapshot', (data) => {
       if (data.servicioId !== servicioId) return;
       const peer = rol === 'cliente' ? data.conductor : data.cliente;
-      if (peer?.lat) setUbicacionPeer(peer);
+      if (peer?.lat) {
+        setUbicacionPeer((prev) => {
+          if (prev?.lat && Math.abs(prev.lat - peer.lat) < 0.0003 && Math.abs(prev.lng - peer.lng) < 0.0003) {
+            return prev;
+          }
+          return peer;
+        });
+      }
     });
 
     return () => {

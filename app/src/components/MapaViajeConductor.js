@@ -1,10 +1,11 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, memo } from 'react';
 import { View, Text, StyleSheet, ActivityIndicator } from 'react-native';
 import MapView, { Marker, Polyline } from 'react-native-maps';
 import { useTrackingViaje } from '../hooks/useWebSocket';
 import { useAuth } from '../context/AuthContext';
 
 const ESTADOS_LIVE = ['aceptado', 'conductor_en_sitio', 'en_curso'];
+const MIN_MOVE_M = 35;
 
 const ESTADO_MENSAJES = {
   aceptado: { texto: 'En camino al punto de recogida', color: '#1565C0', icon: '🚕' },
@@ -23,11 +24,18 @@ function calcularDistancia(lat1, lon1, lat2, lon2) {
   return R * c;
 }
 
-export default function MapaViajeConductor({ servicioActivo }) {
+function metrosEntre(a, b) {
+  if (!a?.lat || !b?.lat) return Infinity;
+  return calcularDistancia(a.lat, a.lng, b.lat, b.lng) * 1000;
+}
+
+function MapaViajeConductor({ servicioActivo }) {
   const { perfil } = useAuth();
   const mapRef = useRef(null);
   const [miUbicacion, setMiUbicacion] = useState(null);
   const [distancia, setDistancia] = useState(null);
+  const ultimoFitEstadoRef = useRef(null);
+  const miUbRef = useRef(null);
 
   const liveActivo = !!(servicioActivo?.id && ESTADOS_LIVE.includes(servicioActivo?.estado));
   const { ubicacionPeer, conectado } = useTrackingViaje(
@@ -37,7 +45,7 @@ export default function MapaViajeConductor({ servicioActivo }) {
     liveActivo
   );
 
-  // GPS propio del conductor en el mapa
+  // GPS propio — throttled
   useEffect(() => {
     if (!liveActivo) return;
     let mounted = true;
@@ -48,52 +56,67 @@ export default function MapaViajeConductor({ servicioActivo }) {
         const Location = require('expo-location');
         const { status } = await Location.requestForegroundPermissionsAsync();
         if (status !== 'granted') return;
-        const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
-        if (mounted) {
-          setMiUbicacion({ lat: loc.coords.latitude, lng: loc.coords.longitude });
-        }
+        const loc = await Location.getCurrentPositionAsync({
+          accuracy: Location.Accuracy.Balanced,
+          maximumAge: 8000,
+        });
+        if (!mounted) return;
+        const next = { lat: loc.coords.latitude, lng: loc.coords.longitude };
+        if (metrosEntre(miUbRef.current, next) < MIN_MOVE_M) return;
+        miUbRef.current = next;
+        setMiUbicacion(next);
       } catch {}
     };
 
     leerGPS();
-    intervalo = setInterval(leerGPS, 5000);
+    intervalo = setInterval(leerGPS, 10000);
     return () => {
       mounted = false;
       if (intervalo) clearInterval(intervalo);
     };
   }, [liveActivo]);
 
+  // Distancia sin mover cámara
+  useEffect(() => {
+    if (!miUbicacion) return;
+    const recogida = servicioActivo?.ubicacionGPS;
+    const destLat = servicioActivo?.destinoLat;
+    const destLng = servicioActivo?.destinoLng;
+
+    if (servicioActivo?.estado !== 'en_curso' && recogida?.lat) {
+      setDistancia(calcularDistancia(miUbicacion.lat, miUbicacion.lng, recogida.lat, recogida.lng));
+    } else if (servicioActivo?.estado === 'en_curso' && destLat && destLng) {
+      setDistancia(calcularDistancia(miUbicacion.lat, miUbicacion.lng, destLat, destLng));
+    }
+  }, [miUbicacion, servicioActivo?.estado, servicioActivo?.ubicacionGPS, servicioActivo?.destinoLat, servicioActivo?.destinoLng]);
+
+  // Cámara solo al cambiar estado
   useEffect(() => {
     if (!miUbicacion || !mapRef.current) return;
+    const estado = servicioActivo?.estado;
+    if (ultimoFitEstadoRef.current === estado) return;
+    ultimoFitEstadoRef.current = estado;
 
     const coords = [
       { latitude: miUbicacion.lat, longitude: miUbicacion.lng },
     ];
-
     const recogida = servicioActivo?.ubicacionGPS;
     const destLat = servicioActivo?.destinoLat;
     const destLng = servicioActivo?.destinoLng;
 
     if (servicioActivo?.estado !== 'en_curso' && recogida?.lat) {
       coords.push({ latitude: recogida.lat, longitude: recogida.lng });
-      setDistancia(calcularDistancia(miUbicacion.lat, miUbicacion.lng, recogida.lat, recogida.lng));
     } else if (servicioActivo?.estado === 'en_curso' && destLat && destLng) {
       coords.push({ latitude: destLat, longitude: destLng });
-      setDistancia(calcularDistancia(miUbicacion.lat, miUbicacion.lng, destLat, destLng));
-    }
-
-    // Si el cliente mueve su ubicación (peer), mostrar también
-    if (ubicacionPeer?.lat && servicioActivo?.estado !== 'en_curso') {
-      coords.push({ latitude: ubicacionPeer.lat, longitude: ubicacionPeer.lng });
     }
 
     if (coords.length >= 2) {
       mapRef.current.fitToCoordinates(coords, {
         edgePadding: { top: 50, right: 50, bottom: 50, left: 50 },
-        animated: true,
+        animated: false,
       });
     }
-  }, [miUbicacion, ubicacionPeer, servicioActivo?.estado, servicioActivo?.ubicacionGPS, servicioActivo?.destinoLat, servicioActivo?.destinoLng]);
+  }, [servicioActivo?.estado, miUbicacion, servicioActivo?.ubicacionGPS, servicioActivo?.destinoLat, servicioActivo?.destinoLng]);
 
   if (!liveActivo) return null;
 
@@ -137,6 +160,7 @@ export default function MapaViajeConductor({ servicioActivo }) {
           longitudeDelta: 0.03,
         }}
         showsUserLocation={false}
+        moveOnMarkerPress={false}
       >
         {rutaPuntos.length >= 2 && (
           <Polyline
@@ -148,7 +172,10 @@ export default function MapaViajeConductor({ servicioActivo }) {
         )}
 
         {miUbicacion && (
-          <Marker coordinate={{ latitude: miUbicacion.lat, longitude: miUbicacion.lng }}>
+          <Marker
+            coordinate={{ latitude: miUbicacion.lat, longitude: miUbicacion.lng }}
+            tracksViewChanges={false}
+          >
             <View style={styles.taxiMarker}>
               <Text style={styles.taxiEmoji}>🚕</Text>
               <View style={styles.placaBadge}>
@@ -159,7 +186,10 @@ export default function MapaViajeConductor({ servicioActivo }) {
         )}
 
         {recogida?.lat && (
-          <Marker coordinate={{ latitude: recogida.lat, longitude: recogida.lng }}>
+          <Marker
+            coordinate={{ latitude: recogida.lat, longitude: recogida.lng }}
+            tracksViewChanges={false}
+          >
             <View style={styles.puntoMarker}>
               <Text style={styles.markerEmoji}>📍</Text>
               <View style={[styles.badge, { backgroundColor: '#1565C0' }]}>
@@ -170,7 +200,10 @@ export default function MapaViajeConductor({ servicioActivo }) {
         )}
 
         {ubicacionPeer?.lat && servicioActivo?.estado !== 'en_curso' && (
-          <Marker coordinate={{ latitude: ubicacionPeer.lat, longitude: ubicacionPeer.lng }}>
+          <Marker
+            coordinate={{ latitude: ubicacionPeer.lat, longitude: ubicacionPeer.lng }}
+            tracksViewChanges={false}
+          >
             <View style={styles.puntoMarker}>
               <Text style={styles.markerEmoji}>👤</Text>
               <View style={[styles.badge, { backgroundColor: '#7B1FA2' }]}>
@@ -181,7 +214,10 @@ export default function MapaViajeConductor({ servicioActivo }) {
         )}
 
         {destLat && destLng ? (
-          <Marker coordinate={{ latitude: destLat, longitude: destLng }}>
+          <Marker
+            coordinate={{ latitude: destLat, longitude: destLng }}
+            tracksViewChanges={false}
+          >
             <View style={styles.puntoMarker}>
               <Text style={styles.markerEmoji}>🏁</Text>
               <View style={[styles.badge, { backgroundColor: '#E53935' }]}>
@@ -194,6 +230,8 @@ export default function MapaViajeConductor({ servicioActivo }) {
     </View>
   );
 }
+
+export default memo(MapaViajeConductor);
 
 const styles = StyleSheet.create({
   container: { borderRadius: 14, overflow: 'hidden', marginBottom: 12, elevation: 3 },

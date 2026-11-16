@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, memo } from 'react';
 import { View, Text, StyleSheet, ActivityIndicator } from 'react-native';
 import MapView, { Marker, Polyline } from 'react-native-maps';
 import api from '../config/api';
@@ -6,6 +6,7 @@ import { useTrackingViaje } from '../hooks/useWebSocket';
 import { useAuth } from '../context/AuthContext';
 
 const ESTADOS_LIVE = ['aceptado', 'conductor_en_sitio', 'en_curso'];
+const MIN_MOVE_M = 35; // no re-renderizar marker por ruido GPS
 
 const ESTADO_MENSAJES = {
   aceptado: { texto: 'Tu conductor viene en camino', color: '#1565C0', icon: '🚕' },
@@ -24,12 +25,19 @@ function calcularDistancia(lat1, lon1, lat2, lon2) {
   return R * c;
 }
 
-export default function MapaServicioActivo({ servicioActivo, destinoGPS }) {
+function metrosEntre(a, b) {
+  if (!a?.lat || !b?.lat) return Infinity;
+  return calcularDistancia(a.lat, a.lng, b.lat, b.lng) * 1000;
+}
+
+function MapaServicioActivo({ servicioActivo, destinoGPS }) {
   const { perfil } = useAuth();
   const [ubicacionConductor, setUbicacionConductor] = useState(null);
   const [tiempoEstimado, setTiempoEstimado] = useState(null);
   const [distancia, setDistancia] = useState(null);
   const mapRef = useRef(null);
+  const ultimoFitEstadoRef = useRef(null);
+  const ubRef = useRef(null);
 
   const liveActivo = !!(servicioActivo?.id && ESTADOS_LIVE.includes(servicioActivo?.estado));
   const { ubicacionPeer, conectado } = useTrackingViaje(
@@ -39,14 +47,16 @@ export default function MapaServicioActivo({ servicioActivo, destinoGPS }) {
     liveActivo
   );
 
-  // Actualizar desde WebSocket en vivo
+  // Actualizar desde WebSocket solo si se movió lo suficiente (anti-parpadeo)
   useEffect(() => {
-    if (ubicacionPeer?.lat) {
-      setUbicacionConductor({ lat: ubicacionPeer.lat, lng: ubicacionPeer.lng });
-    }
+    if (!ubicacionPeer?.lat) return;
+    const next = { lat: ubicacionPeer.lat, lng: ubicacionPeer.lng };
+    if (metrosEntre(ubRef.current, next) < MIN_MOVE_M) return;
+    ubRef.current = next;
+    setUbicacionConductor(next);
   }, [ubicacionPeer]);
 
-  // Fallback HTTP cada 15s por si WS falla
+  // Fallback HTTP cada 20s por si WS falla
   useEffect(() => {
     if (!servicioActivo?.conductorUid) return;
     if (!ESTADOS_LIVE.includes(servicioActivo.estado)) return;
@@ -56,20 +66,21 @@ export default function MapaServicioActivo({ servicioActivo, destinoGPS }) {
         const res = await api.get('/users/conductores/en-servicio');
         const conductor = res.data.find(c => c.uid === servicioActivo.conductorUid);
         if (conductor?.ubicacionActual?.lat) {
-          setUbicacionConductor((prev) => prev || conductor.ubicacionActual);
-          if (!ubicacionPeer) {
-            setUbicacionConductor(conductor.ubicacionActual);
+          const next = conductor.ubicacionActual;
+          if (!ubRef.current || metrosEntre(ubRef.current, next) >= MIN_MOVE_M) {
+            ubRef.current = next;
+            setUbicacionConductor(next);
           }
         }
       } catch {}
     };
 
     cargar();
-    const intervalo = setInterval(cargar, 15000);
+    const intervalo = setInterval(cargar, 20000);
     return () => clearInterval(intervalo);
-  }, [servicioActivo?.conductorUid, servicioActivo?.estado, ubicacionPeer]);
+  }, [servicioActivo?.conductorUid, servicioActivo?.estado]);
 
-  // Distancia / ETA y fit del mapa
+  // ETA: actualizar sin forzar cámara
   useEffect(() => {
     if (!ubicacionConductor) return;
 
@@ -93,25 +104,36 @@ export default function MapaServicioActivo({ servicioActivo, destinoGPS }) {
       setDistancia(dist);
       setTiempoEstimado(Math.max(1, Math.round((dist / 30) * 60)));
     }
-
-    if (mapRef.current) {
-      const coords = [
-        { latitude: ubicacionConductor.lat, longitude: ubicacionConductor.lng },
-      ];
-      if (recogidaLat && recogidaLng) {
-        coords.push({ latitude: recogidaLat, longitude: recogidaLng });
-      }
-      if (destLat && destLng) {
-        coords.push({ latitude: destLat, longitude: destLng });
-      }
-      if (coords.length >= 2) {
-        mapRef.current.fitToCoordinates(coords, {
-          edgePadding: { top: 60, right: 60, bottom: 60, left: 60 },
-          animated: true,
-        });
-      }
-    }
   }, [ubicacionConductor, servicioActivo?.estado, servicioActivo?.ubicacionGPS, destinoGPS]);
+
+  // Cámara: solo al cambiar de estado (no en cada tick GPS)
+  useEffect(() => {
+    if (!mapRef.current || !ubicacionConductor) return;
+    const estado = servicioActivo?.estado;
+    if (ultimoFitEstadoRef.current === estado) return;
+    ultimoFitEstadoRef.current = estado;
+
+    const recogidaLat = servicioActivo?.ubicacionGPS?.lat;
+    const recogidaLng = servicioActivo?.ubicacionGPS?.lng;
+    const destLat = destinoGPS?.lat || servicioActivo?.destinoLat;
+    const destLng = destinoGPS?.lng || servicioActivo?.destinoLng;
+
+    const coords = [
+      { latitude: ubicacionConductor.lat, longitude: ubicacionConductor.lng },
+    ];
+    if (recogidaLat && recogidaLng) {
+      coords.push({ latitude: recogidaLat, longitude: recogidaLng });
+    }
+    if (destLat && destLng) {
+      coords.push({ latitude: destLat, longitude: destLng });
+    }
+    if (coords.length >= 2) {
+      mapRef.current.fitToCoordinates(coords, {
+        edgePadding: { top: 60, right: 60, bottom: 60, left: 60 },
+        animated: false,
+      });
+    }
+  }, [servicioActivo?.estado, ubicacionConductor, servicioActivo?.ubicacionGPS, destinoGPS]);
 
   if (!liveActivo) return null;
   if (!servicioActivo?.ubicacionGPS && !destinoGPS && !ubicacionConductor) return null;
@@ -163,6 +185,7 @@ export default function MapaServicioActivo({ servicioActivo, destinoGPS }) {
           longitudeDelta: 0.03,
         }}
         showsUserLocation={true}
+        moveOnMarkerPress={false}
       >
         {rutaPuntos.length >= 2 && (
           <Polyline
@@ -174,7 +197,10 @@ export default function MapaServicioActivo({ servicioActivo, destinoGPS }) {
         )}
 
         {servicioActivo?.ubicacionGPS && (
-          <Marker coordinate={{ latitude: clienteLat, longitude: clienteLng }}>
+          <Marker
+            coordinate={{ latitude: clienteLat, longitude: clienteLng }}
+            tracksViewChanges={false}
+          >
             <View style={styles.clienteMarker}>
               <Text style={styles.markerEmoji}>📍</Text>
               <View style={[styles.markerBadge, { backgroundColor: '#1565C0' }]}>
@@ -185,7 +211,10 @@ export default function MapaServicioActivo({ servicioActivo, destinoGPS }) {
         )}
 
         {destLat && destLng ? (
-          <Marker coordinate={{ latitude: destLat, longitude: destLng }}>
+          <Marker
+            coordinate={{ latitude: destLat, longitude: destLng }}
+            tracksViewChanges={false}
+          >
             <View style={styles.clienteMarker}>
               <Text style={styles.markerEmoji}>🏁</Text>
               <View style={[styles.markerBadge, { backgroundColor: '#E53935' }]}>
@@ -199,6 +228,7 @@ export default function MapaServicioActivo({ servicioActivo, destinoGPS }) {
           <Marker
             coordinate={{ latitude: ubicacionConductor.lat, longitude: ubicacionConductor.lng }}
             anchor={{ x: 0.5, y: 0.5 }}
+            tracksViewChanges={false}
           >
             <View style={styles.taxiMarker}>
               <Text style={styles.taxiEmoji}>🚕</Text>
@@ -232,6 +262,8 @@ export default function MapaServicioActivo({ servicioActivo, destinoGPS }) {
     </View>
   );
 }
+
+export default memo(MapaServicioActivo);
 
 const styles = StyleSheet.create({
   container: { borderRadius: 16, overflow: 'hidden', marginBottom: 14, elevation: 3 },

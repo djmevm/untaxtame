@@ -85,11 +85,6 @@ function ConductorTabs() {
 
   return (
     <View style={{ flex: 1 }}>
-      {gpsPerdido && servicioActivoId ? (
-        <View style={gpsBannerStyles.banner}>
-          <Text style={gpsBannerStyles.texto}>📡 Sin señal GPS — activa ubicación para el rastreo en vivo</Text>
-        </View>
-      ) : null}
       <Tab.Navigator
         tabBar={(props) => <CustomTabBar {...props} irAMisServiciosAlAceptar />}
         screenOptions={{ headerShown: false }}
@@ -100,12 +95,23 @@ function ConductorTabs() {
         <Tab.Screen name="MiTaxi" component={MiTaxiScreen} />
         <Tab.Screen name="PerfilConductor" component={PerfilConductorScreen} />
       </Tab.Navigator>
+      {/* Overlay absoluto: no empuja el layout ni hace parpadear las tabs */}
+      {gpsPerdido && servicioActivoId ? (
+        <View style={gpsBannerStyles.banner} pointerEvents="none">
+          <Text style={gpsBannerStyles.texto}>📡 Sin señal GPS — activa ubicación para el rastreo en vivo</Text>
+        </View>
+      ) : null}
     </View>
   );
 }
 
 const gpsBannerStyles = StyleSheet.create({
   banner: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 100,
     backgroundColor: '#B71C1C',
     paddingVertical: 8,
     paddingHorizontal: 12,
