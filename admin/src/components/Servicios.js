@@ -491,8 +491,8 @@ export default function Servicios() {
                   ? <span title={s.calificacion.comentario || ''} style={{ fontWeight: 'bold', color: '#F97316' }}>
                       ⭐ {s.calificacion.puntuacion || s.calificacion.estrellas}/10
                     </span>
-                  : s.estado === 'completado'
-                    ? <button onClick={() => { setCalificarModal(s); setCalificacionAdmin(5); setComentarioAdmin(''); }}
+                  : ['completado', 'completado_auto'].includes(s.estado)
+                    ? <button onClick={() => { setCalificarModal(s); setCalificacionAdmin(10); setComentarioAdmin(''); }}
                         style={{ background: '#F97316', color: '#fff', border: 'none', borderRadius: 6, padding: '4px 10px', cursor: 'pointer', fontSize: 11, fontWeight: 'bold' }}>
                         ⭐ Calificar
                       </button>

@@ -683,17 +683,26 @@ router.put('/calificar/:servicioId', verifyToken, async (req, res) => {
     const doc = await ref.get();
     if (!doc.exists) return res.status(404).json({ error: 'Servicio no encontrado' });
     const servicioPre = doc.data();
-    if (servicioPre.clienteUid !== req.user.uid) {
-      return res.status(403).json({ error: 'Solo el cliente puede calificar este servicio' });
+    const esCliente = servicioPre.clienteUid === req.user.uid;
+    const admin = await esAdminUid(req.user.uid);
+    if (!esCliente && !admin) {
+      return res.status(403).json({ error: 'Solo el cliente o un administrador pueden calificar este servicio' });
     }
-    if (servicioPre.estado !== 'completado') {
+    if (!['completado', 'completado_auto'].includes(servicioPre.estado)) {
       return res.status(400).json({ error: 'Solo se pueden calificar servicios completados' });
     }
+    const quien = admin && !esCliente ? 'admin' : 'cliente';
+    const nombreQuien = quien === 'admin'
+      ? 'La central'
+      : (servicioPre.clienteNombre || 'El cliente');
+
     await ref.update({
       calificacion: {
         puntuacion,
         comentario: comentario || '',
         fecha: new Date().toISOString(),
+        calificadoPor: quien,
+        calificadoPorUid: req.user.uid,
       },
       actualizadoEn: new Date().toISOString(),
     });
@@ -706,8 +715,8 @@ router.put('/calificar/:servicioId', verifyToken, async (req, res) => {
         tipo: 'calificacion',
         titulo: `⭐ Nueva calificación: ${puntuacion}/10`,
         mensaje: comentario
-          ? `${servicio.clienteNombre} te calificó con ${puntuacion}/10: "${comentario}"`
-          : `${servicio.clienteNombre} te calificó con ${puntuacion}/10`,
+          ? `${nombreQuien} te calificó con ${puntuacion}/10: "${comentario}"`
+          : `${nombreQuien} te calificó con ${puntuacion}/10`,
         puntuacion,
         servicioId: req.params.servicioId,
         leida: false,
@@ -720,8 +729,8 @@ router.put('/calificar/:servicioId', verifyToken, async (req, res) => {
         enviarPushAUsuario(servicio.conductorUid, {
           titulo: `⭐ Te calificaron con ${puntuacion}/10`,
           cuerpo: comentario
-            ? `${servicio.clienteNombre}: "${comentario}"`
-            : `${servicio.clienteNombre} calificó tu servicio.`,
+            ? `${nombreQuien}: "${comentario}"`
+            : `${nombreQuien} calificó tu servicio.`,
           datos: { tipo: 'calificacion', servicioId: req.params.servicioId },
         });
       } catch (e) {}
