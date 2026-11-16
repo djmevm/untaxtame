@@ -139,7 +139,13 @@ export default function PerfilConductorScreen() {
   const { perfil, setPerfil, cerrarSesion } = useAuth();
   const [editando, setEditando] = useState(false);
   const [actualizando, setActualizando] = useState(false);
-  const [form, setForm] = useState({ nombre: perfil?.nombre||'', telefono: perfil?.telefono||'', cedula: perfil?.cedula||'', placa: perfil?.placa||'' });
+  const [form, setForm] = useState({
+    nombre: perfil?.nombre||'',
+    telefono: perfil?.telefono||'',
+    cedula: perfil?.cedula||'',
+    placa: perfil?.placa||'',
+    movilCarro: perfil?.movilCarro||'',
+  });
   const estado = ESTADO_CONFIG[perfil?.estadoVerificacion] || ESTADO_CONFIG.pendiente;
   const [enServicio, setEnServicio] = useState(!!perfil?.enServicio);
   const [repostulandose, setRepostulandose] = useState(false);
@@ -172,6 +178,7 @@ export default function PerfilConductorScreen() {
                 telefono: res.data.telefono || '',
                 cedula: res.data.cedula || '',
                 placa: res.data.placa || '',
+                movilCarro: res.data.movilCarro || '',
               });
             }
             return edit;
@@ -498,6 +505,14 @@ export default function PerfilConductorScreen() {
           <View style={styles.datoFila}><Text style={styles.datoLabel}>Celular</Text><Text style={styles.datoValor}>{perfil.telefono || '—'}</Text></View>
           <View style={styles.separador} />
           <View style={styles.datoFila}><Text style={styles.datoLabel}>Placa</Text><Text style={[styles.datoValor, { color: '#FFC107', fontWeight: 'bold', letterSpacing: 2 }]}>{perfil.placa || '—'}</Text></View>
+          <View style={styles.separador} />
+          <View style={styles.datoFila}>
+            <Text style={styles.datoLabel}>Móvil del carro</Text>
+            <Text style={[styles.datoValor, { color: '#1565C0', fontWeight: '600' }]}>{perfil.movilCarro || '—'}</Text>
+          </View>
+          <Text style={{ fontSize: 11, color: '#888', marginTop: 8 }}>
+            Número del móvil asociado a la placa del taxi (no tu celular personal).
+          </Text>
         </View>
       ) : (
         <View style={styles.seccion}>
@@ -506,15 +521,36 @@ export default function PerfilConductorScreen() {
           <TextInput style={styles.input} value={form.nombre} onChangeText={v => setForm(p => ({ ...p, nombre: v }))} />
           <Text style={styles.inputLabel}>Cédula</Text>
           <TextInput style={styles.input} value={form.cedula} onChangeText={v => setForm(p => ({ ...p, cedula: v }))} keyboardType="numeric" />
-          <Text style={styles.inputLabel}>Celular</Text>
+          <Text style={styles.inputLabel}>Celular personal</Text>
           <TextInput style={styles.input} value={form.telefono} onChangeText={v => setForm(p => ({ ...p, telefono: v }))} keyboardType="phone-pad" />
           <Text style={styles.inputLabel}>Placa</Text>
-          <TextInput style={styles.input} value={form.placa} onChangeText={v => setForm(p => ({ ...p, placa: v.toUpperCase() }))} />
+          <TextInput style={styles.input} value={form.placa} onChangeText={v => setForm(p => ({ ...p, placa: v.toUpperCase() }))} autoCapitalize="characters" />
+          <Text style={styles.inputLabel}>Móvil del carro (de la placa)</Text>
+          <TextInput
+            style={styles.input}
+            value={form.movilCarro}
+            onChangeText={v => setForm(p => ({ ...p, movilCarro: v.replace(/[^\d]/g, '') }))}
+            keyboardType="phone-pad"
+            placeholder="Número del móvil del taxi"
+            placeholderTextColor="#aaa"
+          />
+          <Text style={{ fontSize: 11, color: '#888', marginBottom: 4 }}>
+            Debe coincidir con el móvil registrado para esa placa.
+          </Text>
           <View style={{ marginTop: 16, gap: 10 }}>
             <TouchableOpacity style={styles.btnGuardar} onPress={guardarPerfil} disabled={actualizando}>
               {actualizando ? <ActivityIndicator color="#000" /> : <Text style={{ fontWeight: 'bold', fontSize: 15 }}>Guardar</Text>}
             </TouchableOpacity>
-            <TouchableOpacity style={styles.btnCancelar} onPress={() => setEditando(false)}><Text style={{ color: '#666', fontWeight: 'bold' }}>Cancelar</Text></TouchableOpacity>
+            <TouchableOpacity style={styles.btnCancelar} onPress={() => {
+              setEditando(false);
+              setForm({
+                nombre: perfil?.nombre||'',
+                telefono: perfil?.telefono||'',
+                cedula: perfil?.cedula||'',
+                placa: perfil?.placa||'',
+                movilCarro: perfil?.movilCarro||'',
+              });
+            }}><Text style={{ color: '#666', fontWeight: 'bold' }}>Cancelar</Text></TouchableOpacity>
           </View>
         </View>
       )}

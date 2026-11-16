@@ -63,6 +63,11 @@ export default function MiTaxiScreen() {
   return React.createElement(ScrollView, { contentContainerStyle: styles.container },
     React.createElement(Text, { style: styles.titulo }, 'Mi Taxi'),
     React.createElement(Text, { style: styles.placa }, perfil.placa || 'Sin placa'),
+    React.createElement(Text, { style: styles.movilCarro },
+      perfil.movilCarro
+        ? ('📱 Móvil del carro: ' + perfil.movilCarro)
+        : '📱 Móvil del carro: sin registrar — edítalo en Mi Perfil'
+    ),
 
     React.createElement(TouchableOpacity, { style: styles.fotoCard, onPress: cambiarFoto, disabled: subiendoFoto },
       subiendoFoto
@@ -92,7 +97,8 @@ var styles = StyleSheet.create({
   center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   container: { flexGrow: 1, backgroundColor: '#f5f5f5', padding: 20, paddingBottom: 40 },
   titulo: { fontSize: 22, fontWeight: 'bold', color: '#1E293B', marginBottom: 4 },
-  placa: { fontSize: 18, fontWeight: 'bold', color: '#FFC107', letterSpacing: 2, marginBottom: 20 },
+  placa: { fontSize: 18, fontWeight: 'bold', color: '#FFC107', letterSpacing: 2, marginBottom: 4 },
+  movilCarro: { fontSize: 14, color: '#1565C0', fontWeight: '600', marginBottom: 16 },
   fotoCard: { borderRadius: 14, overflow: 'hidden', marginBottom: 20, backgroundColor: '#fff', elevation: 2 },
   fotoImg: { width: '100%', height: 180, resizeMode: 'cover' },
   fotoEmpty: { width: '100%', height: 140, alignItems: 'center', justifyContent: 'center', backgroundColor: '#F8FAFC', borderWidth: 2, borderColor: '#ddd', borderStyle: 'dashed', borderRadius: 14 },

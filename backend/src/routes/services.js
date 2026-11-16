@@ -171,6 +171,7 @@ router.put('/aceptar/:servicioId', verifyToken, async (req, res) => {
       conductorNombre,
       conductorPlaca:   conductorData.placa   || null,
       conductorCelular: conductorData.telefono || null,
+      conductorMovilCarro: conductorData.movilCarro || null,
       estado: 'aceptado',
       actualizadoEn: new Date().toISOString(),
     });

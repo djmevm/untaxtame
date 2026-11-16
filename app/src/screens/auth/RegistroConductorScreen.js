@@ -19,7 +19,7 @@ const DOCUMENTOS = [
 export default function RegistroConductorScreen({ navigation }) {
   const { registrar } = useAuth();
   const [form, setForm] = useState({
-    nombre: '', cedula: '', telefono: '', email: '', password: '', placa: '',
+    nombre: '', cedula: '', telefono: '', email: '', password: '', placa: '', movilCarro: '',
   });
   const [docs, setDocs] = useState({});
   const [cargando, setCargando] = useState(false);
@@ -66,9 +66,9 @@ export default function RegistroConductorScreen({ navigation }) {
   };
 
   const validarPaso1 = () => {
-    const { nombre, cedula, telefono, email, password, placa } = form;
-    if (!nombre || !cedula || !telefono || !email || !password || !placa) {
-      Alert.alert('Error', 'Completa todos los campos');
+    const { nombre, cedula, telefono, email, password, placa, movilCarro } = form;
+    if (!nombre || !cedula || !telefono || !email || !password || !placa || !movilCarro) {
+      Alert.alert('Error', 'Completa todos los campos, incluido el móvil del carro');
       return false;
     }
     if (cedula.length < 6) {
@@ -99,6 +99,7 @@ export default function RegistroConductorScreen({ navigation }) {
         telefono: form.telefono,
         rol: 'conductor',
         placa: form.placa.toUpperCase(),
+        movilCarro: form.movilCarro.replace(/\D/g, ''),
         documentos: {},
         estadoVerificacion: 'pendiente',
       });
@@ -164,6 +165,11 @@ export default function RegistroConductorScreen({ navigation }) {
 
         <TextInput style={styles.input} placeholder="Placa del taxi" placeholderTextColor="#999" value={form.placa}
           onChangeText={v => set('placa', v.toUpperCase())} autoCapitalize="characters" />
+        <TextInput style={styles.input} placeholder="Móvil del carro (de esa placa)" placeholderTextColor="#999" value={form.movilCarro}
+          onChangeText={v => set('movilCarro', v.replace(/[^\d]/g, ''))} keyboardType="phone-pad" />
+        <Text style={{ fontSize: 12, color: '#888', marginTop: -8, marginBottom: 8 }}>
+          Número del móvil asociado a la placa del taxi, no tu celular personal.
+        </Text>
 
         <TextInput style={styles.input} placeholder="Correo electrónico" placeholderTextColor="#999" value={form.email}
           onChangeText={v => set('email', v)} keyboardType="email-address" autoCapitalize="none" />

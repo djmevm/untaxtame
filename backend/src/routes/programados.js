@@ -335,6 +335,7 @@ router.put('/aceptar/:viajeId', verifyToken, async (req, res) => {
     const conductorData = conductorDoc.exists ? conductorDoc.data() : {};
     const conductorPlaca = conductorData.placa || null;
     const conductorCelular = conductorData.telefono || null;
+    const conductorMovilCarro = conductorData.movilCarro || null;
     const conductorVehiculo =
       conductorData.vehiculo || conductorData.fotoVehiculo || null;
 
@@ -383,6 +384,7 @@ router.put('/aceptar/:viajeId', verifyToken, async (req, res) => {
         conductorNombre,
         conductorPlaca,
         conductorCelular,
+        conductorMovilCarro,
         conductorVehiculo,
         pinEmbarque,
         pinGeneradoEn: new Date().toISOString(),
@@ -748,6 +750,7 @@ router.put('/reasignar/:viajeId', verifyToken, verifyAdmin, async (req, res) => 
       conductorNombre: cond.nombre || 'Conductor',
       conductorPlaca: cond.placa || null,
       conductorCelular: cond.telefono || null,
+      conductorMovilCarro: cond.movilCarro || null,
       reasignadoEn: new Date().toISOString(),
       reasignadoPor: req.user.uid,
       motivoReasignacion: motivo || 'Asignado manualmente por central',

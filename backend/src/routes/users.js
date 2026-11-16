@@ -92,15 +92,19 @@ router.put('/:uid/datos', verifyToken, verifyAdmin, async (req, res) => {
   const uid = req.params.uid;
   // Campos que el admin puede editar
   const camposPermitidos = [
-    'nombre', 'telefono', 'cedula', 'placa', 'direccion',
+    'nombre', 'telefono', 'cedula', 'placa', 'movilCarro', 'direccion',
     'fotoVehiculo', 'serviciosOfrecidos', 'vencimientoDocumentos',
   ];
   const actualizacion = {};
   for (const campo of camposPermitidos) {
     if (req.body[campo] !== undefined && req.body[campo] !== null) {
-      actualizacion[campo] = campo === 'placa'
-        ? String(req.body[campo]).trim().toUpperCase()
-        : req.body[campo];
+      if (campo === 'placa') {
+        actualizacion[campo] = String(req.body[campo]).trim().toUpperCase();
+      } else if (campo === 'movilCarro') {
+        actualizacion[campo] = String(req.body[campo]).replace(/\D/g, '').slice(0, 15);
+      } else {
+        actualizacion[campo] = req.body[campo];
+      }
     }
   }
   if (Object.keys(actualizacion).length === 0) {

@@ -716,6 +716,17 @@ export default function PedirTaxiScreen() {
           </View>
           <View style={styles.separador} />
           <View style={styles.datoFila}>
+            <Text style={styles.datoLabel}>Móvil del carro</Text>
+            {servicioActivo.conductorMovilCarro ? (
+              <TouchableOpacity onPress={() => llamarConductor(servicioActivo.conductorMovilCarro)}>
+                <Text style={styles.telefonoLink}>📱 {servicioActivo.conductorMovilCarro}</Text>
+              </TouchableOpacity>
+            ) : (
+              <Text style={styles.datoValor}>—</Text>
+            )}
+          </View>
+          <View style={styles.separador} />
+          <View style={styles.datoFila}>
             <Text style={styles.datoLabel}>Reputación</Text>
             <Text style={[styles.datoValor, { color: '#F97316' }]}>⭐ {servicioActivo.conductorReputacion?.promedio || '—'}/10 ({servicioActivo.conductorReputacion?.porcentaje || 0}%)</Text>
           </View>
@@ -746,6 +757,7 @@ export default function PedirTaxiScreen() {
               conductorNombre: oferta.conductorNombre,
               conductorPlaca: oferta.conductorPlaca,
               conductorCelular: oferta.conductorCelular,
+              conductorMovilCarro: oferta.conductorMovilCarro,
               tarifaAcordada: oferta.monto,
               estado: 'aceptado',
             }));

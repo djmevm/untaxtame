@@ -201,6 +201,11 @@ export default function ProgramarViajeScreen() {
                 {['programado_asignado', 'conductor_en_sitio', 'en_curso'].includes(v.estado) && v.conductorNombre && (
                   <View style={styles.conductorBox}>
                     <Text style={styles.conductorTexto}>🚕 {v.conductorNombre} · Placa {v.conductorPlaca || 'N/D'}</Text>
+                    {v.conductorMovilCarro ? (
+                      <TouchableOpacity onPress={() => Linking.openURL(`tel:${v.conductorMovilCarro}`)}>
+                        <Text style={styles.conductorTel}>📱 Móvil carro: {v.conductorMovilCarro}</Text>
+                      </TouchableOpacity>
+                    ) : null}
                     {v.conductorCelular && (
                       <TouchableOpacity onPress={() => Linking.openURL(`tel:${v.conductorCelular}`)}>
                         <Text style={styles.conductorTel}>📞 {v.conductorCelular}</Text>

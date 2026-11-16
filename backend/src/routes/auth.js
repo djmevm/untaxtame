@@ -84,7 +84,7 @@ router.post('/login', async (req, res) => {
 
 // Registrar usuario completo (crear en Auth + Firestore)
 router.post('/register-full', async (req, res) => {
-  const { email, password, nombre, cedula, telefono, direccion, rol, placa, documentos, estadoVerificacion, fotoPerfil } = req.body;
+  const { email, password, nombre, cedula, telefono, direccion, rol, placa, movilCarro, documentos, estadoVerificacion, fotoPerfil } = req.body;
 
   if (!email || !password || !nombre || !telefono || !rol) {
     return res.status(400).json({ error: 'Campos requeridos: email, password, nombre, telefono, rol' });
@@ -106,6 +106,7 @@ router.post('/register-full', async (req, res) => {
     if (rol === 'conductor') {
       userData.cedula = cedula || '';
       userData.placa = placa || '';
+      userData.movilCarro = movilCarro ? String(movilCarro).replace(/\D/g, '').slice(0, 15) : '';
       userData.disponible = false;
       userData.estadoVerificacion = estadoVerificacion || 'pendiente';
       userData.documentos = documentos || {};
@@ -173,7 +174,7 @@ router.post('/refresh-token', async (req, res) => {
 
 // Registrar usuario (cliente o conductor) - legacy endpoint
 router.post('/register', verifyToken, async (req, res) => {
-  const { uid, nombre, cedula, telefono, direccion, rol, placa, documentos, estadoVerificacion, fotoPerfil } = req.body;
+  const { uid, nombre, cedula, telefono, direccion, rol, placa, movilCarro, documentos, estadoVerificacion, fotoPerfil } = req.body;
 
   if (uid !== req.user.uid) {
     return res.status(403).json({ error: 'No puedes registrar otro usuario' });
@@ -208,6 +209,7 @@ router.post('/register', verifyToken, async (req, res) => {
       }
       userData.cedula = cedula;
       userData.placa = placa;
+      userData.movilCarro = movilCarro ? String(movilCarro).replace(/\D/g, '').slice(0, 15) : '';
       userData.disponible = false;
       userData.estadoVerificacion = estadoVerificacion || 'pendiente';
       userData.documentos = documentos || {};
@@ -243,12 +245,18 @@ router.put('/perfil/:uid', verifyToken, async (req, res) => {
     return res.status(403).json({ error: 'No puedes editar el perfil de otro usuario' });
   }
 
-  const camposPermitidos = ['nombre', 'telefono', 'direccion', 'cedula', 'placa', 'fotoPerfil', 'fotoVehiculo', 'vencimientoDocumentos', 'serviciosOfrecidos'];
+  const camposPermitidos = ['nombre', 'telefono', 'direccion', 'cedula', 'placa', 'movilCarro', 'fotoPerfil', 'fotoVehiculo', 'vencimientoDocumentos', 'serviciosOfrecidos'];
   const actualizacion = {};
 
   for (const campo of camposPermitidos) {
     if (req.body[campo] !== undefined && req.body[campo] !== null) {
-      actualizacion[campo] = req.body[campo];
+      if (campo === 'placa') {
+        actualizacion[campo] = String(req.body[campo]).trim().toUpperCase();
+      } else if (campo === 'movilCarro') {
+        actualizacion[campo] = String(req.body[campo]).replace(/\D/g, '').slice(0, 15);
+      } else {
+        actualizacion[campo] = req.body[campo];
+      }
     }
   }
 

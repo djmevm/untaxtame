@@ -191,6 +191,16 @@ export default function Usuarios() {
                   }} />
                 </div>
                 <div style={styles.perfilItem}>
+                  <span style={styles.perfilLabel}>Móvil del carro</span>
+                  <EditableField uid={u.uid} campo="movilCarro" valorActual={u.movilCarro || '—'} onUpdate={() => {
+                    api.get('/users/todos').then(res => {
+                      setUsuarios(res.data);
+                      var actualizado = res.data.find(x => x.uid === u.uid);
+                      if (actualizado) setSeleccionado(actualizado);
+                    }).catch(() => {});
+                  }} />
+                </div>
+                <div style={styles.perfilItem}>
                   <span style={styles.perfilLabel}>Estado verificación</span>
                   <span style={{
                     background: VERIFICACION_COLOR[u.estadoVerificacion] || '#999',
