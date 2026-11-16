@@ -1154,12 +1154,24 @@ router.post('/:servicioId/compartir', verifyToken, async (req, res) => {
     }
 
     let token = data.shareToken;
+    const patch = {};
     if (!token) {
       token = uuidv4().replace(/-/g, '').slice(0, 16);
-      await ref.update({
-        shareToken: token,
-        compartidoEn: new Date().toISOString(),
-      });
+      patch.shareToken = token;
+      patch.compartidoEn = new Date().toISOString();
+    }
+
+    // Snapshot de GPS del conductor al compartir (para el mapa público)
+    if (data.conductorUid) {
+      try {
+        const cond = await db.collection('usuarios').doc(data.conductorUid).get();
+        if (cond.exists && cond.data().ubicacionActual?.lat) {
+          patch.ultimaUbicacionConductor = cond.data().ubicacionActual;
+        }
+      } catch (e) {}
+    }
+    if (Object.keys(patch).length) {
+      await ref.update(patch);
     }
 
     const base = process.env.PUBLIC_BASE_URL || 'https://untaxtame-production.up.railway.app';
@@ -1175,45 +1187,68 @@ router.post('/:servicioId/compartir', verifyToken, async (req, res) => {
 // Seguimiento público (sin auth) — datos sanitizados para familiares
 router.get('/seguimiento/:token', async (req, res) => {
   try {
+    const token = String(req.params.token || '').trim();
+    if (!token || token.length < 8) {
+      return res.status(404).json({ error: 'Enlace no válido o expirado' });
+    }
+
     const snap = await db.collection('servicios')
-      .where('shareToken', '==', req.params.token)
+      .where('shareToken', '==', token)
       .limit(1)
       .get();
 
-    if (snap.empty) return res.status(404).json({ error: 'Enlace no válido o expirado' });
-
-    const data = snap.docs[0].data();
-    if (['completado', 'cancelado'].includes(data.estado)) {
-      return res.json({
-        activo: false,
-        estado: data.estado,
-        mensaje: data.estado === 'completado' ? 'El viaje ya terminó' : 'El viaje fue cancelado',
-        origen: data.origen,
-        destino: data.destino,
+    if (snap.empty) {
+      return res.status(404).json({
+        error: 'Enlace no válido o expirado',
+        mensaje: 'No encontramos este viaje. Pide un enlace nuevo desde la app.',
       });
     }
 
-    let ubicacionConductor = null;
+    const data = snap.docs[0].data();
+    const activo = !['completado', 'cancelado', 'completado_auto'].includes(data.estado);
+
+    let ubicacionConductor = data.ultimaUbicacionConductor || null;
     if (data.conductorUid) {
-      const cond = await db.collection('usuarios').doc(data.conductorUid).get();
-      if (cond.exists && cond.data().ubicacionActual) {
-        ubicacionConductor = cond.data().ubicacionActual;
-      }
+      try {
+        const cond = await db.collection('usuarios').doc(data.conductorUid).get();
+        if (cond.exists && cond.data().ubicacionActual?.lat) {
+          ubicacionConductor = cond.data().ubicacionActual;
+          // Persistir en el servicio para que el mapa siga tras finalizar
+          if (activo) {
+            snap.docs[0].ref.update({
+              ultimaUbicacionConductor: ubicacionConductor,
+            }).catch(() => {});
+          }
+        }
+      } catch (e) {}
     }
 
+    const destinoGPS =
+      (data.destinoLat != null && data.destinoLng != null)
+        ? { lat: data.destinoLat, lng: data.destinoLng }
+        : (data.destinoGPS || null);
+
     res.json({
-      activo: true,
+      activo,
       estado: data.estado,
+      mensaje: activo
+        ? null
+        : (data.estado === 'cancelado'
+          ? 'El viaje fue cancelado'
+          : 'El viaje ya terminó'),
       origen: data.origen,
       destino: data.destino,
       conductorNombre: data.conductorNombre || null,
       conductorPlaca: data.conductorPlaca || null,
+      conductorMovilCarro: data.conductorMovilCarro || null,
       ubicacionConductor,
       ubicacionRecogida: data.ubicacionGPS || null,
-      actualizadoEn: new Date().toISOString(),
+      destinoGPS,
+      actualizadoEn: ubicacionConductor?.actualizadoEn || new Date().toISOString(),
     });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error('[seguimiento]', err.message);
+    res.status(500).json({ error: 'No se pudo cargar el seguimiento. Intenta de nuevo.' });
   }
 });
 

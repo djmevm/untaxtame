@@ -2,88 +2,219 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+  <meta name="theme-color" content="#FFC107" />
   <title>Seguimiento UntaXtame</title>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <style>
     * { box-sizing: border-box; }
-    body { margin: 0; font-family: system-ui, sans-serif; background: #111; color: #fff; }
-    .header { background: #FFC107; color: #111; padding: 14px 16px; font-weight: 800; }
-    .card { padding: 16px; }
-    .estado { display: inline-block; padding: 6px 12px; border-radius: 999px; background: #1565C0; font-weight: 700; font-size: 13px; }
-    .dato { margin: 8px 0; color: #ddd; font-size: 14px; }
-    #mapa { height: 55vh; width: 100%; background: #222; }
-    .aviso { color: #FFC107; font-size: 13px; margin-top: 12px; }
-    .err { padding: 40px 16px; text-align: center; color: #ef9a9a; }
+    html, body { margin: 0; height: 100%; font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; background: #0f172a; color: #fff; }
+    #mapa { position: absolute; inset: 0; z-index: 1; background: #1e293b; }
+    .top {
+      position: absolute; top: 0; left: 0; right: 0; z-index: 5;
+      background: linear-gradient(180deg, rgba(15,23,42,.92), rgba(15,23,42,.55), transparent);
+      padding: 14px 16px 28px; pointer-events: none;
+    }
+    .brand { font-weight: 800; font-size: 15px; color: #FFC107; letter-spacing: .3px; }
+    .panel {
+      position: absolute; left: 12px; right: 12px; bottom: 16px; z-index: 5;
+      background: rgba(255,255,255,.97); color: #0f172a; border-radius: 18px;
+      padding: 14px 16px; box-shadow: 0 12px 40px rgba(0,0,0,.35);
+      max-height: 42vh; overflow: auto;
+    }
+    .estado {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 6px 12px; border-radius: 999px; font-weight: 800; font-size: 12px; color: #fff;
+      background: #1565C0;
+    }
+    .estado.fin { background: #64748b; }
+    .estado.cancel { background: #E53935; }
+    .ruta { margin-top: 10px; font-size: 13px; line-height: 1.45; color: #334155; }
+    .ruta strong { color: #0f172a; }
+    .meta { margin-top: 8px; font-size: 13px; color: #475569; }
+    .aviso { margin-top: 8px; font-size: 11px; color: #94a3b8; }
+    .err-full {
+      position: absolute; inset: 0; z-index: 6; display: flex; align-items: center; justify-content: center;
+      background: #0f172a; padding: 24px; text-align: center;
+    }
+    .err-full h2 { color: #fecaca; margin: 0 0 8px; font-size: 18px; }
+    .err-full p { color: #94a3b8; margin: 0; font-size: 14px; }
+    .btn-centrar {
+      position: absolute; right: 14px; bottom: calc(42vh + 28px); z-index: 5;
+      width: 44px; height: 44px; border-radius: 22px; border: none; background: #fff;
+      box-shadow: 0 4px 16px rgba(0,0,0,.25); font-size: 20px; cursor: pointer;
+    }
+    .pin {
+      width: 36px; height: 36px; border-radius: 18px; display: flex; align-items: center; justify-content: center;
+      font-size: 20px; box-shadow: 0 2px 8px rgba(0,0,0,.35); border: 2px solid #fff;
+    }
+    .pin.taxi { background: #FFC107; }
+    .pin.origen { background: #1565C0; }
+    .pin.destino { background: #E53935; }
+    .loading { position: absolute; inset: 0; z-index: 6; display: flex; align-items: center; justify-content: center; background: #0f172a; color: #FFC107; font-weight: 700; }
   </style>
 </head>
 <body>
-  <div class="header">🚕 UntaXtame — Seguimiento del viaje</div>
-  <div id="app" class="card">Cargando...</div>
+  <div id="loading" class="loading">Cargando mapa…</div>
   <div id="mapa"></div>
+  <div class="top"><div class="brand">🚕 UntaXtame · Seguimiento en vivo</div></div>
+  <button type="button" class="btn-centrar" id="btnCentrar" title="Centrar" style="display:none">◎</button>
+  <div class="panel" id="panel" style="display:none"></div>
+  <div id="err" class="err-full" style="display:none"></div>
+
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script>
-    const token = location.pathname.split('/').pop();
-    const API = '/api/services/seguimiento/' + token;
-    let map, markerTaxi, markerOrigen;
+    const token = (location.pathname.split('/').filter(Boolean).pop() || '').trim();
+    const API = '/api/services/seguimiento/' + encodeURIComponent(token);
 
     const ESTADOS = {
-      aceptado: 'Conductor en camino',
-      conductor_en_sitio: 'Conductor en el punto',
-      en_curso: 'Viaje en curso',
+      aceptado: { t: 'Conductor en camino', c: '#1565C0' },
+      conductor_en_sitio: { t: 'Conductor en el punto', c: '#FF9800' },
+      en_curso: { t: 'Viaje en curso', c: '#2E7D32' },
+      completado: { t: 'Viaje finalizado', c: '#64748b' },
+      completado_auto: { t: 'Viaje finalizado', c: '#64748b' },
+      cancelado: { t: 'Viaje cancelado', c: '#E53935' },
     };
 
-    function render(data) {
-      const app = document.getElementById('app');
-      if (!data.activo) {
-        app.innerHTML = '<div class="err"><h2>' + (data.mensaje || 'Viaje no activo') + '</h2></div>';
+    let map, markerTaxi, markerOrigen, markerDestino, linea;
+    let lastBoundsKey = '';
+
+    function iconHtml(cls, emoji) {
+      return L.divIcon({
+        className: '',
+        html: '<div class="pin ' + cls + '">' + emoji + '</div>',
+        iconSize: [36, 36],
+        iconAnchor: [18, 18],
+      });
+    }
+
+    function ensureMap(lat, lng) {
+      if (map) return;
+      map = L.map('mapa', { zoomControl: false, attributionControl: false }).setView([lat, lng], 15);
+      L.control.zoom({ position: 'topright' }).addTo(map);
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        maxZoom: 19,
+        attribution: '© OpenStreetMap',
+      }).addTo(map);
+      document.getElementById('btnCentrar').style.display = 'block';
+    }
+
+    function fitSmart(points) {
+      if (!map || !points.length) return;
+      const key = points.map(p => p[0].toFixed(4) + ',' + p[1].toFixed(4)).join('|');
+      if (key === lastBoundsKey) return;
+      lastBoundsKey = key;
+      if (points.length === 1) {
+        map.setView(points[0], 15);
         return;
       }
-      app.innerHTML =
-        '<span class="estado">' + (ESTADOS[data.estado] || data.estado) + '</span>' +
-        '<div class="dato">🧑‍✈️ ' + (data.conductorNombre || '—') + ' · ' + (data.conductorPlaca || '') + '</div>' +
-        '<div class="dato">📍 ' + (data.origen || '—') + '</div>' +
-        '<div class="dato">🏁 ' + (data.destino || '—') + '</div>' +
-        '<p class="aviso">Se actualiza cada 10 segundos. Solo comparte este enlace con personas de confianza.</p>';
+      map.fitBounds(points, { padding: [60, 60], maxZoom: 16, animate: true });
+    }
 
-      const lat = data.ubicacionConductor?.lat || data.ubicacionRecogida?.lat;
-      const lng = data.ubicacionConductor?.lng || data.ubicacionRecogida?.lng;
-      if (lat && lng) {
-        if (!map) {
-          map = L.map('mapa').setView([lat, lng], 15);
-          L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            attribution: '© OpenStreetMap',
-          }).addTo(map);
-        }
-        if (data.ubicacionConductor?.lat) {
-          const pos = [data.ubicacionConductor.lat, data.ubicacionConductor.lng];
-          if (!markerTaxi) markerTaxi = L.marker(pos).addTo(map).bindPopup('Taxi');
-          else markerTaxi.setLatLng(pos);
-          map.panTo(pos);
-        }
-        if (data.ubicacionRecogida?.lat && !markerOrigen) {
-          markerOrigen = L.marker([data.ubicacionRecogida.lat, data.ubicacionRecogida.lng])
-            .addTo(map).bindPopup('Recogida');
+    function render(data) {
+      document.getElementById('loading').style.display = 'none';
+      document.getElementById('err').style.display = 'none';
+      const panel = document.getElementById('panel');
+      panel.style.display = 'block';
+
+      const est = ESTADOS[data.estado] || { t: data.estado || 'Viaje', c: '#1565C0' };
+      const cls = data.estado === 'cancelado' ? 'cancel' : (!data.activo ? 'fin' : '');
+      panel.innerHTML =
+        '<span class="estado ' + cls + '" style="background:' + est.c + '">' + est.t + '</span>' +
+        '<div class="meta">🧑‍✈️ <strong>' + (data.conductorNombre || '—') + '</strong>' +
+          (data.conductorPlaca ? ' · ' + data.conductorPlaca : '') + '</div>' +
+        '<div class="ruta"><strong>📍</strong> ' + (data.origen || '—') + '<br/><strong>🏁</strong> ' + (data.destino || '—') + '</div>' +
+        (data.mensaje && !data.activo ? '<div class="meta">' + data.mensaje + '</div>' : '') +
+        '<div class="aviso">Se actualiza cada 5 s · Comparte solo con personas de confianza</div>';
+
+      const points = [];
+      const taxi = data.ubicacionConductor;
+      const origen = data.ubicacionRecogida;
+      const dest = data.destinoGPS;
+
+      const centerLat = taxi?.lat || origen?.lat || dest?.lat;
+      const centerLng = taxi?.lng || origen?.lng || dest?.lng;
+      if (centerLat == null || centerLng == null) {
+        panel.innerHTML += '<div class="meta" style="color:#b45309;margin-top:8px">Aún no hay GPS del taxi. El mapa aparecerá en cuanto el conductor transmita ubicación.</div>';
+        return;
+      }
+
+      ensureMap(centerLat, centerLng);
+
+      if (origen?.lat != null) {
+        const p = [origen.lat, origen.lng];
+        points.push(p);
+        if (!markerOrigen) markerOrigen = L.marker(p, { icon: iconHtml('origen', '📍') }).addTo(map).bindPopup('Recogida');
+        else markerOrigen.setLatLng(p);
+      }
+
+      if (dest?.lat != null) {
+        const p = [dest.lat, dest.lng];
+        points.push(p);
+        if (!markerDestino) markerDestino = L.marker(p, { icon: iconHtml('destino', '🏁') }).addTo(map).bindPopup('Destino');
+        else markerDestino.setLatLng(p);
+      }
+
+      if (taxi?.lat != null) {
+        const p = [taxi.lat, taxi.lng];
+        points.push(p);
+        if (!markerTaxi) markerTaxi = L.marker(p, { icon: iconHtml('taxi', '🚕') }).addTo(map).bindPopup('Taxi en vivo');
+        else markerTaxi.setLatLng(p);
+      }
+
+      // Línea taxi → destino (en curso) o taxi → recogida
+      const linePts = [];
+      if (taxi?.lat != null) linePts.push([taxi.lat, taxi.lng]);
+      if (data.estado === 'en_curso' && dest?.lat != null) linePts.push([dest.lat, dest.lng]);
+      else if (origen?.lat != null) linePts.push([origen.lat, origen.lng]);
+
+      if (linePts.length >= 2) {
+        if (!linea) {
+          linea = L.polyline(linePts, { color: '#1565C0', weight: 4, opacity: 0.75, dashArray: '8 10' }).addTo(map);
+        } else {
+          linea.setLatLngs(linePts);
         }
       }
+
+      fitSmart(points);
+
+      document.getElementById('btnCentrar').onclick = function () {
+        lastBoundsKey = '';
+        fitSmart(points);
+      };
+    }
+
+    function showFatal(title, sub) {
+      document.getElementById('loading').style.display = 'none';
+      document.getElementById('panel').style.display = 'none';
+      const err = document.getElementById('err');
+      err.style.display = 'flex';
+      err.innerHTML = '<div><h2>' + title + '</h2><p>' + (sub || '') + '</p></div>';
     }
 
     async function cargar() {
+      if (!token) {
+        showFatal('Enlace incompleto', 'Abre el enlace completo que te compartieron.');
+        return;
+      }
       try {
-        const res = await fetch(API);
-        const data = await res.json();
+        const res = await fetch(API, { cache: 'no-store' });
+        const data = await res.json().catch(() => ({}));
         if (!res.ok) {
-          document.getElementById('app').innerHTML = '<div class="err"><h2>' + (data.error || 'Enlace inválido') + '</h2></div>';
+          showFatal(data.error || 'Enlace no válido', data.mensaje || 'Pide un enlace nuevo desde la app UntaXtame.');
           return;
         }
+        // Siempre renderizar mapa si hay datos (activo o finalizado)
         render(data);
       } catch (e) {
-        document.getElementById('app').innerHTML = '<div class="err"><h2>Sin conexión</h2></div>';
+        document.getElementById('loading').style.display = 'none';
+        // No tapar el mapa si ya había datos
+        if (!map) showFatal('Sin conexión', 'Revisa tu internet e intenta de nuevo.');
       }
     }
 
     cargar();
-    setInterval(cargar, 10000);
+    setInterval(cargar, 5000);
   </script>
 </body>
 </html>
